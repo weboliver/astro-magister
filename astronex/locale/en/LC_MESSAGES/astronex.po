@@ -1,0 +1,1311 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Astro-Nex 0.7\n"
+"POT-Creation-Date: 2008-07-13 14:22+WEST\n"
+"PO-Revision-Date: 2008-07-13 14:28+0100\n"
+"Last-Translator: Jose <jar@astro-nex.com>\n"
+"Language-Team: English\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "\tEl le muestra el camino hacia si misma"
+msgstr "\tHe shows her the way to herself"
+
+msgid "\tElla le muestra el camino hacia si mismo"
+msgstr "\tShe shows him the way to himself"
+
+msgid "   + Ctlr-May"
+msgstr "   + Ctlr-Shift"
+
+msgid "%s de %s"
+msgstr "%s of %s"
+
+msgid "'_' o letra*, seguida de letra*, numero o '_'."
+msgstr "follwed by letter*, number or '_'."
+
+msgid "(La importacion puede tardar un poco...)\n"
+msgstr "(Import may take some time...)\n"
+
+msgid "* A-Z, a-z, sin tildes ni caracteres compuestos"
+msgstr "* A-Z, a-z, no composed characters"
+
+msgid "+/- Tecl. num."
+msgstr "+/-  Num. Keyb."
+
+msgid "0-9 Tecl. num."
+msgstr "0-9 Num. Keyb."
+
+msgid ": Alternar casillas"
+msgstr ": Alternate slots"
+
+msgid ": Buscar tecleando en listas"
+msgstr ": Find in lists"
+
+msgid ": Calendario"
+msgstr ": Calendar"
+
+msgid ": Cerrar ventana/dialogo"
+msgstr ": Close window/dialog"
+
+msgid ": Ciclos"
+msgstr ": Cycles"
+
+msgid ": Cuadro de configuracion"
+msgstr ": Settings dialog"
+
+msgid ": Cuadro de entradas"
+msgstr ": Data entry dialog"
+
+msgid ": Diagramas"
+msgstr ": Diagrams"
+
+msgid ": Esta ayuda"
+msgstr ": This help"
+
+msgid ": Exportar a PDF - Imprimir"
+msgstr ": Export to PDF - Print"
+
+msgid ": Exportar a imagen"
+msgstr ": Export to image"
+
+msgid ": Localidades personalizadas"
+msgstr ": User defined locations"
+
+msgid ": Moverse en listas"
+msgstr ": Move on lists"
+
+msgid ": Navegador rapido cartas"
+msgstr ": Quick browser"
+
+msgid ": PE"
+msgstr ": PE"
+
+msgid ": PE puente"
+msgstr ": Bridge AP"
+
+msgid ": Pantalla completa"
+msgstr ": Full screen"
+
+msgid ": Rotar casas (biografia)"
+msgstr ": Rotate houses (biography)"
+
+msgid ": Rotar tambor"
+msgstr ": Rotate persons drum"
+
+msgid ": Salir"
+msgstr ": Exit"
+
+msgid ": Seleccionar lista"
+msgstr ": Choose list"
+
+msgid ": Selector aspectos"
+msgstr ": Aspect selector"
+
+msgid ": Ventana auxiliar"
+msgstr ": New window"
+
+msgid "A"
+msgstr "K"
+
+msgid "Accion"
+msgstr "Action"
+
+msgid "Accion inmediata"
+msgstr "Immediate action"
+
+msgid "Acerca de Astro-Nex"
+msgstr "About Astro-Nex"
+
+msgid "Acercar"
+msgstr "Zoom in"
+
+msgid "Acontecimiento"
+msgstr "Event"
+
+msgid "Activar goodwill"
+msgstr "Show goodwill"
+
+msgid "Admiracion"
+msgstr "Admiration"
+
+msgid "Afan de rendimiento"
+msgstr "Performance manic"
+
+msgid "Agua"
+msgstr "Water"
+
+msgid "Aire"
+msgstr "Air"
+
+msgid "Alejar"
+msgstr "Zoom out"
+
+msgid "Alma"
+msgstr "Causal"
+
+msgid "Alma-Alma"
+msgstr "Causal-Causal"
+
+msgid "Alma-Nodal"
+msgstr "Causal-Nodal"
+
+msgid "Altura"
+msgstr "Height"
+
+msgid "Anadir localidad"
+msgstr "Add location"
+
+msgid "Analisis de polaridades"
+msgstr "Polarities analysis"
+
+msgid "Anchura"
+msgstr "Width"
+
+msgid "Apellidos:"
+msgstr "Surname:"
+
+msgid "Archivo"
+msgstr "File"
+
+msgid "Archivo AAF"
+msgstr "AAF file"
+
+msgid "Arrastrar"
+msgstr "Drag"
+
+msgid "Asiduo"
+msgstr "Assiduous"
+
+msgid "Aspecto de charla, acuerdo momentaneo"
+msgstr "Chat aspect, momentary agrement"
+
+msgid "Aspecto de comprension, comprenderlo todo siempre"
+msgstr "Understanding aspct, to understand all always"
+
+msgid "Aspecto de conversacion, te entiendo"
+msgstr "Conversation aspect, I understand you"
+
+msgid "Aspecto de coqueteo, sensualidad emocional"
+msgstr "Flirt aspect, emotional sensuality"
+
+msgid "Aspecto de discusion, desintegrar un tema hablando"
+msgstr "Discussion aspect, to talk about a topic exhausting it"
+
+msgid "Atraccion erotica"
+msgstr "Erotic atraction"
+
+msgid "Ayuda"
+msgstr "Help"
+
+msgid "Azul"
+msgstr "Blue"
+
+msgid "Base"
+msgstr "Base"
+
+msgid "Biografia Alma"
+msgstr "Causal biography"
+
+msgid "Biografia Nodal"
+msgstr "Nodal biography"
+
+msgid "Biografia Radix"
+msgstr "Radix biography"
+
+msgid "Biografia alma"
+msgstr "Causal biography"
+
+msgid "Biografia nodal"
+msgstr "Nodal biography"
+
+msgid "Biografia radix"
+msgstr "Radix biography"
+
+msgid "Biografias"
+msgstr "Biographies"
+
+msgid "Boton rueda"
+msgstr "Wheel button"
+
+msgid "CCasas"
+msgstr "House"
+
+msgid "CRadix"
+msgstr "Radix"
+
+msgid "Calculos dinamicos"
+msgstr "Dynamic calculation"
+
+msgid "Calendario"
+msgstr "Calendar (Ctrl-C)"
+
+msgid "Cambiar lenguage"
+msgstr "Choose language"
+
+msgid "Cambiar nombre"
+msgstr "Change table name"
+
+msgid "Card"
+msgstr "Card"
+
+msgid "Carta Clics Individual"
+msgstr "Single click"
+
+msgid "Carta Clics Radix alma"
+msgstr "Radix-Causal"
+
+msgid "Carta Local"
+msgstr "Local chart"
+
+msgid "Carta Nodal"
+msgstr "Nodal chart"
+
+msgid "Carta de Integracion"
+msgstr "Integration chart"
+
+msgid "Carta de Rayos"
+msgstr "Rays"
+
+msgid "Carta de las Casas"
+msgstr "House chart"
+
+msgid "Carta del Alma"
+msgstr "Causal chart"
+
+msgid "Carta del Perfil"
+msgstr "Profile chart"
+
+msgid "Carta del momento"
+msgstr "Now chart"
+
+msgid "Cartas"
+msgstr "Charts"
+
+msgid "Cartas importadas: %s; dudosas: %s"
+msgstr "Imported charts: %s; doubtful: %s"
+
+msgid "Casa"
+msgstr "House"
+
+msgid "Casas"
+msgstr "Houses"
+
+msgid "Casas-Casas"
+msgstr "House-House"
+
+msgid "Casas-Nodal"
+msgstr "House-Nodal"
+
+msgid "Ciclos PE"
+msgstr "AP cycle"
+
+msgid "Clic Cuadrantes dinamicos"
+msgstr "Dynamic quadrants click "
+
+msgid "Clic Individual"
+msgstr "Single click"
+
+msgid "Clic Radix-Alma"
+msgstr "Radix-Causal"
+
+msgid "Clic Subjetivo"
+msgstr "Subjective click"
+
+msgid "Clic derecho"
+msgstr "Right click"
+
+msgid "Clic puente"
+msgstr "Subjective click"
+
+msgid "Clic simple"
+msgstr "Click"
+
+msgid "Clic subjetivo"
+msgstr "Subjective click"
+
+msgid "Clics Casas-Casas"
+msgstr "House-House"
+
+msgid "Clics Casas-Nodal"
+msgstr "House-Nodal"
+
+msgid "Clics Ind."
+msgstr "Single click"
+
+msgid "Clics Nodal-Casas"
+msgstr "Nodal-House"
+
+msgid "Clics Nodal-Nodal"
+msgstr "Nodal-Nodal"
+
+msgid "Clics Radix-Radix"
+msgstr "Radix-Radix"
+
+msgid "Clics sin ego"
+msgstr "All planets"
+
+msgid "Coincidencias maravillosas"
+msgstr "Wonderfull coincidences"
+
+msgid "Col"
+msgstr "Col"
+
+msgid "Colores"
+msgstr "Colors"
+
+msgid "Comparacion PE"
+msgstr "AP comparison"
+
+msgid "Comparacion pareja 1"
+msgstr "Partnership analysis I"
+
+msgid "Comparacion pareja 2"
+msgstr "Partnership analysis II"
+
+msgid "Comparacion pareja I"
+msgstr "Partnership analysis I"
+
+msgid "Comparacion pareja II"
+msgstr "Partnership analysis II"
+
+msgid "Compatibilidad sexual"
+msgstr "Sexual compatibility"
+
+msgid "Configuracion"
+msgstr "Settings"
+
+msgid "Congelar"
+msgstr "Freeze"
+
+msgid "Conj."
+msgstr "Conj."
+
+msgid "Conocidos comunes - Los caminos transcurren paralelos"
+msgstr "Common acquaintances - Paths go by in parallel"
+
+msgid "Consciente"
+msgstr "Concious"
+
+msgid "Conservacion"
+msgstr "Conservation"
+
+msgid "Conservador"
+msgstr "Conservative"
+
+msgid "Consolidacion"
+msgstr "Stabilization"
+
+msgid "Contactos comunes - Los caminos se cruzan una y otra vez"
+msgstr "Common contacts - Paths cross again and again"
+
+msgid "Contemplativo"
+msgstr "Contemplative"
+
+msgid "Contra horoscopos"
+msgstr "Counter horoscopes"
+
+msgid "Copiar"
+msgstr "Copy"
+
+msgid "Cortar"
+msgstr "Cut"
+
+msgid "Creada tabla %s\n"
+msgstr "Table %s created\n"
+
+msgid "Crear pareja"
+msgstr "Create partnership"
+
+msgid "Cruce PE - K1: %s  %s"
+msgstr "AP Crossing - K1: %s  %s"
+
+msgid "Cuadrantes dinamicos"
+msgstr "Dynamic quadrants"
+
+msgid "Cursores"
+msgstr "Cursors"
+
+msgid "DDiagramas"
+msgstr "Diagrams"
+
+msgid "Datos C. Casas"
+msgstr "House data"
+
+msgid "Datos C. Nodal"
+msgstr "Nodal data"
+
+msgid "Datos Radix"
+msgstr "Radix data"
+
+msgid "Defensivo"
+msgstr "Defenssive"
+
+msgid "Desactivar goodwill"
+msgstr "Hide goodwill"
+
+msgid "Desconfiado"
+msgstr "Distrustful"
+
+msgid "Descongelar"
+msgstr "Defreeze"
+
+msgid "Desea realmente eliminar la tabla %s?"
+msgstr "Do you really want to delete table %s?"
+
+msgid "Deseo de ser padres"
+msgstr "Paternity wishes"
+
+msgid "Deshacer"
+msgstr "Undo"
+
+msgid "Diagrama de barras"
+msgstr "Bar diagram"
+
+msgid "Diagrama de casas"
+msgstr "House diagram"
+
+msgid "Diagrama de diferencias"
+msgstr "Difference diagram"
+
+msgid "Diagrama de energia"
+msgstr "Energy diagram"
+
+msgid "Diagrama de signos"
+msgstr "Sign diagram"
+
+msgid "Diagramas"
+msgstr "Diagrams (Ctrl-D)"
+
+msgid "Disfrute"
+msgstr "Enjoyment"
+
+msgid "Doble clic"
+msgstr "Double click"
+
+msgid "Documento Pdf "
+msgstr "PDF Document"
+
+msgid "Domingo"
+msgstr "Sunday"
+
+msgid "Donde"
+msgstr "Where"
+
+msgid "Duda y critica"
+msgstr "Doubt & critic"
+
+msgid "E_liminar tabla"
+msgstr "_Delete table"
+
+msgid "Economico"
+msgstr "Economic"
+
+msgid "Ego-clics"
+msgstr "Ego planets"
+
+msgid "El activa su sentimiento maternal"
+msgstr "He activates her motherly feelings"
+
+msgid "El la idealiza"
+msgstr "He idealizes her"
+
+msgid "El nombre de las tablas solo puede comenzar con"
+msgstr "Table names can only begin with '_' or letter,"
+
+msgid "Elige una fuente"
+msgstr "Choose font"
+
+msgid "Eliminar"
+msgstr "Delete"
+
+msgid "Eliminar entrada"
+msgstr "Delete entry"
+
+msgid "Eliminar tabla"
+msgstr "Delete table"
+
+msgid "Eliminar una localidad puede impedir modificar "
+msgstr "This location may be used in charts. Deleting this"
+
+msgid "Ella activa su sentimiento paternal"
+msgstr "She activates his fatherly feelings"
+
+msgid "Ella lo idealiza"
+msgstr "She idealizes him"
+
+msgid "Encaje maravilloso"
+msgstr "Wonderfull fitting"
+
+msgid "Energia"
+msgstr "Energy"
+
+msgid "Entradas"
+msgstr "Data entry"
+
+msgid "Erotismo mutuo"
+msgstr "Mutual erotism"
+
+msgid "Error abriendo el archivo"
+msgstr "Error opening file"
+
+msgid "Error abriendo el archivo %s"
+msgstr "Error opening file %s"
+
+msgid "Error importando carta"
+msgstr "Error while importing chart"
+
+msgid "Error importando la tabla"
+msgstr "Error importing chart"
+
+msgid "Espontaneo"
+msgstr "Spontaneous"
+
+msgid "Estado"
+msgstr "State"
+
+msgid "Estrella de ascenso"
+msgstr "Ascension Star"
+
+msgid "Estrella maravillosa"
+msgstr "Wonderfull Star"
+
+msgid "Estrellas dinamicas"
+msgstr "Frust & stress diagrams"
+
+msgid "Etiquetas"
+msgstr "Labels"
+
+msgid "Examinar"
+msgstr "Browse"
+
+msgid "Explorador"
+msgstr "Explorer"
+
+msgid "Explorador/Tablas"
+msgstr "Explorer/Tables"
+
+msgid "Exportar a PDF/Imprimir"
+msgstr "Export to PDF/Print (Ctrl-P)"
+
+msgid "Exportar a imagen"
+msgstr "Export to image (Ctrl-G)"
+
+msgid "Exportar carta"
+msgstr "Export chart"
+
+msgid "Exportar como imagen"
+msgstr "Export to image"
+
+msgid "Exportar tabla"
+msgstr "Export table"
+
+msgid "Favoritos: "
+msgstr "Favourites: "
+
+msgid "Fecha"
+msgstr "Date"
+
+msgid "Fecha y hora"
+msgstr "Date and time"
+
+msgid "Fecha:"
+msgstr "Date:"
+
+msgid "Fija"
+msgstr "Fix"
+
+msgid "Filtro"
+msgstr "Filter"
+
+msgid "Forma"
+msgstr "Form"
+
+msgid "Formacion"
+msgstr "Will"
+
+msgid "Formacion ideas"
+msgstr "Building of Ideas"
+
+msgid "Fuego"
+msgstr "Fire"
+
+msgid "Fuentes"
+msgstr "Fonts"
+
+msgid "Funcion edipica femenina"
+msgstr "Female edipic function"
+
+msgid "Funcion edipica masculina"
+msgstr "Male edipic function"
+
+msgid "Guardar..."
+msgstr "Save..."
+
+msgid "Herr."
+msgstr "Tool"
+
+msgid "Hora:"
+msgstr "Time:"
+
+msgid "Horizontal"
+msgstr "Horizontal"
+
+msgid "Imagen"
+msgstr "Image"
+
+msgid "Impaciente por rendir"
+msgstr "Impatient to yield"
+
+msgid "Importacion AAF"
+msgstr " AAF Import"
+
+msgid "Importando %s %s\n"
+msgstr "Importing %s %s\n"
+
+msgid "Importar"
+msgstr "Import"
+
+msgid "Importar archivo: "
+msgstr "Import file: "
+
+msgid "Importar carta"
+msgstr "Import chart"
+
+msgid "Importar tabla"
+msgstr "Import table"
+
+msgid "Impulso a poseer"
+msgstr "Aim to possession"
+
+msgid "Inconsciente"
+msgstr "Unconscious"
+
+msgid "Ind"
+msgstr "Ind"
+
+msgid "Inicio: "
+msgstr "Start:"
+
+msgid "Integracion"
+msgstr "Integration"
+
+msgid "Intuitivo"
+msgstr "Intuitive"
+
+msgid "Investigador"
+msgstr "Researcher"
+
+msgid "Jueves"
+msgstr "Thursday"
+
+msgid "La presencia de el estimula el desarrollo de ella"
+msgstr "His presence encourages her development"
+
+msgid "La presencia de ella estimula el desarrollo de el"
+msgstr "Her presence encourages his development"
+
+msgid "La tabla %s existe. Reemplazarla, perdiendo los datos?"
+msgstr "Table %s already exists. Overwrite, losing all data?"
+
+msgid "Largo plazo"
+msgstr "Long term"
+
+msgid "Las cartas siguientes fueron importadas sin encontrar\n"
+msgstr "Following charts have been imported without\n"
+
+msgid "Latitud"
+msgstr "Latitude"
+
+msgid "Lenguage"
+msgstr "Language"
+
+msgid "Lenguage por defecto"
+msgstr "Default language"
+
+msgid "Lineas"
+msgstr "Lines"
+
+msgid "Local"
+msgstr "Local"
+
+msgid "Localidad"
+msgstr "Location"
+
+msgid "Localidad por defecto"
+msgstr "Default locality"
+
+msgid "Longitud"
+msgstr "Longitude"
+
+msgid "Los cambios tendran lugar depues de reiniciar la aplicacion"
+msgstr "Changes will be effective after application restart"
+
+msgid "Lunes"
+msgstr "Monday"
+
+msgid "Martes"
+msgstr "Tuesday"
+
+msgid "Mentalidad coincidente"
+msgstr "Mental agreement"
+
+msgid "Mezclador"
+msgstr "Mixer"
+
+msgid "Miercoles"
+msgstr "Wednesday"
+
+msgid "Modificar carta"
+msgstr "Modify chart"
+
+msgid "Modificar entrada"
+msgstr "Modify entry"
+
+msgid "Momento actual"
+msgstr "Current time"
+
+msgid "Mostrar todo"
+msgstr "Show all"
+
+msgid "Mostrar unilaterales"
+msgstr "Show unilateral"
+
+msgid "Mover"
+msgstr "Move"
+
+msgid "Mut"
+msgstr "Mut"
+
+msgid "N. favoritos: "
+msgstr "N. favourites: "
+
+msgid "No puedo cambiar el nombre a una tabla predeterminada."
+msgstr "The name of a default table can't be changed."
+
+msgid "No puedo eliminar una carta con pareja!"
+msgstr "I can't delete a chart in partnership!"
+
+msgid "No puedo eliminar una tabla con pareja!"
+msgstr "I can't delete a table with partner!"
+
+msgid "No puedo eliminar una tabla predeterminada."
+msgstr "A default table can't be deleted."
+
+msgid "Nodal"
+msgstr "Nodal"
+
+msgid "Nodal-Casas"
+msgstr "Nodal-House"
+
+msgid "Nodal-Nodal"
+msgstr "Nodal-Nodal"
+
+msgid "Nodales"
+msgstr "Nodal"
+
+msgid "Nodo"
+msgstr "Node"
+
+msgid "Nombre"
+msgstr "Name"
+
+msgid "Nombre tabla: "
+msgstr "Table name: "
+
+msgid "Nombre:"
+msgstr "Name:"
+
+msgid "Observador"
+msgstr "Observant"
+
+msgid "Ocultar"
+msgstr "Hide"
+
+msgid "Ocultar EA"
+msgstr "Hide AS"
+
+msgid "Ocultar unilaterales"
+msgstr "Hide unilateral"
+
+msgid "Ocultar zonas PE"
+msgstr "Hide AP zones"
+
+msgid "Ocultar zonas de casa"
+msgstr "Hide house zones"
+
+msgid "Ofensivo"
+msgstr "Offensive"
+
+msgid "Orbes"
+msgstr "Orbs"
+
+msgid "Organizador"
+msgstr "Organizer"
+
+msgid "P. Inversion"
+msgstr "Invert Point"
+
+msgid "P. Reposo"
+msgstr "Low Point"
+
+msgid "P.Inv."
+msgstr "Inv. P."
+
+msgid "P.Rep."
+msgstr "Low P."
+
+msgid "PE Puente"
+msgstr "Bridge AP"
+
+msgid "PE de la pareja"
+msgstr "Partners AP"
+
+msgid "PE puente"
+msgstr "Bridge AP (Ctrl-R)"
+
+msgid "PNG"
+msgstr "PNG"
+
+msgid "Pais"
+msgstr "Country"
+
+msgid "Panal de la pareja"
+msgstr "Partner Honeycomb"
+
+msgid "Pantalla completa"
+msgstr "Full screen (F11)"
+
+msgid "Parejas"
+msgstr "Partners"
+
+msgid "Pegar"
+msgstr "Paste"
+
+msgid "Pensamiento"
+msgstr "Thinking"
+
+msgid "Pensamiento utilitario"
+msgstr "Profit oriented thinking"
+
+msgid "Perfil"
+msgstr "Profile"
+
+msgid "Permutar"
+msgstr "Swap"
+
+msgid "Pers."
+msgstr "Pers."
+
+msgid "Personal"
+msgstr "Personal data"
+
+msgid "Placer mutuo"
+msgstr "Mutual pleasure"
+
+msgid "Planetas"
+msgstr "Planets"
+
+msgid "Planificador"
+msgstr "Planner"
+
+msgid "Primera pers."
+msgstr "First person"
+
+msgid "Proceso creativo"
+msgstr "Creative process"
+
+msgid "Programa de calculo y dibujo de cartas astrologicas segun el metodo API"
+msgstr "Program to calc and plot API astrological charts"
+
+msgid "Progresion E. Alma"
+msgstr "Causal AP"
+
+msgid "Progresion E. Local"
+msgstr "Local AP"
+
+msgid "Progresion E. Nodal"
+msgstr "Nodal AP"
+
+msgid "Progresion E. Radix"
+msgstr "Radix AP"
+
+msgid "Progresion de la edad Carta Local"
+msgstr "Local AP"
+
+msgid "Progresion de la edad Carta Nodal"
+msgstr "Nodal AP"
+
+msgid "Progresion de la edad Carta del Alma"
+msgstr "Causal AP"
+
+msgid "Progresion de la edad Radix"
+msgstr "Radix AP"
+
+msgid "Progresion secundaria"
+msgstr "Secundary progression"
+
+msgid "Proyeccion de padre/madre ideal"
+msgstr "Ideal father/mother proyection"
+
+msgid "Prudente"
+msgstr "Prudent"
+
+msgid "Puente"
+msgstr "Bridge"
+
+msgid "Punto Edad"
+msgstr "Age Point (Ctrl-A)"
+
+msgid "Radix"
+msgstr "Radix chart"
+
+msgid "Radix Alma"
+msgstr "Radix-Causal"
+
+msgid "Radix con transitos"
+msgstr "Radix-Transits"
+
+msgid "Radix-Alma"
+msgstr "Radix-Causal"
+
+msgid "Radix-Radix"
+msgstr "Radix-Radix"
+
+msgid "Raton"
+msgstr "Mouse"
+
+msgid "Region"
+msgstr "Region"
+
+msgid "Resignado"
+msgstr "Resigned"
+
+msgid "Resolucion"
+msgstr "Resolution"
+
+msgid "Restablecer"
+msgstr "Reset"
+
+msgid "Revolucion solar"
+msgstr "Solar revolution"
+
+msgid "Rojo"
+msgstr "Red"
+
+msgid "Rueda"
+msgstr "Wheel"
+
+msgid "Sabado"
+msgstr "Saturday"
+
+msgid "Salir"
+msgstr "Exit (Ctrl-Q)"
+
+msgid "Segunda pers."
+msgstr "Second person"
+
+msgid "Seguridad coincidente"
+msgstr "Security agreement"
+
+msgid "Selector de aspectos"
+msgstr "Aspect selector (Ctrl-H)"
+
+msgid "Selector de ciclos"
+msgstr "Cycle selector (Ctrl-Y)"
+
+msgid "Selector de ciclos PE"
+msgstr "AP cycle selector"
+
+msgid "Sensi-estrella"
+msgstr "Sensi-star"
+
+msgid "Sensualidad maravillosa"
+msgstr "Wonderfull sensuality"
+
+msgid "Simular"
+msgstr "Simulate"
+
+msgid "Sobrescribir"
+msgstr "Overwrite"
+
+msgid "Solo EA"
+msgstr "Only AS"
+
+msgid "Su tarea del alma. Conexiones cosmicas indefinibles"
+msgstr "His/her soul's job. Indefinable comic relationships"
+
+msgid "Su tarea karmica. Caminos del destino entre ambos, providencia"
+msgstr "His/her karmic job. Destiny paths joins them, providence"
+
+msgid "Subconsciente"
+msgstr "Subconscious"
+
+msgid "TConfiguracion"
+msgstr "Settings (Ctrl-S)"
+
+msgid "TEntradas"
+msgstr "Data entry (Ctrl-E) "
+
+msgid "Tabla"
+msgstr "Table"
+
+msgid "Tabla de aspectos"
+msgstr "Aspect table"
+
+msgid "Tablas"
+msgstr "Tables"
+
+msgid "Tablas por defecto"
+msgstr "Default tables"
+
+msgid "Tamano de imagen PNG"
+msgstr "PNG image size"
+
+msgid "Teclado"
+msgstr "Keyboard"
+
+msgid "Tierra"
+msgstr "Earth"
+
+msgid "Tipo"
+msgstr "Type"
+
+msgid "Trans."
+msgstr "Trans."
+
+msgid "Transitos"
+msgstr "Transits"
+
+msgid "Tu"
+msgstr "You"
+
+msgid "Una carta con este nombre: %s %s existe. Sobrescribir?"
+msgstr "A chart with this name: %s %s exist. Overwrite?"
+
+msgid "Uniones corona"
+msgstr "Crown unions"
+
+msgid "Usa"
+msgstr "USA"
+
+msgid "Utilizacion"
+msgstr "Utilization"
+
+msgid "Vacilante"
+msgstr "Unsteady"
+
+msgid "Vent.aux."
+msgstr "Windows"
+
+msgid "Ventana auxiliar"
+msgstr "Window (Ctrl-W)"
+
+msgid "Ver EA"
+msgstr "Show AS"
+
+msgid "Ver solo clics"
+msgstr "Std. clicks"
+
+msgid "Ver todos los aspectos"
+msgstr "All clicks"
+
+msgid "Ver zonas PE"
+msgstr "Show AP zones"
+
+msgid "Ver zonas de casa"
+msgstr "Show house zones"
+
+msgid "Verde"
+msgstr "Green"
+
+msgid "Vertical"
+msgstr "Vertical"
+
+msgid "Viernes"
+msgstr "Friday"
+
+msgid "Yo"
+msgstr "I"
+
+msgid "Zona"
+msgstr "Zone"
+
+msgid "_Aceptar"
+msgstr "_Accept"
+
+msgid "_Cancelar"
+msgstr "_Cancel"
+
+msgid "_Crear tabla"
+msgstr "_Create table"
+
+msgid "_Exportar  tabla"
+msgstr "_Export table"
+
+msgid "_Hoy"
+msgstr "_Today"
+
+msgid "_Importar  tabla"
+msgstr "_Import table"
+
+msgid "_Renombrar"
+msgstr "_Rename"
+
+msgid "acercar"
+msgstr "Zoom in"
+
+msgid "aleman"
+msgstr "German"
+
+msgid "alternar con guia"
+msgstr "Alternate guide"
+
+msgid "alternar posicion"
+msgstr "Alternate position"
+
+msgid "area de dibujo"
+msgstr "Drawing area"
+
+msgid "areas de dibujo"
+msgstr "Drawing areas"
+
+msgid "biografia"
+msgstr "Biography"
+
+msgid "c"
+msgstr "H"
+
+msgid "carta reloj, transitos"
+msgstr "Clock chart, transits"
+
+msgid "casillas"
+msgstr "Chart slots"
+
+msgid "catalan"
+msgstr "Catalan"
+
+msgid "codigo pais no encontrado: %s\n"
+msgstr "Country code not found: %s\n"
+
+msgid "de voluntad"
+msgstr " building"
+
+msgid "dias"
+msgstr "days"
+
+msgid "entre tablas"
+msgstr "Between tables"
+
+msgid "espanol"
+msgstr "Spanish"
+
+msgid "guia de grados"
+msgstr "Degree guide"
+
+msgid "horas"
+msgstr "hours"
+
+msgid "ingles"
+msgstr "English"
+
+msgid "la localidad correspondiente, y la zona horaria sera\n"
+msgstr "a matching locality. Time zone will be\n"
+
+msgid "lista principal"
+msgstr "Main list"
+
+msgid "listas de cartas"
+msgstr "Chart lists"
+
+msgid "listas dobles/triples"
+msgstr "Double/triple lists"
+
+msgid "luego una carta con facilidad. Continuar?"
+msgstr "location may cause problems in the charts where it is used. Continue?"
+
+msgid "menu secundario"
+msgstr "Contextual Menu"
+
+msgid "minutos"
+msgstr "minutes"
+
+msgid "mover pe"
+msgstr "Move AP"
+
+msgid "mover pe "
+msgstr "Move AP "
+
+msgid "mover pe +"
+msgstr "Move AP +"
+
+msgid "mover pe -"
+msgstr "Move AP -"
+
+msgid "mover registros"
+msgstr "Move registers"
+
+msgid "ojo"
+msgstr "Eye"
+
+msgid "panorama"
+msgstr "Panning"
+
+msgid "pe"
+msgstr " AP"
+
+msgid "pe, biografia"
+msgstr "AP, biography"
+
+msgid "personas recientes"
+msgstr "Recent persons list"
+
+msgid "principio de lista"
+msgstr "List beginning"
+
+msgid "principio lista"
+msgstr "List beginning"
+
+msgid "principio lista principal"
+msgstr "Radix"
+
+msgid "probablemente incorrrecta. Puede editar este panel,\n"
+msgstr "probably wrong. You can edit this panel,\n"
+
+msgid "restaurar fecha"
+msgstr "Date = Today"
+
+msgid "rotar lista"
+msgstr "Rotate list"
+
+msgid "rotar tambor"
+msgstr "Rotate pers. drum"
+
+msgid "s"
+msgstr "S"
+
+msgid "seleccionar pe"
+msgstr "Position AP"
+
+msgid "selector de casas"
+msgstr "House selector"
+
+msgid "sin_nombre%d"
+msgstr "unnamed%d"
+
+msgid "ventana auxiliar"
+msgstr "Windows"
+
+msgid "ventana de grados"
+msgstr "Degree popup"
+
+msgid "y copiar su contenido (menu clic derecho)."
+msgstr "and copy/paste its contents (right click menu)."
+
+msgid "Cerrar"
+msgstr "Close"
+
+msgid "Guardar"
+msgstr "Save"

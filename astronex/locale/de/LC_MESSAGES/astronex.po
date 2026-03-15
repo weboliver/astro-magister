@@ -1,0 +1,1314 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Astro-Nex 0.7\n"
+"POT-Creation-Date: 2008-07-13 14:22+WEST\n"
+"PO-Revision-Date: 2008-07-13 14:32+0100\n"
+"Last-Translator:  Joan <joansole@api-ediciones.com>\n"
+"Language-Team: German\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "\tEl le muestra el camino hacia si misma"
+msgstr "\tEr zeigt ihr den Weg zu sich selbst"
+
+msgid "\tElla le muestra el camino hacia si mismo"
+msgstr "\tSie zeigt ihm den Weg zu sich selbst"
+
+msgid "   + Ctlr-May"
+msgstr "   + Ctlr-Shift"
+
+msgid "%s de %s"
+msgstr "%s aus %s"
+
+msgid "'_' o letra*, seguida de letra*, numero o '_'."
+msgstr "Buchstabe* anfangen. Dann nur Buchstabe, Nummer oder '_'."
+
+msgid "(La importacion puede tardar un poco...)\n"
+msgstr "(Der Import kann ein bischen dauern...)\n"
+
+msgid "* A-Z, a-z, sin tildes ni caracteres compuestos"
+msgstr "* A-Z, a-z, ohne Akzenten oder zussamengesetzen Zeichen"
+
+msgid "+/- Tecl. num."
+msgstr "+/- Num. Tast."
+
+msgid "0-9 Tecl. num."
+msgstr "0-9 Num. Tast."
+
+msgid ": Alternar casillas"
+msgstr ": Personenfeld abwechseln"
+
+msgid ": Buscar tecleando en listas"
+msgstr ": Suchen (in die Liste schreibend)"
+
+msgid ": Calendario"
+msgstr ": Kalender"
+
+msgid ": Cerrar ventana/dialogo"
+msgstr ": Fenster/Dialog beenden"
+
+msgid ": Ciclos"
+msgstr ": AP Zyklus"
+
+msgid ": Cuadro de configuracion"
+msgstr ": Konfiguration"
+
+msgid ": Cuadro de entradas"
+msgstr ": Daten-Eingabe"
+
+msgid ": Diagramas"
+msgstr ": Diagramme"
+
+msgid ": Esta ayuda"
+msgstr ": Dieses Hilfe"
+
+msgid ": Exportar a PDF - Imprimir"
+msgstr ": Zum PDF exportieren - Drucken"
+
+msgid ": Exportar a imagen"
+msgstr ": Bild exportieren"
+
+msgid ": Localidades personalizadas"
+msgstr ": Benutzerspezifisch Orte"
+
+msgid ": Moverse en listas"
+msgstr ": Sich in den Listen bewegen"
+
+msgid ": Navegador rapido cartas"
+msgstr ": Schnell-Horoskopexplorer"
+
+msgid ": PE"
+msgstr ": AP"
+
+msgid ": PE puente"
+msgstr ": Brücken AP"
+
+msgid ": Pantalla completa"
+msgstr ": Ganzer Bildschirm"
+
+msgid ": Rotar casas (biografia)"
+msgstr ": Häuser rotieren (Biographie)"
+
+msgid ": Rotar tambor"
+msgstr ": Personnentrommel rotieren"
+
+msgid ": Salir"
+msgstr ": Beenden"
+
+msgid ": Seleccionar lista"
+msgstr ": Liste auswählen"
+
+msgid ": Selector aspectos"
+msgstr ": Aspektselektor"
+
+msgid ": Ventana auxiliar"
+msgstr ": Fenster"
+
+msgid "A"
+msgstr "K"
+
+msgid "Accion"
+msgstr "Action"
+
+msgid "Accion inmediata"
+msgstr "unmittelbar"
+
+msgid "Acerca de Astro-Nex"
+msgstr "Über Astro-Nex"
+
+msgid "Acercar"
+msgstr "Vergrössen"
+
+msgid "Acontecimiento"
+msgstr "Ereignis"
+
+msgid "Activar goodwill"
+msgstr "Goodwill Asp. anzeigen"
+
+msgid "Admiracion"
+msgstr "Bewunderung"
+
+msgid "Afan de rendimiento"
+msgstr "leistungsmanisch"
+
+msgid "Agua"
+msgstr "Wasser"
+
+msgid "Aire"
+msgstr "Luft"
+
+msgid "Alejar"
+msgstr "Verkleinen"
+
+msgid "Alma"
+msgstr "Kausal"
+
+msgid "Alma-Alma"
+msgstr "Kausal-Kausal"
+
+msgid "Alma-Nodal"
+msgstr "Kausal-MKH"
+
+msgid "Altura"
+msgstr "Höhe"
+
+msgid "Anadir localidad"
+msgstr "Ort hinzufügen "
+
+msgid "Analisis de polaridades"
+msgstr "Polaritätenanalyse"
+
+msgid "Anchura"
+msgstr "Breite"
+
+msgid "Apellidos:"
+msgstr "Name"
+
+msgid "Archivo"
+msgstr "Datei"
+
+msgid "Archivo AAF"
+msgstr "AAF Datei"
+
+msgid "Arrastrar"
+msgstr "Drag"
+
+msgid "Asiduo"
+msgstr "emsig"
+
+msgid "Aspecto de charla, acuerdo momentaneo"
+msgstr "Plauderaspekt, momentane Verständigung"
+
+msgid "Aspecto de comprension, comprenderlo todo siempre"
+msgstr "Verständnisaspekt, ewig alles vestehen"
+
+msgid "Aspecto de conversacion, te entiendo"
+msgstr "Gersprächsaspekt, verstehe Dich"
+
+msgid "Aspecto de coqueteo, sensualidad emocional"
+msgstr "Flirtaspekt, Gefühlsinnlichkeit"
+
+msgid "Aspecto de discusion, desintegrar un tema hablando"
+msgstr "Diskussiopnaspekt, zerreden"
+
+msgid "Atraccion erotica"
+msgstr "erotische Anziehung"
+
+msgid "Ayuda"
+msgstr "Hilfe"
+
+msgid "Azul"
+msgstr "Blau"
+
+msgid "Base"
+msgstr "Basis"
+
+msgid "Biografia Alma"
+msgstr "Kausalhoroskop Biographie"
+
+msgid "Biografia Nodal"
+msgstr "MKH Biographie"
+
+msgid "Biografia Radix"
+msgstr "Radix Biographie"
+
+msgid "Biografia alma"
+msgstr "Kausalhoroskop Biographie"
+
+msgid "Biografia nodal"
+msgstr "MKH Biographie"
+
+msgid "Biografia radix"
+msgstr "Radix Biographie"
+
+msgid "Biografias"
+msgstr "Biographien"
+
+msgid "Boton rueda"
+msgstr "Scroll-Rad Klick"
+
+msgid "CCasas"
+msgstr "Häuser"
+
+msgid "CRadix"
+msgstr "Radix"
+
+msgid "Calculos dinamicos"
+msgstr "Dynamische Auszählung"
+
+msgid "Calendario"
+msgstr "Kalender (Ctrl-C)"
+
+msgid "Cambiar lenguage"
+msgstr "Sprache auswählen"
+
+msgid "Cambiar nombre"
+msgstr "Tabelle umbenennen"
+
+msgid "Card"
+msgstr "Kar"
+
+msgid "Carta Clics Individual"
+msgstr "Individual Klickhoroskop"
+
+msgid "Carta Clics Radix alma"
+msgstr "Radix-Kausal Klickhoroskop"
+
+msgid "Carta Local"
+msgstr "Ortshoroskop"
+
+msgid "Carta Nodal"
+msgstr "Mondknotenhoroskop"
+
+msgid "Carta de Integracion"
+msgstr "Integrationshoroskop"
+
+msgid "Carta de Rayos"
+msgstr "Strahlen"
+
+msgid "Carta de las Casas"
+msgstr "Häuserhoroskop"
+
+msgid "Carta del Alma"
+msgstr "Kausalhoroskop"
+
+msgid "Carta del Perfil"
+msgstr "Profilhoroskop"
+
+msgid "Carta del momento"
+msgstr "Momenthoroskop"
+
+msgid "Cartas"
+msgstr "Horoskopen"
+
+msgid "Cartas importadas: %s; dudosas: %s"
+msgstr "Importierten Horoskopen: %s; fragwürdigen: %s"
+
+msgid "Casa"
+msgstr "Haus"
+
+msgid "Casas"
+msgstr "Häuser"
+
+msgid "Casas-Casas"
+msgstr "Häuser-Häuser"
+
+msgid "Casas-Nodal"
+msgstr "Häuser-MKH"
+
+msgid "Ciclos PE"
+msgstr "AP Zyklus"
+
+msgid "Clic Cuadrantes dinamicos"
+msgstr "Dynamische Auszählung Klick"
+
+msgid "Clic Individual"
+msgstr "Individual Klick"
+
+msgid "Clic Radix-Alma"
+msgstr "Radix-Kausal"
+
+msgid "Clic Subjetivo"
+msgstr "Subjektiver Klick"
+
+msgid "Clic derecho"
+msgstr "Rechtsklick"
+
+msgid "Clic puente"
+msgstr "Brückenklicks"
+
+msgid "Clic simple"
+msgstr "Klick"
+
+msgid "Clic subjetivo"
+msgstr "Subjektiver Klick"
+
+msgid "Clics Casas-Casas"
+msgstr "Häuser-Häuser"
+
+msgid "Clics Casas-Nodal"
+msgstr "Häuser-MKH"
+
+msgid "Clics Ind."
+msgstr "Individual Click"
+
+msgid "Clics Nodal-Casas"
+msgstr "MKH-Häuser"
+
+msgid "Clics Nodal-Nodal"
+msgstr "MKH-MKH"
+
+msgid "Clics Radix-Radix"
+msgstr "Radix-Radix"
+
+msgid "Clics sin ego"
+msgstr "Alle Planeten"
+
+msgid "Coincidencias maravillosas"
+msgstr "Wundersame Fügungen"
+
+msgid "Col"
+msgstr "Kol"
+
+msgid "Colores"
+msgstr "Farben"
+
+msgid "Comparacion PE"
+msgstr "AP-Vergeliche"
+
+msgid "Comparacion pareja 1"
+msgstr "Paar-Analyse-I"
+
+msgid "Comparacion pareja 2"
+msgstr "Paar-Analyse-II"
+
+msgid "Comparacion pareja I"
+msgstr "Paar-Analyse I"
+
+msgid "Comparacion pareja II"
+msgstr "Paar-Analyse II"
+
+msgid "Compatibilidad sexual"
+msgstr "sexuelle Kompatibilität"
+
+msgid "Configuracion"
+msgstr "Konfiguration"
+
+msgid "Congelar"
+msgstr "Einfrieren"
+
+msgid "Conj."
+msgstr "Konj."
+
+msgid "Conocidos comunes - Los caminos transcurren paralelos"
+msgstr "Gemeinsame Bekannte – Wege laufen parallel, miteinander"
+
+msgid "Consciente"
+msgstr "bewusst"
+
+msgid "Conservacion"
+msgstr "Bewahrung"
+
+msgid "Conservador"
+msgstr "konservativ"
+
+msgid "Consolidacion"
+msgstr "Festigung"
+
+msgid "Contactos comunes - Los caminos se cruzan una y otra vez"
+msgstr "Gemeinsame Kontakte – Wege kreuzen sich immer wieder"
+
+msgid "Contemplativo"
+msgstr "kontemplativ"
+
+msgid "Contra horoscopos"
+msgstr "Gegen-Horoskope"
+
+msgid "Copiar"
+msgstr "Kopieren"
+
+msgid "Cortar"
+msgstr "Cut"
+
+msgid "Creada tabla %s\n"
+msgstr "Tabelle angelegt %s\n"
+
+msgid "Crear pareja"
+msgstr "Paar_anlegen"
+
+msgid "Cruce PE - K1: %s  %s"
+msgstr "AP - K1: %s  %s"
+
+msgid "Cuadrantes dinamicos"
+msgstr "Dynamische Auszählung"
+
+msgid "Cursores"
+msgstr "Cursor-Tasten"
+
+msgid "DDiagramas"
+msgstr "Diagramme"
+
+msgid "Datos C. Casas"
+msgstr "Häuserhoroskop Daten"
+
+msgid "Datos C. Nodal"
+msgstr "Mondknotenhoroskop Daten"
+
+msgid "Datos Radix"
+msgstr "Radixhoroskop Daten"
+
+msgid "Defensivo"
+msgstr "defensiv"
+
+msgid "Desactivar goodwill"
+msgstr "Goodwill Asp. aufheben"
+
+msgid "Desconfiado"
+msgstr "misstrauisch"
+
+msgid "Descongelar"
+msgstr "Auftauen"
+
+msgid "Desea realmente eliminar la tabla %s?"
+msgstr "Möchten Sie die %s Tabelle wirklich löschen?"
+
+msgid "Deseo de ser padres"
+msgstr "Eltern werden - Wunsch"
+
+msgid "Deshacer"
+msgstr "Aufmachen"
+
+msgid "Dharma"
+msgstr "Dharma"
+
+msgid "Diagrama de barras"
+msgstr "Barrendiagramm"
+
+msgid "Diagrama de casas"
+msgstr "Differenzendiagramm"
+
+msgid "Diagrama de diferencias"
+msgstr "Differenzendiagramm"
+
+msgid "Diagrama de energia"
+msgstr "Energiediagramm"
+
+msgid "Diagrama de signos"
+msgstr "Zeichendiagramm"
+
+msgid "Diagramas"
+msgstr "Diagramme (Ctrl-D)"
+
+msgid "Disfrute"
+msgstr "geniessend"
+
+msgid "Doble clic"
+msgstr "Doppelklick"
+
+msgid "Documento Pdf "
+msgstr "PDF Dokument"
+
+msgid "Domingo"
+msgstr "Sonntag"
+
+msgid "Donde"
+msgstr "Wo"
+
+msgid "Duda y critica"
+msgstr "Zweifel od. Kritik"
+
+msgid "E_liminar tabla"
+msgstr "Tabelle _löschen"
+
+msgid "Economico"
+msgstr "ökonomisch"
+
+msgid "Ego-clics"
+msgstr "Ich-Planeten"
+
+msgid "El activa su sentimiento maternal"
+msgstr "Er aktiviert ihre Mutterschaft"
+
+msgid "El la idealiza"
+msgstr "Er idealisiert Sie"
+
+msgid "El nombre de las tablas solo puede comenzar con"
+msgstr "Tabellenname konnte nur mit '_' oder"
+
+msgid "Elige una fuente"
+msgstr "Font selektieren"
+
+msgid "Eliminar"
+msgstr "Löschen"
+
+msgid "Eliminar entrada"
+msgstr "Eintragung löschen"
+
+msgid "Eliminar tabla"
+msgstr "Tabelle löschen"
+
+msgid "Eliminar una localidad puede impedir modificar "
+msgstr "This location may be used in charts. Deleting this"
+
+msgid "Ella activa su sentimiento paternal"
+msgstr "Sie aktiviert seine vaterschaft"
+
+msgid "Ella lo idealiza"
+msgstr "Sie idealisiert ihn"
+
+msgid "Encaje maravilloso"
+msgstr "Wunderbar Passend"
+
+msgid "Energia"
+msgstr "Energie"
+
+msgid "Entradas"
+msgstr "Daten-Eingabe"
+
+msgid "Erotismo mutuo"
+msgstr "gemeinsamer Eros"
+
+msgid "Error abriendo el archivo"
+msgstr "Eroffnungfehler Datei %s"
+
+msgid "Error abriendo el archivo %s"
+msgstr "Eroffnungfehler Datei %s"
+
+msgid "Error importando carta"
+msgstr "Fehler während Horoskop Importierung"
+
+msgid "Error importando la tabla"
+msgstr "Fehler während Tabelle Importierung"
+
+msgid "Espontaneo"
+msgstr "spontan"
+
+msgid "Estado"
+msgstr "Staat"
+
+msgid "Estrella de ascenso"
+msgstr "Aufstiegs-Stern "
+
+msgid "Estrella maravillosa"
+msgstr "Wunder-Stern"
+
+msgid "Estrellas dinamicas"
+msgstr "Frust und Stress Diagramme"
+
+msgid "Etiquetas"
+msgstr "Etiketten"
+
+msgid "Examinar"
+msgstr "Suchen"
+
+msgid "Explorador"
+msgstr "Explorer"
+
+msgid "Explorador/Tablas"
+msgstr "Explorer/Tabellen"
+
+msgid "Exportar a PDF/Imprimir"
+msgstr "Zum PDF exportieren/Drucken (Ctrl-P)"
+
+msgid "Exportar a imagen"
+msgstr "Bild exportieren (Ctrl-G)"
+
+msgid "Exportar carta"
+msgstr "Horoskop exportieren"
+
+msgid "Exportar como imagen"
+msgstr "Bild exportieren"
+
+msgid "Exportar tabla"
+msgstr "Tabelle exportieren"
+
+msgid "Favoritos: "
+msgstr "Favoriten Tabelle:"
+
+msgid "Fecha"
+msgstr "Datum"
+
+msgid "Fecha y hora"
+msgstr "Datum und Zeit"
+
+msgid "Fecha:"
+msgstr "Datum"
+
+msgid "Fija"
+msgstr "Fix"
+
+msgid "Filtro"
+msgstr "Filter"
+
+msgid "Forma"
+msgstr "Form"
+
+msgid "Formacion"
+msgstr "Willens-  "
+
+msgid "Formacion ideas"
+msgstr "Ideen bildung"
+
+msgid "Fuego"
+msgstr "Feuer"
+
+msgid "Fuentes"
+msgstr "Fonts"
+
+msgid "Funcion edipica femenina"
+msgstr "weibliche Ödipus-Funktion"
+
+msgid "Funcion edipica masculina"
+msgstr "männliche Ödipus-Funktion"
+
+msgid "Guardar..."
+msgstr "Speichern..."
+
+msgid "Herr."
+msgstr "Kreat."
+
+msgid "Hora:"
+msgstr "Zeit:"
+
+msgid "Horizontal"
+msgstr "Horizontal"
+
+msgid "Imagen"
+msgstr "Bild"
+
+msgid "Impaciente por rendir"
+msgstr "ungedul. leistungsstrebig"
+
+msgid "Importacion AAF"
+msgstr "AAF importieren"
+
+msgid "Importando %s %s\n"
+msgstr "Import im Prozess %s %s\n"
+
+msgid "Importar"
+msgstr "Importieren"
+
+msgid "Importar archivo: "
+msgstr "Datei importieren"
+
+msgid "Importar carta"
+msgstr "Horoskop importieren"
+
+msgid "Importar tabla"
+msgstr "Tabelle importieren"
+
+msgid "Impulso a poseer"
+msgstr "bezitsstrebig"
+
+msgid "Inconsciente"
+msgstr "unbewusst"
+
+msgid "Ind"
+msgstr "Ind"
+
+msgid "Inicio: "
+msgstr "Start-Tabelle:"
+
+msgid "Integracion"
+msgstr "Integration"
+
+msgid "Intuitivo"
+msgstr "intuitiv"
+
+msgid "Investigador"
+msgstr "forschend"
+
+msgid "Jueves"
+msgstr "Donnerstag"
+
+msgid "La presencia de el estimula el desarrollo de ella"
+msgstr "Seine Präsenz regt ihre Entwicklung an"
+
+msgid "La presencia de ella estimula el desarrollo de el"
+msgstr "Ihre Präsenz regt seine Entwicklung an"
+
+msgid "La tabla %s existe. Reemplazarla, perdiendo los datos?"
+msgstr "Die %s Tabelle schön existiert.Einsetzen (und Daten verlieren)?"
+
+msgid "Largo plazo"
+msgstr "langfristig"
+
+msgid "Las cartas siguientes fueron importadas sin encontrar\n"
+msgstr "Die folgende Horoskopen waren importiert aber die Orten\n"
+
+msgid "Latitud"
+msgstr "Breite"
+
+msgid "Lenguage"
+msgstr "Sprache"
+
+msgid "Lenguage por defecto"
+msgstr "Vorgegebene Sprache"
+
+msgid "Lineas"
+msgstr "Linien"
+
+msgid "Local"
+msgstr "Ort"
+
+msgid "Localidad"
+msgstr "Ort"
+
+msgid "Localidad por defecto"
+msgstr "Vorgegebener Ort"
+
+msgid "Longitud"
+msgstr "Länge"
+
+msgid "Los cambios tendran lugar depues de reiniciar la aplicacion"
+msgstr "Die Änderungen werden nach dem Wiederaufstarten aktiviert"
+
+msgid "Lunes"
+msgstr "Montag"
+
+msgid "Martes"
+msgstr "Dienstag"
+
+msgid "Mentalidad coincidente"
+msgstr "gemeinsame Mentalität"
+
+msgid "Mezclador"
+msgstr "Mischer"
+
+msgid "Miercoles"
+msgstr "Mittwoch"
+
+msgid "Modificar carta"
+msgstr "Horoskpdaten ändern"
+
+msgid "Modificar entrada"
+msgstr "Eintragung ändern"
+
+msgid "Momento actual"
+msgstr "Aktueller Moment"
+
+msgid "Mostrar todo"
+msgstr "Alles anzeigen"
+
+msgid "Mostrar unilaterales"
+msgstr "Einseit. Asp. anzeigen"
+
+msgid "Mover"
+msgstr "Bewegen"
+
+msgid "Mut"
+msgstr "Ver"
+
+msgid "N. favoritos: "
+msgstr "Favoriten Num.:"
+
+msgid "No puedo cambiar el nombre a una tabla predeterminada."
+msgstr "DefaultTabelle kann nicht umbennant sein."
+
+msgid "No puedo eliminar una carta con pareja!"
+msgstr "Paar Horoskopen kann nicht gelöscht sein. "
+
+msgid "No puedo eliminar una tabla con pareja!"
+msgstr "Paar Tabellen kann nicht gelöscht sein. "
+
+msgid "No puedo eliminar una tabla predeterminada."
+msgstr "DefaultTabelle kann nicht gelöscht sein. "
+
+msgid "Nodal"
+msgstr "MKH"
+
+msgid "Nodal-Casas"
+msgstr "MKH-Häuser"
+
+msgid "Nodal-Nodal"
+msgstr "MKH-MKH"
+
+msgid "Nodales"
+msgstr "MKH"
+
+msgid "Nodo"
+msgstr "Mkn"
+
+msgid "Nombre"
+msgstr "Name"
+
+msgid "Nombre tabla: "
+msgstr "Name der Tabelle"
+
+msgid "Nombre:"
+msgstr "Vorname"
+
+msgid "Observador"
+msgstr "beobachtend"
+
+msgid "Ocultar"
+msgstr "Aufheben"
+
+msgid "Ocultar EA"
+msgstr "Aspektbild aufheben"
+
+msgid "Ocultar unilaterales"
+msgstr "Einseitig. Asp. aufheben"
+
+msgid "Ocultar zonas PE"
+msgstr "AP-Bereiche aufheben"
+
+msgid "Ocultar zonas de casa"
+msgstr "Hâuser-Bereiche aufheben"
+
+msgid "Ofensivo"
+msgstr "offensiv"
+
+msgid "Orbes"
+msgstr "Orbis"
+
+msgid "Organizador"
+msgstr "organisierend"
+
+msgid "P. Inversion"
+msgstr "Invertpunkt"
+
+msgid "P. Reposo"
+msgstr "Talpunkt"
+
+msgid "P.Inv."
+msgstr "Invertpunkt"
+
+msgid "P.Rep."
+msgstr "Talpunkt"
+
+msgid "PE Puente"
+msgstr "Brücken AP"
+
+msgid "PE de la pareja"
+msgstr "Paar-AP"
+
+msgid "PE puente"
+msgstr "Brücken AP (Ctrl-R)"
+
+msgid "PNG"
+msgstr "PNG"
+
+msgid "Pais"
+msgstr "Land"
+
+msgid "Panal de la pareja"
+msgstr "Paar-Wabe"
+
+msgid "Pantalla completa"
+msgstr "Ganzer Bildschirm (F11)"
+
+msgid "Parejas"
+msgstr "Planeten"
+
+msgid "Pegar"
+msgstr "Paste"
+
+msgid "Pensamiento"
+msgstr "Denken"
+
+msgid "Pensamiento utilitario"
+msgstr "nutzdenkend"
+
+msgid "Perfil"
+msgstr "Profil"
+
+msgid "Permutar"
+msgstr "Tauschen"
+
+msgid "Pers."
+msgstr "Pers."
+
+msgid "Personal"
+msgstr "Persönlichen Daten"
+
+msgid "Placer mutuo"
+msgstr "gemeinsame Lust"
+
+msgid "Planetas"
+msgstr "Planeten"
+
+msgid "Planificador"
+msgstr "plannend"
+
+msgid "Primera pers."
+msgstr "Erste Person"
+
+msgid "Proceso creativo"
+msgstr "Schaffensprozess"
+
+msgid "Programa de calculo y dibujo de cartas astrologicas segun el metodo API"
+msgstr "API Metode astrologische Software"
+
+msgid "Progresion E. Alma"
+msgstr "Seeelenshoroskop AP"
+
+msgid "Progresion E. Local"
+msgstr "Ortshoroskop AP"
+
+msgid "Progresion E. Nodal"
+msgstr "MKH AP"
+
+msgid "Progresion E. Radix"
+msgstr "Radix AP"
+
+msgid "Progresion de la edad Carta Local"
+msgstr "Ortshoroskop AP"
+
+msgid "Progresion de la edad Carta Nodal"
+msgstr "MKH AP"
+
+msgid "Progresion de la edad Carta del Alma"
+msgstr "Kausalhoroskop AP"
+
+msgid "Progresion de la edad Radix"
+msgstr "Radix AP"
+
+msgid "Progresion secundaria"
+msgstr "Sekundär-Direktionen"
+
+msgid "Proyeccion de padre/madre ideal"
+msgstr "ideale/r Mutter/Vater - Projektion"
+
+msgid "Prudente"
+msgstr "vorsichtig"
+
+msgid "Puente"
+msgstr "Brückenklicks"
+
+msgid "Punto Edad"
+msgstr "Alterspunkt (Ctrl-A)"
+
+msgid "Radix"
+msgstr "Radixhoroskop"
+
+msgid "Radix Alma"
+msgstr "Radix-Kausal"
+
+msgid "Radix con transitos"
+msgstr "Radix-Transite"
+
+msgid "Radix-Alma"
+msgstr "Radix-Kausal"
+
+msgid "Radix-Radix"
+msgstr "Radix-Radix"
+
+msgid "Raton"
+msgstr "Maus"
+
+msgid "Region"
+msgstr "Region"
+
+msgid "Resignado"
+msgstr "resignierend"
+
+msgid "Resolucion"
+msgstr "Entschließung"
+
+msgid "Restablecer"
+msgstr "Wiederherstellen"
+
+msgid "Revolucion solar"
+msgstr "Solarhoroskop"
+
+msgid "Rojo"
+msgstr "Rot"
+
+msgid "Rueda"
+msgstr "Scroll-Rad"
+
+msgid "Sabado"
+msgstr "Samstag"
+
+msgid "Salir"
+msgstr "Beenden (Ctrl-Q)"
+
+msgid "Segunda pers."
+msgstr "Zweite Person"
+
+msgid "Seguridad coincidente"
+msgstr "gemeinsame Sicherheit"
+
+msgid "Selector de aspectos"
+msgstr "Aspektselektor (Ctrl-H)"
+
+msgid "Selector de ciclos"
+msgstr "AP Zyklusselektor (Ctrl-Y)"
+
+msgid "Selector de ciclos PE"
+msgstr "AP Zyklusselektor"
+
+msgid "Sensi-estrella"
+msgstr "Sensi-Stern"
+
+msgid "Sensualidad maravillosa"
+msgstr "Wunderbare Sinnlichkeit"
+
+msgid "Simular"
+msgstr "Simulation"
+
+msgid "Sobrescribir"
+msgstr "Überschreiben"
+
+msgid "Solo EA"
+msgstr "Nur Aspektbild"
+
+msgid "Su tarea del alma. Conexiones cosmicas indefinibles"
+msgstr "Ihr Seelen-Auftrag - Kosmische, undefinierbare Zusammenhänge"
+
+msgid "Su tarea karmica. Caminos del destino entre ambos, providencia"
+msgstr "Sein Seelen-Auftrag - Kosmische, undefinierbare Zusammenhänge"
+
+msgid "Subconsciente"
+msgstr "unterbewusst"
+
+msgid "TConfiguracion"
+msgstr "Konfiguration (Ctrl-S)"
+
+msgid "TEntradas"
+msgstr "Daten-Eingabe (Ctrl-E)"
+
+msgid "Tabla"
+msgstr "Tabelle"
+
+msgid "Tabla de aspectos"
+msgstr "Orbis-Tabelle"
+
+msgid "Tablas"
+msgstr "Tabellen"
+
+msgid "Tablas por defecto"
+msgstr "Vorgegebene Tabellen"
+
+msgid "Tamano de imagen PNG"
+msgstr "Bildgrösse"
+
+msgid "Teclado"
+msgstr "Tastatur"
+
+msgid "Tierra"
+msgstr "Erde"
+
+msgid "Tipo"
+msgstr "Art"
+
+msgid "Trans."
+msgstr "Trans."
+
+msgid "Transitos"
+msgstr "Transite"
+
+msgid "Tu"
+msgstr "Du"
+
+msgid "Una carta con este nombre: %s %s existe. Sobrescribir?"
+msgstr "Ein Horoskop mit dieses Name: %s %s schön existiert. Überschreiben?"
+
+msgid "Uniones corona"
+msgstr "Krönenbindungen"
+
+msgid "Usa"
+msgstr "USA"
+
+msgid "Utilizacion"
+msgstr "Verwertung"
+
+msgid "Vacilante"
+msgstr "sögernd"
+
+msgid "Vent.aux."
+msgstr "Fenster"
+
+msgid "Ventana auxiliar"
+msgstr "Fenster (Ctrl-W)"
+
+msgid "Ver EA"
+msgstr "Aspektbild anzeigen"
+
+msgid "Ver solo clics"
+msgstr "Standard Klicken"
+
+msgid "Ver todos los aspectos"
+msgstr "Alle Klicken"
+
+msgid "Ver zonas PE"
+msgstr "AP-Bereiche anzeigen"
+
+msgid "Ver zonas de casa"
+msgstr "Häuser-Bereiche anzeigen"
+
+msgid "Verde"
+msgstr "Grün"
+
+msgid "Vertical"
+msgstr "Vertikal"
+
+msgid "Viernes"
+msgstr "Freitag"
+
+msgid "Yo"
+msgstr "Ich"
+
+msgid "Zona"
+msgstr "Bereich"
+
+msgid "_Aceptar"
+msgstr "_Anehmen"
+
+msgid "_Cancelar"
+msgstr "_Löschen"
+
+msgid "_Crear tabla"
+msgstr "Tabelle _anlegen"
+
+msgid "_Exportar  tabla"
+msgstr "Tabelle _exportieren"
+
+msgid "_Hoy"
+msgstr "_Heute"
+
+msgid "_Importar  tabla"
+msgstr "Tabelle _importieren"
+
+msgid "_Renombrar"
+msgstr "Tabelle _umbenennen"
+
+msgid "acercar"
+msgstr "Nähern"
+
+msgid "aleman"
+msgstr "Deutsch"
+
+msgid "alternar con guia"
+msgstr "Umsch.m Gradzeiger"
+
+msgid "alternar posicion"
+msgstr "Position umsch."
+
+msgid "area de dibujo"
+msgstr "Zeichnungsraum"
+
+msgid "areas de dibujo"
+msgstr "Zeichnungsräume"
+
+msgid "biografia"
+msgstr "Biographie"
+
+msgid "c"
+msgstr "H"
+
+msgid "carta reloj, transitos"
+msgstr "Uhr horoskop, Transite"
+
+msgid "casillas"
+msgstr "Personenfelder"
+
+msgid "catalan"
+msgstr "Katalanisch"
+
+msgid "codigo pais no encontrado: %s\n"
+msgstr "Landescode nicht gefunden:; %s\n"
+
+msgid "de voluntad"
+msgstr "   bildung"
+
+msgid "dias"
+msgstr "Tage"
+
+msgid "entre tablas"
+msgstr "zwischen den Tabellen"
+
+msgid "espanol"
+msgstr "Spanisch"
+
+msgid "guia de grados"
+msgstr "Gradzeiger"
+
+msgid "horas"
+msgstr "Stunden"
+
+msgid "ingles"
+msgstr "Englisch"
+
+msgid "la localidad correspondiente, y la zona horaria sera\n"
+msgstr "waren nicht gefunden. Die Zeitzone ist wahrscheinlich\n"
+
+msgid "lista principal"
+msgstr "Radix"
+
+msgid "listas de cartas"
+msgstr "Horoskoplisten"
+
+msgid "listas dobles/triples"
+msgstr "Dopple/Dreifach Listen"
+
+msgid "luego una carta con facilidad. Continuar?"
+msgstr "location may cause problems in the charts where it is used. Continue?"
+
+msgid "menu secundario"
+msgstr "Kontext Menü"
+
+msgid "minutos"
+msgstr "Minuten"
+
+msgid "mover pe"
+msgstr "AP bewegen"
+
+msgid "mover pe "
+msgstr "AP bewegen "
+
+msgid "mover pe +"
+msgstr "AP bewegen +"
+
+msgid "mover pe -"
+msgstr "AP bewegen -"
+
+msgid "mover registros"
+msgstr "Einträge versch."
+
+msgid "ojo"
+msgstr "Auge"
+
+msgid "panorama"
+msgstr "Bewegen"
+
+msgid "pe"
+msgstr "AP"
+
+msgid "pe, biografia"
+msgstr "AP Biographie"
+
+msgid "personas recientes"
+msgstr "zuletz verwend. Person."
+
+msgid "principio de lista"
+msgstr "Listenanfang"
+
+msgid "principio lista"
+msgstr "Listenanfang"
+
+msgid "principio lista principal"
+msgstr "Hauptliste Anfang"
+
+msgid "probablemente incorrrecta. Puede editar este panel,\n"
+msgstr "inkorrekt. Um die text editieren und kopieren\n"
+
+msgid "restaurar fecha"
+msgstr "Datum = Heute"
+
+msgid "rotar lista"
+msgstr "Liste rotieren"
+
+msgid "rotar tambor"
+msgstr "Pers. Trommel rot."
+
+msgid "s"
+msgstr "Z"
+
+msgid "seleccionar pe"
+msgstr "AP positionieren"
+
+msgid "selector de casas"
+msgstr "Häuserselektor"
+
+msgid "sin_nombre%d"
+msgstr "ohne_Name%d"
+
+msgid "ventana auxiliar"
+msgstr "Fenster"
+
+msgid "ventana de grados"
+msgstr "Gradangabe"
+
+msgid "y copiar su contenido (menu clic derecho)."
+msgstr "machen Sie Rechtsklick"
+
+msgid "Cerrar"
+msgstr "Schließen"
+
+msgid "Guardar"
+msgstr "Speichern"

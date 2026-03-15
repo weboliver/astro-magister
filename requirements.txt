@@ -1,0 +1,57 @@
+# Python package dependencies for Astro-Nex
+# Install with: pip install -r requirements.txt
+
+# Configuration management
+configobj>=4.4.0
+
+# Timezone support
+pytz>=2023.3
+
+# Interactive Python shell
+ipython>=0.8.1
+
+# GTK3/Pango/Cairo bindings are provided by system packages, not pip
+# Remove PyGObject from pip install to avoid girepository build errors.
+
+# If you need to install via apt (Ubuntu/Debian):
+#   sudo apt install python3-gi python3-gi-cairo libgtk-3-dev \
+#        libgirepository1.0-dev gobject-introspection libcairo2-dev
+
+# (pycairo is supplied by the system package python3-gi-cairo)
+
+# Web API
+fastapi>=0.110.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+httpx>=0.25.0  # required for FastAPI TestClient
+timezonefinder>=6.0.0
+
+# Caching helper for TTL + max-size eviction
+cachetools>=5.0.0
+redis>=5.0.0
+
+# Authentication
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+fastapi-users>=15.0.4
+fastapi-users-db-sqlalchemy>=7.0.0
+
+# SQLAlchemy and migrations (optional for Postgres migration path)
+SQLAlchemy
+alembic
+psycopg2-binary
+
+# Note: The following dependencies must be installed manually:
+# 
+# 1. GTK3 - Install via system package manager:
+#    - Ubuntu/Debian: sudo apt install libgtk-3-dev gobject-introspection libgirepository1.0-dev
+#    - Fedora/RHEL: sudo dnf install gtk3-devel gobject-introspection-devel
+#    - Arch: sudo pacman -S gtk3 gobject-introspection
+#
+# 2. pysw (Swiss Ephemeris Library) - Must be compiled and installed manually:
+#    - Copy pysw.py and _pysw.so from ext/ext32 or ext/ext64 to Python's site-packages
+#    - See INSTALL file for details
+#
+# 3. Astro-Nex.ttf font - Must be installed:
+#    - Copy from astronex/resources/Astro-Nex.ttf to system fonts directory
+#    - Linux: ~/.fonts/ or /usr/share/fonts/

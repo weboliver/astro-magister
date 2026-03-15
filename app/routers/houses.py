@@ -1,0 +1,190 @@
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
+import logging
+from app.services.ephemeris import julday, houses
+from app.services.horoscope_graphics import build_chart_from_request, draw_chart_png
+from app.static.texte import get_general_anweisung
+from app.static.zodiac_names import get_zodiac_name
+from app.schemas.datetime_models import DateTimeRequest, HousesResponse
+from pytz import timezone as pytz_timezone
+from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set
+from app.services import auth as auth_service
+from app.routers.auth import _get_user_from_request, require_authenticated_user
+
+router = APIRouter(tags=["houses"], dependencies=[Depends(require_authenticated_user)])
+logger = logging.getLogger(__name__)
+
+HOUSES_SYSTEM_PROMPT = "houses"
+
+
+def _resolve_role_name_for_houses(request: Request, payload: DateTimeRequest) -> str:
+    user = _get_user_from_request(request)
+    if not user:
+        return "Laie"
+    return auth_service.get_role_name_for_subject(user['id'], getattr(payload, 'person_id', None))
+
+
+def _sse_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _build_houses_response(request: DateTimeRequest) -> HousesResponse:
+    # compute decimal hour in UT, honoring provided IANA timezone when present
+    decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
+    if getattr(request, 'timezone', None):
+        try:
+            local_dt = pytz_timezone(request.timezone).localize(
+                __import__('datetime').datetime(
+                    request.year, request.month, request.day,
+                    request.hour, request.minute, request.second
+                ), is_dst=True
+            )
+            ut = local_dt.astimezone(pytz_timezone('UTC'))
+            decimal_hour = ut.hour + ut.minute / 60.0 + ut.second / 3600.0
+        except Exception:
+            pass
+
+    jd = julday(request.year, request.month, request.day, decimal_hour)
+    latitude = request.latitude
+    longitude = request.longitude
+    h = houses(jd, latitude, longitude)
+    if h is None:
+        raise HTTPException(status_code=400, detail="Error computing houses (may be above Arctic Circle)")
+
+    house_entries = []
+    for idx, cusp in enumerate(h):
+        sign_idx = int(cusp // 30) % 12
+        deg_in_sign = cusp - sign_idx * 30
+        deg_int = int(deg_in_sign)
+        minutes = int((deg_in_sign - deg_int) * 60)
+        sign_deg = f"{deg_int:02d}\u00b0 {minutes:02d}\u2032"
+        house_entries.append({
+            "house": idx + 1,
+            "longitude": float(cusp),
+            "sign_index": sign_idx,
+            "sign": get_zodiac_name(sign_idx),
+            "sign_degree": sign_deg,
+        })
+
+    label_map = {1: "AC", 4: "IC", 7: "DC", 10: "MC"}
+    parts = []
+    for house_entry in house_entries:
+        number = house_entry["house"]
+        label = label_map.get(number, f"house {number}")
+        parts.append(f"{label} - {house_entry['sign']} ({house_entry['sign_degree']})")
+
+    birth = f"{request.year:04d}-{request.month:02d}-{request.day:02d}"
+    summary_text = f"Huber Astrologische Psychologie.\n\nInterpretiere Häuser Horoskop: {birth}.\n\n"
+    summary_text += "Häuser:\n\n" + "\n".join(parts)
+    summary_text += "\n\n" + get_general_anweisung()
+
+    return HousesResponse(
+        year=request.year,
+        month=request.month,
+        day=request.day,
+        hour=decimal_hour,
+        julian_day=jd,
+        latitude=latitude,
+        longitude=longitude,
+        houses=house_entries,
+        summary=summary_text,
+    )
+
+@router.post("/houses", response_model=HousesResponse)
+def get_houses(request: DateTimeRequest):
+    try:
+        return _build_houses_response(request)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error calculating houses: {str(e)}")
+
+
+@router.post("/houses/stream")
+async def get_houses_stream(payload: DateTimeRequest, request: Request):
+    try:
+        result = _build_houses_response(payload)
+        response_data = result.model_dump()
+        summary_prompt = response_data.pop("summary")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error preparing /houses/stream")
+        raise HTTPException(status_code=400, detail=f"Error calculating houses: {str(e)}")
+
+    async def event_stream():
+        role_name = _resolve_role_name_for_houses(request, payload)
+        perplexity_client = PerplexityClient(role_type=role_name)
+        summary_parts = []
+
+        yield _sse_event("meta", response_data)
+
+        try:
+            async for chunk in perplexity_client.send_summary_stream(
+                summary=summary_prompt,
+                system_prompt=HOUSES_SYSTEM_PROMPT,
+            ):
+                summary_parts.append(chunk)
+                yield _sse_event("summary_delta", {"content": chunk})
+
+            if not summary_parts:
+                try:
+                    logger.debug("No streamed chunks received, invoking synchronous fallback for houses")
+                    text = await asyncio.to_thread(
+                        perplexity_client.send_summary_text,
+                        summary_prompt,
+                        HOUSES_SYSTEM_PROMPT,
+                    )
+                    summary_parts = [text]
+                    logger.debug("Fallback returned length=%d", len(text))
+                except Exception:
+                    logger.exception("Synchronous fallback to send_summary_text failed for houses")
+
+            full_summary = "".join(summary_parts)
+            try:
+                resolved_prompt = perplexity_client._resolve_system_prompt(HOUSES_SYSTEM_PROMPT)
+                key = _make_cache_key(summary_prompt, resolved_prompt, perplexity_client.model)
+                _cache_set(key, full_summary)
+            except Exception:
+                logger.exception("Failed to set Perplexity cache for houses")
+
+            yield _sse_event("done", {"summary": full_summary})
+        except Exception as exc:
+            logger.exception("Error streaming /houses/stream")
+            yield _sse_event("error", {"detail": str(exc)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/houses/graphic",
+    responses={200: {"content": {"image/png": {}}}},
+)
+def get_houses_graphic(
+    payload: DateTimeRequest,
+    request: Request,
+    width: int = Query(750, ge=200, le=2048, description="Image width in pixels"),
+    height: int = Query(750, ge=200, le=2048, description="Image height in pixels"),
+):
+    """Render the natal houses graphic using the Astronex drawing engine."""
+
+    try:
+        chart = build_chart_from_request(payload)
+        png_bytes = draw_chart_png(
+            request.app, chart, width, height, operation='draw_house'
+        )
+        return Response(content=png_bytes, media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error rendering houses graphic: {exc}")

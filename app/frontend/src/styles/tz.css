@@ -1,0 +1,19 @@
+.tz-input { color: black; }
+.tz-input::placeholder { color: black !important; opacity: 1; }
+
+/* Container to limit form width to 400pt and make inner controls expand to container */
+.container-400pt { max-width: 400pt; width: 100%; box-sizing: border-box; }
+.container-400pt input,
+.container-400pt select,
+.container-400pt textarea,
+.container-400pt .flatpickr-input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* Make readonly textarea use monospace-like pre-wrap appearance */
+.container-400pt textarea[readonly] {
+	font-family: inherit;
+	white-space: pre-wrap;
+	min-height: 200px;
+}

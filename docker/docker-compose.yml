@@ -1,0 +1,131 @@
+name: astronex
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: astronex-db
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: astronex-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    image: astronex-api:dev
+    container_name: astronex-api
+    working_dir: /workspace
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      DB_HOST: db
+      DATABASE_URL: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      REDIS_URL: redis://redis:6379/0
+      DB_WAIT_TIMEOUT_SECONDS: "180"
+      SEED_USERS: "0"
+      SEED_LOCATIONS: "1"
+      MIGRATE_IF_EMPTY_ONLY: "1"
+      FORCE_MIGRATIONS: "0"
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /workspace
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ../:/workspace
+    command: >
+      /bin/sh -c "
+      export PATH=/opt/venv/bin:$$PATH &&
+      bash ./scripts/docker_init_postgres.sh &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /workspace/app
+      "
+
+  frontend:
+    image: node:20-alpine
+    container_name: astronex-frontend
+    working_dir: /workspace/app/frontend
+    env_file:
+      - ../.env
+    volumes:
+      - ../:/workspace
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_PROXY_TARGET: http://api:8000
+    command: >
+      /bin/sh -c "
+      npm install &&
+      DEBUG_NORMALIZED=$$(printf '%s' \"$${DEBUG:-false}\" | tr '[:upper:]' '[:lower:]') &&
+      if [ \"$$DEBUG_NORMALIZED\" = \"true\" ] || [ \"$$DEBUG_NORMALIZED\" = \"1\" ] || [ \"$$DEBUG_NORMALIZED\" = \"yes\" ] || [ \"$$DEBUG_NORMALIZED\" = \"on\" ]; then
+        npm run dev -- --host 0.0.0.0 --port 5173;
+      else
+        npm run build && npm run preview -- --host 0.0.0.0 --port 5173;
+      fi
+      "
+
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
+      args:
+        GEOIP2_ENABLED: ${GEOIP2_ENABLED:-0}
+        GEOIP2_LICENSE_KEY: ${GEOIP2_LICENSE_KEY:-}
+        MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
+    image: astronex-nginx:letsencrypt
+    container_name: astronex-nginx
+    depends_on:
+      - api
+      - frontend
+    env_file:
+      - ../.env
+    environment:
+      GEOIP2_ENABLED: ${GEOIP2_ENABLED:-0}
+      GEOIP2_DB_PATH: /usr/share/GeoIP/GeoLite2-Country.mmdb
+      GEOIP2_ALLOWED_COUNTRIES: ${GEOIP2_ALLOWED_COUNTRIES:-DE,AT,CH}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt_data:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+      - ./certs:/etc/nginx/dev-certs:ro
+      - geoip_data:/usr/share/GeoIP
+
+volumes:
+  postgres_data:
+    name: docker_postgres_data
+  redis_data:
+    name: docker_redis_data
+  letsencrypt_data:
+    name: docker_letsencrypt_data
+  certbot_webroot:
+    name: docker_certbot_webroot
+  geoip_data:
+    name: docker_geoip_data

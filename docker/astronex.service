@@ -1,0 +1,19 @@
+[Unit]
+Description=Astronex Docker Compose Stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=oliver
+Group=docker
+WorkingDirectory=/astronex/docker
+ExecStart=/astronex/docker/start.sh
+ExecStop=/astronex/docker/stop.sh
+ExecReload=/astronex/docker/start.sh
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

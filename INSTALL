@@ -1,0 +1,107 @@
+Installing from sources
+=======================
+
+Dependencies
+------------
+Python >= 3.10
+
+# Python packages (install via pip install -r requirements.txt in .venv)
+configobj>=4.4.0
+pytz>=2023.3
+ipython>=0.8.1
+fastapi>=0.110.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+httpx>=0.25.0
+
+# System packages (Ubuntu/Debian) — required for GTK3/GObject and building C parts
+# These are **not** installed via pip:
+#   sudo apt update
+#   sudo apt install -y \
+#     python3-gi python3-gi-cairo libgtk-3-dev libgirepository1.0-dev gobject-introspection \
+#     libcairo2-dev pkg-config python3-dev build-essential swig
+
+Ephemeris library — install manually (64-bit only).
+In the distribution ext folder you'll find ext64. 
+Place the built artifacts (pysw.py, _pysw.so) in site-packages 
+or in a directory on your Python path.
+I habe precompiled: _pysw_ubuntu.so (Ubuntu 22) and _pysw.so (Raspberry Pi 5)
+
+You must also install the font Astro-Nex.ttf from the astronex/resources
+folder, or you will see nothing useful.
+
+Enjoy!
+
+# Install on Ubuntu:
+
+1. Install system dependencies (GTK3, GI, build tools) — Ubuntu/Debian:
+   sudo apt update
+   sudo apt install -y \
+     python3 python3-pip python3-venv \
+     python3-gi python3-gi-cairo libgtk-3-dev libgirepository1.0-dev gobject-introspection \
+     libcairo2-dev pkg-config python3-dev build-essential swig
+
+2. Optional: Create venv that can see system packages (gi/gtk):
+   cd ~/Projects/astronex
+   python3 -m venv --system-site-packages .venv
+   source .venv/bin/activate
+
+3. Install Python dependencies:
+   pip install -r requirements.txt
+
+4. Install/build the Swiss Ephemeris (pysw) extension:
+   cd ext/ext64
+   make
+   # Kopiere die Artefakte ins Projekt-Root, damit python sie findet
+   cp _pysw.so ../../
+   cp pysw.py ../../
+   cd ../..
+
+5. Install the Astro-Nex font:
+   mkdir -p ~/.fonts
+   cp astronex/resources/Astro-Nex.ttf ~/.fonts/
+   fc-cache -f -v
+
+6. Run the application:
+   python nex.py
+
+
+FastAPI API (optional)
+----------------------
+Astro-Magister stellt zusätzlich eine FastAPI bereit, um Ephemeriden-Berechnungen per HTTP zu nutzen.
+
+1. API starten:
+   uvicorn api:app --host 0.0.0.0 --port 8000
+
+2. Interaktive Dokumentation öffnen:
+   http://localhost:8000/docs
+
+
+Swiss Ephemeris Pfad & Fixsterne
+---------------------------------
+Für Fixstern-Berechnungen benötigt Swiss Ephemeris die Datei `sefstars.txt` im konfigurierten Ephemeriden-Pfad.
+
+Empfohlene Vorgehensweise:
+
+1. Datei bereitstellen:
+   wget https://www.astro.com/ftp/swisseph/sefstars.txt -O astronex/resources/sefstars.txt
+
+2. Pfad optional per Umgebungsvariable setzen (ansonsten erkennt die API `astronex/resources` automatisch, wenn die Datei dort liegt):
+   export SWISS_EPHE_PATH="~/Projects/astronex/astronex/resources"
+
+3. API neu starten und prüfen:
+   uvicorn api:app --host 0.0.0.0 --port 8000
+   # Diagnose-Endpoint zeigt Pfad und ob die Datei gefunden wird
+   curl http://localhost:8000/ephepath
+
+4. Fixstern testen (Beispiel Sirius):
+   curl -X POST "http://localhost:8000/fixstar?star_name=Sirius" \
+     -H "Content-Type: application/json" \
+     -d '{"year":2000,"month":1,"day":1,"hour":12,"minute":0,"second":0}'
+
+Hinweis:
+- Ohne `sefstars.txt` meldet der Fixstern-Endpoint: "SwissEph file 'sefstars.txt' not found".
+- Der Diagnose-Endpoint `/ephepath` hilft bei der Fehlersuche.
+
+
+

@@ -1,0 +1,1183 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Astro-Nex 0.8\n"
+"POT-Creation-Date: 2008-07-13 14:22+WEST\n"
+"PO-Revision-Date: 2008-07-13 14:27+0100\n"
+"Last-Translator: jose <jar@astro-nex.com>\n"
+"Language-Team: Spanish\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "\tEl le muestra el camino hacia si misma"
+msgstr "\tÉl le muestra el camino hacia sí misma"
+
+msgid "\tElla le muestra el camino hacia si mismo"
+msgstr "\tElla le muestra el camino hacia sí mismo"
+
+msgid "'_' o letra*, seguida de letra*, numero o '_'."
+msgstr "'_' o letra*, seguida de letra*, numero o '_'."
+
+msgid "(La importacion puede tardar un poco...)\n"
+msgstr "(La importación puede tardar un poco...)\n"
+
+msgid "* A-Z, a-z, sin tildes ni caracteres compuestos"
+msgstr "* A-Z, a-z, sin tildes ni caracteres compuestos"
+
+msgid "+/- Tecl. num."
+msgstr "+/-  Tecl. num."
+
+msgid ": Alternar casillas"
+msgstr ": Alternar casillas"
+
+msgid ": Buscar tecleando en listas"
+msgstr ": Buscar tecleando en listas"
+
+msgid ": Calendario"
+msgstr ": Calendario"
+
+msgid ": Cerrar ventana/dialogo"
+msgstr ": Cerrar ventana/diálogo"
+
+msgid ": Ciclos"
+msgstr ": Ciclos"
+
+msgid ": Cuadro de configuracion"
+msgstr ": Cuadro de configuración"
+
+msgid ": Cuadro de entradas"
+msgstr ": Cuadro de entradas"
+
+msgid ": Diagramas"
+msgstr ": Diagramas"
+
+msgid ": Esta ayuda"
+msgstr ": Esta ayuda"
+
+msgid ": Exportar a PDF - Imprimir"
+msgstr ": Exportar a PDF - Imprimir"
+
+msgid ": Exportar a imagen"
+msgstr ": Exportar a imagen"
+
+msgid ": Localidades personalizadas"
+msgstr ": Añadir localidad"
+
+msgid ": Moverse en listas"
+msgstr ": Moverse en listas"
+
+msgid ": Navegador rapido cartas"
+msgstr ": Navegador rápido cartas"
+
+msgid ": PE"
+msgstr ": PE"
+
+msgid ": PE puente"
+msgstr ": PE Puente"
+
+msgid ": Pantalla completa"
+msgstr ": Pantalla completa"
+
+msgid ": Rotar casas (biografia)"
+msgstr ": Rotar casas (biografía)"
+
+msgid ": Rotar tambor"
+msgstr ": Rotar tambor de personas"
+
+msgid ": Salir"
+msgstr ": Salir"
+
+msgid ": Seleccionar lista"
+msgstr ": Seleccionar lista"
+
+msgid ": Selector aspectos"
+msgstr ": Selector de aspectos"
+
+msgid ": Ventana auxiliar"
+msgstr ": Ventana auxiliar"
+
+msgid "A"
+msgstr "K"
+
+msgid "Accion"
+msgstr "Acción"
+
+msgid "Accion inmediata"
+msgstr "Acción inmediata"
+
+msgid "Acerca de Astro-Nex"
+msgstr "Acerca de Astro-Nex"
+
+msgid "Acercar"
+msgstr "Acercar"
+
+msgid "Activar goodwill"
+msgstr "Ver goodwill"
+
+msgid "Admiracion"
+msgstr "Admiración"
+
+msgid "Afan de rendimiento"
+msgstr "Afán de rendimiento"
+
+msgid "Agua"
+msgstr "Agua"
+
+msgid "Aire"
+msgstr "Aire"
+
+msgid "Alejar"
+msgstr "Alejar"
+
+msgid "Alma"
+msgstr "Causal"
+
+msgid "Alma-Alma"
+msgstr "Causal-Causal"
+
+msgid "Alma-Nodal"
+msgstr "Causal-Nodal"
+
+msgid "Anadir localidad"
+msgstr "Añadir localidad"
+
+msgid "Analisis de polaridades"
+msgstr "Análisis de polaridades"
+
+msgid "Apellidos:"
+msgstr "Apellidos:"
+
+msgid "Archivo"
+msgstr "Archivo"
+
+msgid "Archivo AAF"
+msgstr "Archivo AAF"
+
+msgid "Asiduo"
+msgstr "Asiduo"
+
+msgid "Aspecto de charla, acuerdo momentaneo"
+msgstr "Aspecto de charla, acuerdo momentáneo"
+
+msgid "Aspecto de comprension, comprenderlo todo siempre"
+msgstr "Aspecto de comprensión, comprenderlo todo siempre"
+
+msgid "Aspecto de conversacion, te entiendo"
+msgstr "Aspecto de conversación, te entiendo"
+
+msgid "Aspecto de discusion, desintegrar un tema hablando"
+msgstr "Aspecto de discusión, desintegrar un tema hablando"
+
+msgid "Atraccion erotica"
+msgstr "Atracción erótica"
+
+msgid "Ayuda"
+msgstr "Ayuda"
+
+msgid "Azul"
+msgstr "Azul"
+
+msgid "Base"
+msgstr "Base"
+
+msgid "Biografia Alma"
+msgstr "Biografía causal"
+
+msgid "Biografia Nodal"
+msgstr "Biografía nodal"
+
+msgid "Biografia Radix"
+msgstr "Biografía radix"
+
+msgid "Biografia alma"
+msgstr "Biografía causal"
+
+msgid "Biografia nodal"
+msgstr "Biografía nodal"
+
+msgid "Biografia radix"
+msgstr "Biografía radix"
+
+msgid "Biografias"
+msgstr "Biografías"
+
+msgid "Boton rueda"
+msgstr "Botón rueda"
+
+msgid "CCasas"
+msgstr "Casas"
+
+msgid "CRadix"
+msgstr "Radix"
+
+msgid "Calculos dinamicos"
+msgstr "Cálculos dinámicos"
+
+msgid "Calendario"
+msgstr "Calendario (Ctrl-C)"
+
+msgid "Cambiar lenguage"
+msgstr "Seleccionar idioma"
+
+msgid "Cambiar nombre"
+msgstr "Cambiar nombre de tabla"
+
+msgid "Card"
+msgstr "Card"
+
+msgid "Carta Clics Individual"
+msgstr "Clic individual"
+
+msgid "Carta Clics Radix alma"
+msgstr "Clic Radix-Causal"
+
+msgid "Carta Local"
+msgstr "Carta local"
+
+msgid "Carta Nodal"
+msgstr "Carta nodal"
+
+msgid "Carta de Integracion"
+msgstr "Carta de integración"
+
+msgid "Carta de Rayos"
+msgstr "Rayos"
+
+msgid "Carta de las Casas"
+msgstr "Carta de las casas"
+
+msgid "Carta del Alma"
+msgstr "Carta Causal"
+
+msgid "Carta del Perfil"
+msgstr "Carta del perfil"
+
+msgid "Carta del momento"
+msgstr "Carta del momento"
+
+msgid "Cartas"
+msgstr "Cartas"
+
+msgid "Cartas importadas: %s; dudosas: %s"
+msgstr "Cartas importadas: %s; dudosas: %s"
+
+msgid "Casa"
+msgstr "Casa"
+
+msgid "Casas"
+msgstr "Casas"
+
+msgid "Casas-Casas"
+msgstr "Casas-Casas"
+
+msgid "Casas-Nodal"
+msgstr "Casas-Nodal"
+
+msgid "Ciclos PE"
+msgstr "Ciclo del PE"
+
+msgid "Clic Cuadrantes dinamicos"
+msgstr "Clic cuadrantes dinámicos"
+
+msgid "Clic Individual"
+msgstr "Clic individual"
+
+msgid "Clic Radix-Alma"
+msgstr "Radix-Causal"
+
+msgid "Clic Subjetivo"
+msgstr "Clic subjetivo"
+
+msgid "Clic derecho"
+msgstr "Clic derecho"
+
+msgid "Clic puente"
+msgstr "Clic puente"
+
+msgid "Clic simple"
+msgstr "Clic"
+
+msgid "Clic subjetivo"
+msgstr "Clic subjetivo"
+
+msgid "Clics Casas-Casas"
+msgstr "Casas-Casas"
+
+msgid "Clics Casas-Nodal"
+msgstr "Casas-Nodal"
+
+msgid "Clics Ind."
+msgstr "Clic individual"
+
+msgid "Clics Nodal-Casas"
+msgstr "Nodal-Casas"
+
+msgid "Clics Nodal-Nodal"
+msgstr "Nodal-Nodal"
+
+msgid "Clics Radix-Radix"
+msgstr "Radix-Radix"
+
+msgid "Clics sin ego"
+msgstr "Todos los planetas"
+
+msgid "Col"
+msgstr "Col"
+
+msgid "Colores"
+msgstr "Colores"
+
+msgid "Comparacion PE"
+msgstr "Comparación PE"
+
+msgid "Comparacion pareja 1"
+msgstr "Análisis de pareja I"
+
+msgid "Comparacion pareja 2"
+msgstr "Análisis de pareja II"
+
+msgid "Comparacion pareja I"
+msgstr "Análisis de  pareja I"
+
+msgid "Comparacion pareja II"
+msgstr "Análisis de  pareja II"
+
+msgid "Configuracion"
+msgstr "Configuración"
+
+msgid "Congelar"
+msgstr "Congelar"
+
+msgid "Conj."
+msgstr "Conj."
+
+msgid "Conservacion"
+msgstr "Conservación"
+
+msgid "Conservador"
+msgstr "Conservador"
+
+msgid "Consolidacion"
+msgstr "Consolidación"
+
+msgid "Contemplativo"
+msgstr "Contemplativo"
+
+msgid "Contra horoscopos"
+msgstr "Contra horóscopos"
+
+msgid "Copiar"
+msgstr "Copiar"
+
+msgid "Cortar"
+msgstr "Cortar"
+
+msgid "Creada tabla %s\n"
+msgstr "Creada tabla %s\n"
+
+msgid "Cruce PE - K1: %s  %s"
+msgstr "Cruce PE - K1: %s  %s"
+
+msgid "Cuadrantes dinamicos"
+msgstr "Cuadrantes dinámicos"
+
+msgid "Cursores"
+msgstr "Cursores"
+
+msgid "DDiagramas"
+msgstr "Diagramas"
+
+msgid "Datos C. Casas"
+msgstr "Datos casas"
+
+msgid "Datos C. Nodal"
+msgstr "Datos nodal"
+
+msgid "Datos Radix"
+msgstr "Datos radix"
+
+msgid "Defensivo"
+msgstr "Defensivo"
+
+msgid "Desactivar goodwill"
+msgstr "Ocultar goodwill"
+
+msgid "Desconfiado"
+msgstr "Desconfiado"
+
+msgid "Descongelar"
+msgstr "Descongelar"
+
+msgid "Desea realmente eliminar la tabla %s?"
+msgstr "¿Desea realmente eliminar la tabla %s?"
+
+msgid "Deshacer"
+msgstr "Deshacer"
+
+msgid "Diagrama de barras"
+msgstr "Diagrama de barras"
+
+msgid "Diagrama de casas"
+msgstr "Diagrama de casas"
+
+msgid "Diagrama de diferencias"
+msgstr "Diagrama de diferencias"
+
+msgid "Diagrama de energia"
+msgstr "Diagrama de energía"
+
+msgid "Diagrama de signos"
+msgstr "Diagrama de signos"
+
+msgid "Diagramas"
+msgstr "Diagramas (Ctrl-D)"
+
+msgid "Disfrute"
+msgstr "Disfrute"
+
+msgid "Documento Pdf "
+msgstr "Documento Pdf "
+
+msgid "Donde"
+msgstr "Dónde"
+
+msgid "Duda y critica"
+msgstr "Duda y crítica"
+
+msgid "E"
+msgstr "E"
+
+msgid "E_liminar tabla"
+msgstr "E_liminar tabla"
+
+msgid "Economico"
+msgstr "Económico"
+
+msgid "Ego-clics"
+msgstr "Planetas del ego"
+
+msgid "El activa su sentimiento maternal"
+msgstr "Él activa su sentimiento maternal"
+
+msgid "El la idealiza"
+msgstr "Él la idealiza"
+
+msgid "El nombre de las tablas solo puede comenzar con"
+msgstr "El nombre de las tablas solo puede comenzar con"
+
+msgid "Elige una fuente"
+msgstr "Elige una fuente"
+
+msgid "Eliminar"
+msgstr "Eliminar"
+
+msgid "Eliminar entrada"
+msgstr "Eliminar entrada"
+
+msgid "Eliminar tabla"
+msgstr "Eliminar tabla"
+
+msgid "Eliminar una localidad puede impedir modificar "
+msgstr "Eliminar una localidad puede impedir modificar "
+
+msgid "Energia"
+msgstr "Energía"
+
+msgid "Entradas"
+msgstr "Entradas"
+
+msgid "Error abriendo el archivo"
+msgstr "Error abriendo el archivo"
+
+msgid "Error abriendo el archivo %s"
+msgstr "Error abriendo el archivo %s"
+
+msgid "Error importando carta"
+msgstr "Error importando carta"
+
+msgid "Error importando la tabla"
+msgstr "Error importando la tabla"
+
+msgid "Espontaneo"
+msgstr "Espontáneo"
+
+msgid "Estado"
+msgstr "Estado"
+
+msgid "Estrellas dinamicas"
+msgstr "Diagramas de frustración y estrés"
+
+msgid "Examinar"
+msgstr "Examinar"
+
+msgid "Explorador"
+msgstr "Explorador"
+
+msgid "Explorador/Tablas"
+msgstr "Explorador/Tablas"
+
+msgid "Exportar a PDF/Imprimir"
+msgstr "Exportar a PDF/Imprimir (Ctrl-P)"
+
+msgid "Exportar a imagen"
+msgstr "Exportar a imagen (Ctrl-G)"
+
+msgid "Exportar carta"
+msgstr "Exportar carta"
+
+msgid "Exportar tabla"
+msgstr "Exportar tabla"
+
+msgid "Fecha"
+msgstr "Fecha"
+
+msgid "Fecha y hora"
+msgstr "Fecha y hora"
+
+msgid "Fecha:"
+msgstr "Fecha:"
+
+msgid "Fija"
+msgstr "Fija"
+
+msgid "Filtro"
+msgstr "Filtro"
+
+msgid "Forma"
+msgstr "Forma"
+
+msgid "Formacion"
+msgstr "Formación"
+
+msgid "Formacion ideas"
+msgstr "Formación ideas"
+
+msgid "Fuego"
+msgstr "Fuego"
+
+msgid "Fuentes"
+msgstr "Fuentes"
+
+msgid "Funcion edipica femenina"
+msgstr "Función edípica femenina"
+
+msgid "Funcion edipica masculina"
+msgstr "Función edípica masculina"
+
+msgid "Guardar..."
+msgstr "Guardar..."
+
+msgid "Herr."
+msgstr "Herr."
+
+msgid "Hora:"
+msgstr "Hora:"
+
+msgid "Horizontal"
+msgstr "Horizontal"
+
+msgid "Imagen"
+msgstr "Imagen"
+
+msgid "Impaciente por rendir"
+msgstr "Impaciente por rendir"
+
+msgid "Importacion AAF"
+msgstr "Importación AAF"
+
+msgid "Importando %s %s\n"
+msgstr "Importando %s %s\n"
+
+msgid "Importar"
+msgstr "Importar"
+
+msgid "Importar archivo: "
+msgstr "Importar archivo: "
+
+msgid "Importar carta"
+msgstr "Importar carta"
+
+msgid "Importar tabla"
+msgstr "Importar tabla"
+
+msgid "Impulso a poseer"
+msgstr "Impulso a poseer"
+
+msgid "Ind"
+msgstr "Ind"
+
+msgid "Integracion"
+msgstr "Integración"
+
+msgid "Intuitivo"
+msgstr "Intuitivo"
+
+msgid "Investigador"
+msgstr "Investigador"
+
+msgid "La presencia de el estimula el desarrollo de ella"
+msgstr "La presencia de él estimula el desarrollo de ella"
+
+msgid "La presencia de ella estimula el desarrollo de el"
+msgstr "La presencia de ella estimula el desarrollo de él"
+
+msgid "La tabla %s existe. Reemplazarla, perdiendo los datos?"
+msgstr "La tabla %s ya existe. ¿Reemplazarla, perdiendo los datos?"
+
+msgid "Largo plazo"
+msgstr "Largo plazo"
+
+msgid "Las cartas siguientes fueron importadas sin encontrar\n"
+msgstr "Las cartas siguientes fueron importadas sin encontrar\n"
+
+msgid "Latitud"
+msgstr "Latitud"
+
+msgid "Lenguage"
+msgstr "Idioma"
+
+msgid "Lenguage por defecto"
+msgstr "Idioma preestablecido"
+
+msgid "Lineas"
+msgstr "Líneas"
+
+msgid "Local"
+msgstr "Local"
+
+msgid "Localidad"
+msgstr "Localidad"
+
+msgid "Localidad por defecto"
+msgstr "Localidad preestablecida"
+
+msgid "Longitud"
+msgstr "Longitud"
+
+msgid "Los cambios tendran lugar depues de reiniciar la aplicacion"
+msgstr "Los cambios tendrán lugar depués de reiniciar la aplicación"
+
+msgid "Miercoles"
+msgstr "Miércoles"
+
+msgid "Modificar carta"
+msgstr "Modificar carta"
+
+msgid "Modificar entrada"
+msgstr "Modificar entrada"
+
+msgid "Momento actual"
+msgstr "Momento actual"
+
+msgid "Mostrar todo"
+msgstr "Ver todo"
+
+msgid "Mostrar unilaterales"
+msgstr "Ver unilaterales"
+
+msgid "Mut"
+msgstr "Mut"
+
+msgid "N"
+msgstr "N"
+
+msgid "N. favoritos: "
+msgstr "Núm. favoritos"
+
+msgid "No puedo cambiar el nombre a una tabla predeterminada."
+msgstr "No puedo cambiar el nombre una tabla predeterminada."
+
+msgid "No puedo eliminar una carta con pareja!"
+msgstr "¡No puedo eliminar una carta con pareja!"
+
+msgid "No puedo eliminar una tabla con pareja!"
+msgstr "¡No puedo eliminar una tabla con pareja!"
+
+msgid "No puedo eliminar una tabla predeterminada."
+msgstr "No puedo eliminar una tabla predeterminada."
+
+msgid "Nodal"
+msgstr "Nodal"
+
+msgid "Nodal-Casas"
+msgstr "Nodal-Casas"
+
+msgid "Nodal-Nodal"
+msgstr "Nodal-Nodal"
+
+msgid "Nodales"
+msgstr "Nodal"
+
+msgid "Nodo"
+msgstr "Nodo"
+
+msgid "Nombre"
+msgstr "Nombre"
+
+msgid "Nombre tabla: "
+msgstr "Nombre de tabla: "
+
+msgid "Nombre:"
+msgstr "Nombre:"
+
+msgid "Observador"
+msgstr "Observador"
+
+msgid "Ocultar"
+msgstr "Ocultar"
+
+msgid "Ocultar EA"
+msgstr "Ocultar EA"
+
+msgid "Ocultar unilaterales"
+msgstr "Ocultar unilaterales"
+
+msgid "Ocultar zonas PE"
+msgstr "Ocultar zonas PE"
+
+msgid "Ocultar zonas de casa"
+msgstr "Ocultar zonas de casa"
+
+msgid "Ofensivo"
+msgstr "Ofensivo"
+
+msgid "Orbes"
+msgstr "Orbes"
+
+msgid "Organizador"
+msgstr "Organizador"
+
+msgid "P. Inversion"
+msgstr "P. Inversión"
+
+msgid "P. Reposo"
+msgstr "P. Reposo"
+
+msgid "P.Inv."
+msgstr "P. Inv."
+
+msgid "P.Rep."
+msgstr "P. Rep."
+
+msgid "PE Puente"
+msgstr "PE Puente"
+
+msgid "PE puente"
+msgstr "PE Puente (Ctrl-R)"
+
+msgid "PNG"
+msgstr "PNG"
+
+msgid "Pais"
+msgstr "País"
+
+msgid "Pantalla completa"
+msgstr "Pantalla completa (F11)"
+
+msgid "Pegar"
+msgstr "Pegar"
+
+msgid "Pensamiento"
+msgstr "Pensamiento"
+
+msgid "Pensamiento utilitario"
+msgstr "Pensamiento utilitario"
+
+msgid "Perfil"
+msgstr "Perfil"
+
+msgid "Permutar"
+msgstr "Permutar"
+
+msgid "Pers."
+msgstr "Pers."
+
+msgid "Personal"
+msgstr "Datos personales"
+
+msgid "Planetas"
+msgstr "Planetas"
+
+msgid "Planificador"
+msgstr "Planificador"
+
+msgid "Primera pers."
+msgstr "Primera persona"
+
+msgid "Proceso creativo"
+msgstr "Proceso creativo"
+
+msgid "Programa de calculo y dibujo de cartas astrologicas segun el metodo API"
+msgstr ""
+"Programa de cálculo y dibujo de cartas astrológicas según el método API"
+
+msgid "Progresion E. Alma"
+msgstr "PE causal"
+
+msgid "Progresion E. Local"
+msgstr "PE local"
+
+msgid "Progresion E. Nodal"
+msgstr "PE nodal"
+
+msgid "Progresion E. Radix"
+msgstr "PE radix"
+
+msgid "Progresion de la edad Carta Local"
+msgstr "PE local"
+
+msgid "Progresion de la edad Carta Nodal"
+msgstr "PE nodal"
+
+msgid "Progresion de la edad Carta del Alma"
+msgstr "PE causal"
+
+msgid "Progresion de la edad Radix"
+msgstr "PE radix"
+
+msgid "Progresion secundaria"
+msgstr "Progresión secundaria"
+
+msgid "Proyeccion de padre/madre ideal"
+msgstr "Proyección de padre/madre ideal"
+
+msgid "Prudente"
+msgstr "Prudente"
+
+msgid "Punto Edad"
+msgstr "Punto de la edad (Ctrl-A)"
+
+msgid "Radix"
+msgstr "Radix"
+
+msgid "Radix Alma"
+msgstr "Radix-Causal"
+
+msgid "Radix con transitos"
+msgstr "Radix-Tránsitos"
+
+msgid "Radix-Alma"
+msgstr "Radix-Causal"
+
+msgid "Radix-Radix"
+msgstr "Radix-Radix"
+
+msgid "Raton"
+msgstr "Ratón"
+
+msgid "Region"
+msgstr "Región"
+
+msgid "Resignado"
+msgstr "Resignado"
+
+msgid "Resolucion"
+msgstr "Resolución"
+
+msgid "Restablecer"
+msgstr "Restablecer"
+
+msgid "Revolucion solar"
+msgstr "Revolución solar"
+
+msgid "Rojo"
+msgstr "Rojo"
+
+msgid "S"
+msgstr "S"
+
+msgid "Sabado"
+msgstr "Sábado"
+
+msgid "Salir"
+msgstr "Salir (Ctrl-Q)"
+
+msgid "Segunda pers."
+msgstr "Segunda persona"
+
+msgid "Selector de aspectos"
+msgstr "Selector de aspectos (Ctrl-H)"
+
+msgid "Selector de ciclos"
+msgstr "Selector de ciclos del PE (Ctrl-Y)"
+
+msgid "Selector de ciclos PE"
+msgstr "Selector de ciclos del PE"
+
+msgid "Simular"
+msgstr "Simular"
+
+msgid "Sobrescribir"
+msgstr "Sobrescribir"
+
+msgid "Solo EA"
+msgstr "Solo EA"
+
+msgid "Su tarea del alma. Conexiones cosmicas indefinibles"
+msgstr "Su tarea del alma. Conexiones cósmicas indefinibles"
+
+msgid "Su tarea karmica. Caminos del destino entre ambos, providencia"
+msgstr "Su tarea kármica. Caminos del destino entre ambos, providencia"
+
+msgid "TConfiguracion"
+msgstr "Configuración (Ctrl-S)"
+
+msgid "TEntradas"
+msgstr "Entradas (Ctrl-E)"
+
+msgid "Tabla"
+msgstr "Tabla"
+
+msgid "Tabla de aspectos"
+msgstr "Tabla de aspectos"
+
+msgid "Tablas"
+msgstr "Tablas"
+
+msgid "Tablas por defecto"
+msgstr "Tablas preestablecidas"
+
+msgid "Tamano de imagen PNG"
+msgstr "Tamaño de imagen PNG"
+
+msgid "Teclado"
+msgstr "Teclado"
+
+msgid "Tierra"
+msgstr "Tierra"
+
+msgid "Trans."
+msgstr "Trans."
+
+msgid "Transitos"
+msgstr "Tránsitos"
+
+msgid "Tu"
+msgstr "Tú"
+
+msgid "Una carta con este nombre: %s %s existe. Sobrescribir?"
+msgstr "Una carta con este nombre: %s %s ya existe. ¿Sobrescribir?"
+
+msgid "Uniones corona"
+msgstr "Uniones corona"
+
+msgid "Usa"
+msgstr "USA"
+
+msgid "Utilizacion"
+msgstr "Utilización"
+
+msgid "Vacilante"
+msgstr "Vacilante"
+
+msgid "Vent.aux."
+msgstr "Ventana auxiliar"
+
+msgid "Ventana auxiliar"
+msgstr "Ventana (Ctrl-W)"
+
+msgid "Ver EA"
+msgstr "Ver EA"
+
+msgid "Ver solo clics"
+msgstr "Clics estándar"
+
+msgid "Ver todos los aspectos"
+msgstr "Todos los clics"
+
+msgid "Ver zonas PE"
+msgstr "Ver zonas PE"
+
+msgid "Ver zonas de casa"
+msgstr "Ver zonas de casa"
+
+msgid "Verde"
+msgstr "Verde"
+
+msgid "Vertical"
+msgstr "Vertical"
+
+msgid "W"
+msgstr "W"
+
+msgid "Yo"
+msgstr "Yo"
+
+msgid "Zona"
+msgstr "Zona"
+
+msgid "_Aceptar"
+msgstr "_Aceptar"
+
+msgid "_Cancelar"
+msgstr "_Cancelar"
+
+msgid "_Crear tabla"
+msgstr "_Crear tabla"
+
+msgid "_Exportar  tabla"
+msgstr "_Exportar tabla"
+
+msgid "_Hoy"
+msgstr "_Hoy"
+
+msgid "_Importar  tabla"
+msgstr "_Importar tabla"
+
+msgid "acercar"
+msgstr "Zoom"
+
+msgid "aleman"
+msgstr "Alemán"
+
+msgid "alternar con guia"
+msgstr "Alternar con guía"
+
+msgid "alternar posicion"
+msgstr "Alternar posición"
+
+msgid "area de dibujo"
+msgstr "Área de dibujo"
+
+msgid "areas de dibujo"
+msgstr "Áreas de dibujo"
+
+msgid "biografia"
+msgstr "Biografía"
+
+msgid "c"
+msgstr "H"
+
+msgid "carta reloj, transitos"
+msgstr "Carta reloj, tránsitos"
+
+msgid "casillas"
+msgstr "Casillas"
+
+msgid "catalan"
+msgstr "Catalán"
+
+msgid "codigo pais no encontrado: %s\n"
+msgstr "Código de país no encontrado: %s\n"
+
+msgid "de voluntad"
+msgstr " de voluntad"
+
+msgid "dias"
+msgstr "días"
+
+msgid "entre tablas"
+msgstr "Entre tablas"
+
+msgid "espanol"
+msgstr "Español"
+
+msgid "guia de grados"
+msgstr "Guía de grados"
+
+msgid "horas"
+msgstr "horas"
+
+msgid "ingles"
+msgstr "Inglés"
+
+msgid "la localidad correspondiente, y la zona horaria sera\n"
+msgstr "la localidad correspondiente, y la zona horaria será\n"
+
+msgid "lista principal"
+msgstr "Lista principal"
+
+msgid "listas de cartas"
+msgstr "Listas de cartas"
+
+msgid "listas dobles/triples"
+msgstr "Listas dobles/triples"
+
+msgid "luego una carta con facilidad. Continuar?"
+msgstr "luego una carta con facilidad. ¿Continuar?"
+
+msgid "menu secundario"
+msgstr "Menú secundario"
+
+msgid "minutos"
+msgstr "minutos"
+
+msgid "mover pe"
+msgstr "Mover PE"
+
+msgid "mover pe "
+msgstr "Mover PE "
+
+msgid "mover pe +"
+msgstr "mover PE +"
+
+msgid "mover pe -"
+msgstr "Mover PE -"
+
+msgid "mover registros"
+msgstr "Mover registros"
+
+msgid "ojo"
+msgstr "Ojo"
+
+msgid "panorama"
+msgstr "Arrastrar carta"
+
+msgid "pe"
+msgstr "PE"
+
+msgid "pe, biografia"
+msgstr "PE, biografía"
+
+msgid "personas recientes"
+msgstr "Personas recientes"
+
+msgid "principio de lista"
+msgstr "Principio de lista"
+
+msgid "principio lista"
+msgstr "Principio lista"
+
+msgid "principio lista principal"
+msgstr "Radix"
+
+msgid "probablemente incorrrecta. Puede editar este panel,\n"
+msgstr "probablemente incorrrecta. Puede editar este panel,\n"
+
+msgid "restaurar fecha"
+msgstr "Fecha = Hoy"
+
+msgid "rotar lista"
+msgstr "Rotar lista"
+
+msgid "rotar tambor"
+msgstr "Rotar tambor pers."
+
+msgid "s"
+msgstr "S"
+
+msgid "seleccionar pe"
+msgstr "Situar PE"
+
+msgid "selector de casas"
+msgstr "Selector de casas"
+
+msgid "sin_nombre%d"
+msgstr "sin_nombre%d"
+
+msgid "ventana auxiliar"
+msgstr "Ventana auxiliar"
+
+msgid "ventana de grados"
+msgstr "Ventana de grados"
+
+msgid "y copiar su contenido (menu clic derecho)."
+msgstr "y copiar su contenido (menú clic derecho)."
+
+msgid "Cerrar"
+msgstr "Cerrar"
+
+msgid "Guardar"
+msgstr "Guardar"
