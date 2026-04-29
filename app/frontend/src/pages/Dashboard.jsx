@@ -127,7 +127,7 @@ export default function Dashboard({ user }){
             >
               einloggen
             </button>, um gespeicherte Personen auswählen zu können.
-            <h2>Astro-Magister ist eine spezialisierte Astrologie-Plattform, für die Huber-Astrologie.</h2>
+            <h2>Astro-Magister ist eine spezialisierte Astrologie-Plattform für die Huber-Astrologie.</h2>
             <h3>Entdecke die Welt der Astrologie mit unseren umfassenden Tools und Ressourcen.</h3>
           </p>
           {publicLoginError ? <div className="admin-message admin-error">{publicLoginError}</div> : null}

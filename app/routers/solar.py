@@ -23,6 +23,7 @@ from app.services.horoscope_graphics import draw_chart_png
 from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
+from app.services.auth_security import check_ai_rate_limit, get_client_ip, log_auth_event
 
 router = APIRouter(tags=["solar"], dependencies=[Depends(require_authenticated_user)])
 logger = logging.getLogger(__name__)
@@ -373,6 +374,24 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
         result = _build_solar_return_response(payload)
         response_data = result.model_dump()
         summary_prompt = response_data.pop("summary")
+        if summary_prompt:
+            user = _get_user_from_request(request)
+            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:solar-return')
+            if not rate_limit.allowed:
+                log_auth_event(
+                    event_type='ai_rate_limited',
+                    success=False,
+                    username=user.get('username') if user else None,
+                    user_id=user.get('id') if user else None,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get('user-agent'),
+                    detail='Solar return stream interpretation rate limit exceeded',
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
+                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                )
     except HTTPException:
         raise
     except Exception as exc:
@@ -380,6 +399,11 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
         raise HTTPException(status_code=400, detail=f"Error calculating solar return: {exc}")
 
     async def event_stream():
+        if not summary_prompt:
+            yield _sse_event("meta", response_data)
+            yield _sse_event("done", {"summary": ""})
+            return
+
         role_name = _resolve_role_name_for_solar_return(request, payload)
         perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []

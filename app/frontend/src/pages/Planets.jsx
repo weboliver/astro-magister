@@ -344,14 +344,6 @@ export default function Planets(){
       let skipGraphic = false
       if (cached) {
         displayChartBlob(cached.blob)
-        if (cached.summary) {
-          setCachedSummary(cached.summary)
-          setShowSummary(true)
-          persistPayload(payload)
-          setLoading(false)
-          setImageLoading(false)
-          return
-        }
         skipGraphic = true
       }
 
@@ -421,7 +413,6 @@ export default function Planets(){
       try {
         const summaryText = streamedSummary || 'Kein Summary vorhanden'
         if (skipGraphic) {
-          chartCacheRef.current.set(cacheKey, { ...cached, summary: summaryText })
           setCachedSummary(summaryText)
           persistPayload(payload)
         } else {
@@ -434,7 +425,7 @@ export default function Planets(){
             throw new Error(`Graphic request failed (${graphicResp.status})`)
           }
           const blob = await graphicResp.blob()
-          chartCacheRef.current.set(cacheKey, { blob, summary: summaryText })
+          chartCacheRef.current.set(cacheKey, { blob })
           setCachedSummary(summaryText)
           const currentKey = computeCacheKey(currentPayload, reqSize)
           if (currentKey === cacheKey) {

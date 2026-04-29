@@ -286,29 +286,31 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
 def get_horoscope(payload: DateTimeRequest, request: Request):
     try:
         response_data = _build_horoscope_response_data(payload)
-        user = _get_user_from_request(request)
-        rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:horoscope')
-        if not rate_limit.allowed:
-            log_auth_event(
-                event_type='ai_rate_limited',
-                success=False,
-                username=user.get('username') if user else None,
-                user_id=user.get('id') if user else None,
-                ip_address=get_client_ip(request),
-                user_agent=request.headers.get('user-agent'),
-                detail='Horoscope interpretation rate limit exceeded',
+        summary = response_data['summary_prompt'] or ''
+        if response_data['summary_prompt']:
+            user = _get_user_from_request(request)
+            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:horoscope')
+            if not rate_limit.allowed:
+                log_auth_event(
+                    event_type='ai_rate_limited',
+                    success=False,
+                    username=user.get('username') if user else None,
+                    user_id=user.get('id') if user else None,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get('user-agent'),
+                    detail='Horoscope interpretation rate limit exceeded',
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
+                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                )
+            role_name = _resolve_role_name_for_horoscope(request, payload)
+            perplexityClient = PerplexityClient(role_type=role_name)
+            summary = perplexityClient.send_summary_text(
+                summary=response_data['summary_prompt'],
+                system_prompt="horoskop",
             )
-            raise HTTPException(
-                status_code=429,
-                detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-            )
-        role_name = _resolve_role_name_for_horoscope(request, payload)
-        perplexityClient = PerplexityClient(role_type=role_name)
-        summary = perplexityClient.send_summary_text(
-            summary=response_data['summary_prompt'],
-            system_prompt="horoskop",
-        )
 
         response_obj = SolarReturnResponse(
             target_year=response_data['target_year'],
@@ -339,23 +341,24 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
 async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
     try:
         response_data = _build_horoscope_response_data(payload)
-        user = _get_user_from_request(request)
-        rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:horoscope')
-        if not rate_limit.allowed:
-            log_auth_event(
-                event_type='ai_rate_limited',
-                success=False,
-                username=user.get('username') if user else None,
-                user_id=user.get('id') if user else None,
-                ip_address=get_client_ip(request),
-                user_agent=request.headers.get('user-agent'),
-                detail='Horoscope stream interpretation rate limit exceeded',
-            )
-            raise HTTPException(
-                status_code=429,
-                detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-            )
+        if response_data['summary_prompt']:
+            user = _get_user_from_request(request)
+            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:horoscope')
+            if not rate_limit.allowed:
+                log_auth_event(
+                    event_type='ai_rate_limited',
+                    success=False,
+                    username=user.get('username') if user else None,
+                    user_id=user.get('id') if user else None,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get('user-agent'),
+                    detail='Horoscope stream interpretation rate limit exceeded',
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
+                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                )
     except HTTPException:
         raise
     except Exception as e:
@@ -363,6 +366,12 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
         raise HTTPException(status_code=400, detail=f"Error calculating horoscope: {str(e)}")
 
     async def event_stream():
+        if not response_data['summary_prompt']:
+            meta_payload = {key: value for key, value in response_data.items() if key != 'summary_prompt'}
+            yield _sse_event("meta", meta_payload)
+            yield _sse_event("done", {"summary": ""})
+            return
+
         role_name = _resolve_role_name_for_horoscope(request, payload)
         perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []

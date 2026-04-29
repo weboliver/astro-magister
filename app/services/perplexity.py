@@ -38,6 +38,38 @@ def _strip_think_blocks(text: str) -> str:
     return re.sub(r"<think>.*?(</think>|$)", "", text, flags=re.IGNORECASE | re.DOTALL)
 
 
+def _normalize_prompt_echo_text(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _looks_like_prompt_echo(prompt: str, response_text: str) -> bool:
+    normalized_prompt = _normalize_prompt_echo_text(prompt)
+    normalized_response = _normalize_prompt_echo_text(response_text)
+
+    if not normalized_prompt or not normalized_response:
+        return False
+
+    if normalized_prompt == normalized_response:
+        return True
+
+    if len(normalized_prompt) < 80 or len(normalized_response) < 80:
+        return False
+
+    min_prefix_length = min(len(normalized_prompt), len(normalized_response), 400)
+    prefix_matches = normalized_response.startswith(normalized_prompt[:min_prefix_length])
+    length_delta = abs(len(normalized_prompt) - len(normalized_response))
+    allowed_delta = max(80, len(normalized_prompt) // 10)
+    if prefix_matches and length_delta <= allowed_delta:
+        return True
+
+    if normalized_prompt.startswith(normalized_response):
+        return len(normalized_response) / len(normalized_prompt) >= 0.9
+
+    return False
+
+
 class _CacheBackend:
     def get(self, key: str) -> Optional[str]:
         raise NotImplementedError
@@ -372,8 +404,8 @@ class PerplexityClient:
                 "Überschrift 2: Sternzeichen und Aszendent danach kurze Erläuterung zum Sternzeichen und zum Aszendenten.\n"
                 "Zeige am Anfang die wichtigsten Erkenntnisse an. Liste danach in dieser Reihenfolge:"\
                 "1. Häuserspitzen, als Bullet Liste mit Bedeutung (je 50-70 Tokens).\n"\
-                "2. Planeten, als Bullet Liste mit Bedeutung (je 50-100 Tokens).\n"\
-                "3. Aspekte, als Bullet Liste mit Bedeutung (je 50-100 Tokens).\n"\
+                "2. Planeten, als Bullet Liste mit Bedeutung (je 50-70 Tokens).\n"\
+                "3. Aspekte, als Bullet Liste mit Bedeutung (je 50-70 Tokens).\n"\
                 "Füge am Ende eine Zusammenfassung mit psychologischer Gesamtschau an.\n"
                 f"{allgemeine_deutung}\n"
             )
@@ -428,8 +460,8 @@ class PerplexityClient:
         ENTRY_GENERATION_SYSTEM_PROMPT = (
             "Du bist ein erfahrener Astrologie-Redakteur, spezialisiert auf die Erstellung von astrologischen Inhalten für eine deutschsprachige Wiki-Huber-Astrologie Seite.\n"\
             "Deine Aufgabe ist es, basierend auf Titel, Bereich, Kategorie und vorhandenen Texten, einen vollständigen, gut strukturierten und fachlich fundierten Beitrag zu erstellen oder zu verbessern.\n"\
-            "Verwende immer Listen mit Bullet Points, um die Informationen klar und übersichtlich zu präsentieren.\n"\
-            "Füge am Ende eine Liste der verwendeten Quellen an.\n"
+            "Verwende immer Listen mit Bullet Points, um die Informationen klar und übersichtlich zu präsentieren.\n"
+            "Halte dich strikt an diese Struktur. Keine Meta-Kommentare. Keine Quellenangaben.\n"\
         )
 
         self.system_prompt["horoskop"] = HOROSCOPE_SYSTEM_PROMPT
@@ -509,17 +541,23 @@ class PerplexityClient:
             key = _make_cache_key(summary, resolved, self.model)
             cached = _cache_get(key)
             if cached is not None:
-                yield cached
-                return
+                if _looks_like_prompt_echo(summary, cached):
+                    logger.warning("Verwerfe verunreinigten Perplexity-Cache-Eintrag, der den Prompt spiegelt")
+                    _cache_delete(key)
+                else:
+                    yield cached
+                    return
         except Exception:
             pass
-
+        disable_search = True
+        if system_prompt == "entry":
+            disable_search = False
         messages = self._build_messages(summary=summary, system_prompt=resolved)
         payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "stream": True,
-            "disable_search": True,
+            "disable_search": disable_search,
             "stream_mode": stream_mode,
             "max_tokens": self.tokens,  # erhöhe max_tokens für längere Antworten
         }
@@ -565,18 +603,26 @@ class PerplexityClient:
                 if remainder:
                     yield remainder
 
-    def send_summary_text(self, summary: str, system_prompt: Optional[str] = None) -> str:
+    def send_summary_text(
+        self,
+        summary: str,
+        system_prompt: Optional[str] = None,
+        use_cache: bool = True,
+        retry_on_prompt_echo: bool = True,
+    ) -> str:
         """Wie send_summary(), gibt aber nur den reinen Antworttext zurück."""
         system_prompt = self._resolve_system_prompt(system_prompt)
         if system_prompt is None:
             system_prompt = self.system_prompt_for_summary("horoskop")
-        try:
-            key = _make_cache_key(summary, system_prompt, self.model)
+        key = _make_cache_key(summary, system_prompt, self.model)
+        if use_cache:
             cached = _cache_get(key)
             if cached is not None:
-                return cached
-        except Exception:
-            pass
+                if _looks_like_prompt_echo(summary, cached):
+                    logger.warning("Verwerfe verunreinigten Perplexity-Cache-Eintrag, der den Prompt spiegelt")
+                    _cache_delete(key)
+                else:
+                    return cached
 
         result = self.send_summary(summary=summary, system_prompt=system_prompt)
         try:
@@ -584,8 +630,18 @@ class PerplexityClient:
         except (KeyError, IndexError, TypeError) as e:
             raise ValueError(f"Unerwartete Perplexity-Antwortstruktur: {e} — Raw: {result}")
 
+        if _looks_like_prompt_echo(summary, text):
+            if retry_on_prompt_echo:
+                logger.warning("Perplexity hat den Prompt gespiegelt, wiederhole Anfrage ohne Cache")
+                return self.send_summary_text(
+                    summary,
+                    system_prompt=system_prompt,
+                    use_cache=False,
+                    retry_on_prompt_echo=False,
+                )
+            raise ValueError("Perplexity hat den Prompt statt einer Interpretation zurückgegeben")
+
         try:
-            key = _make_cache_key(summary, system_prompt, self.model)
             _cache_set(key, text)
         except Exception:
             pass
@@ -594,7 +650,7 @@ class PerplexityClient:
 
 
 _CACHE_MAX = int(app_config.get_env_setting("PERPLEXITY_CACHE_MAX") or 256)
-_CACHE_TTL = int(app_config.get_env_setting("PERPLEXITY_CACHE_TTL") or 24 * 3600)
+_CACHE_TTL = int(app_config.get_env_setting("PERPLEXITY_CACHE_TTL") or 7 * 24 * 3600)
 _CACHE_BACKEND = (app_config.get_env_setting("PERPLEXITY_CACHE_BACKEND") or "local").strip().lower()
 _CACHE_PREFIX = (app_config.get_env_setting("PERPLEXITY_CACHE_PREFIX") or "perplexity").strip() or "perplexity"
 _REDIS_URL = (app_config.get_env_setting("REDIS_URL") or "").strip()
@@ -714,6 +770,14 @@ def _cache_set(key: str, text: str) -> None:
         _CACHE.set(key, text)
     except Exception:
         logger.exception("Error setting perplexity cache")
+        return
+
+
+def _cache_delete(key: str) -> None:
+    try:
+        _CACHE.delete(key)
+    except Exception:
+        logger.exception("Error deleting perplexity cache entry")
         return
 
 

@@ -6,10 +6,13 @@ import { storeAuthTokens } from '../services/api'
 export default function Login({ onLogin, onShowRegister }){
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [msg, setMsg] = useState('')
   const [captchaToken, setCaptchaToken] = useState('')
   const { refreshProfile } = useAuth()
   const turnstileRef = useRef(null)
+  const handleShowPress = () => setShowPassword(true)
+  const handleShowRelease = () => setShowPassword(false)
 
   async function submit(e){
     e.preventDefault()
@@ -41,6 +44,7 @@ export default function Login({ onLogin, onShowRegister }){
       setMsg('Fehler: ' + err.message)
       turnstileRef.current?.reset()
     }
+
   }
 
   return (
@@ -53,7 +57,21 @@ export default function Login({ onLogin, onShowRegister }){
         </div>
         <div>
           <label>Passwort</label><br/>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+          <div style={{display:'flex',alignItems:'center'}}>
+            <input type={showPassword ? 'text' : 'password'} value={password} onChange={e=>setPassword(e.target.value)} />
+            <button
+              type="button"
+              onMouseDown={handleShowPress}
+              onMouseUp={handleShowRelease}
+              onMouseLeave={handleShowRelease}
+              onTouchStart={(e)=>{ e.preventDefault(); handleShowPress() }}
+              onTouchEnd={handleShowRelease}
+              style={{marginLeft:8, padding: '5px 5px', cursor: 'pointer'}}
+              aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
         <div style={{marginTop:8}}>
           <button type="submit">Anmelden</button>

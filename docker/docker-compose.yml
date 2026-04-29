@@ -64,7 +64,12 @@ services:
       /bin/sh -c "
       export PATH=/opt/venv/bin:$$PATH &&
       bash ./scripts/docker_init_postgres.sh &&
-      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /workspace/app
+      DEBUG_NORMALIZED=$$(printf '%s' "$${DEBUG:-false}" | tr '[:upper:]' '[:lower:]') &&
+      if [ "$$DEBUG_NORMALIZED" = "true" ] || [ "$$DEBUG_NORMALIZED" = "1" ] || [ "$$DEBUG_NORMALIZED" = "yes" ] || [ "$$DEBUG_NORMALIZED" = "on" ]; then
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /workspace/app;
+      else
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4;
+      fi
       "
 
   frontend:

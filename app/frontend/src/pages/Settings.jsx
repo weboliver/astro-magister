@@ -122,6 +122,9 @@ export default function Settings(){
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
+  const [showOldPwd, setShowOldPwd] = useState(false)
+  const [showNewPwd, setShowNewPwd] = useState(false)
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false)
   const [profile, setProfile] = useState({ role_id: 1 })
   const [roles, setRoles] = useState(DEFAULT_ROLE_OPTIONS)
   const [datetimeLocal, setDatetimeLocal] = useState('')
@@ -646,6 +649,13 @@ export default function Settings(){
     setOldPwd(''); setNewPwd(''); setConfirmPwd('')
   }
 
+  const handleShowOldPress = () => setShowOldPwd(true)
+  const handleShowOldRelease = () => setShowOldPwd(false)
+  const handleShowNewPress = () => setShowNewPwd(true)
+  const handleShowNewRelease = () => setShowNewPwd(false)
+  const handleShowConfirmPress = () => setShowConfirmPwd(true)
+  const handleShowConfirmRelease = () => setShowConfirmPwd(false)
+
   async function saveProfile(e){
     e.preventDefault()
     setMsg('Speichere Profil...')
@@ -1121,15 +1131,57 @@ export default function Settings(){
           <form onSubmit={changePassword} className="settings-form" style={columnFormStyle}>
             <div style={fieldWrapperStyle}>
               <label style={labelStyle}>Altes Passwort</label>
-              <input style={fieldControlStyle} type="password" value={oldPwd} onChange={e=>setOldPwd(e.target.value)} />
+              <div style={{display:'flex',alignItems:'center'}}>
+                <input style={fieldControlStyle} type={showOldPwd ? 'text' : 'password'} value={oldPwd} onChange={e=>setOldPwd(e.target.value)} />
+                <button
+                  type="button"
+                  onMouseDown={handleShowOldPress}
+                  onMouseUp={handleShowOldRelease}
+                  onMouseLeave={handleShowOldRelease}
+                  onTouchStart={(e)=>{ e.preventDefault(); handleShowOldPress() }}
+                  onTouchEnd={handleShowOldRelease}
+                  style={{marginLeft:8, padding: '5px 5px', cursor: 'pointer'}}
+                  aria-label={showOldPwd ? 'Altes Passwort verbergen' : 'Altes Passwort anzeigen'}
+                >
+                  {showOldPwd ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             <div style={fieldWrapperStyle}>
               <label style={labelStyle}>Neues Passwort</label>
-              <input style={fieldControlStyle} type="password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} />
+              <div style={{display:'flex',alignItems:'center'}}>
+                <input style={fieldControlStyle} type={showNewPwd ? 'text' : 'password'} value={newPwd} onChange={e=>setNewPwd(e.target.value)} />
+                <button
+                  type="button"
+                  onMouseDown={handleShowNewPress}
+                  onMouseUp={handleShowNewRelease}
+                  onMouseLeave={handleShowNewRelease}
+                  onTouchStart={(e)=>{ e.preventDefault(); handleShowNewPress() }}
+                  onTouchEnd={handleShowNewRelease}
+                  style={{marginLeft:8, padding: '5px 5px', cursor: 'pointer'}}
+                  aria-label={showNewPwd ? 'Neues Passwort verbergen' : 'Neues Passwort anzeigen'}
+                >
+                  {showNewPwd ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             <div style={fieldWrapperStyle}>
               <label style={labelStyle}>Neues Passwort bestätigen</label>
-              <input style={fieldControlStyle} type="password" value={confirmPwd} onChange={e=>setConfirmPwd(e.target.value)} />
+              <div style={{display:'flex',alignItems:'center'}}>
+                <input style={fieldControlStyle} type={showConfirmPwd ? 'text' : 'password'} value={confirmPwd} onChange={e=>setConfirmPwd(e.target.value)} />
+                <button
+                  type="button"
+                  onMouseDown={handleShowConfirmPress}
+                  onMouseUp={handleShowConfirmRelease}
+                  onMouseLeave={handleShowConfirmRelease}
+                  onTouchStart={(e)=>{ e.preventDefault(); handleShowConfirmPress() }}
+                  onTouchEnd={handleShowConfirmRelease}
+                  style={{marginLeft:8, padding: '5px 5px', cursor: 'pointer'}}
+                  aria-label={showConfirmPwd ? 'Bestätigung verbergen' : 'Bestätigung anzeigen'}
+                >
+                  {showConfirmPwd ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             <div className="settings-actions" style={{marginTop:8}}><button className="admin-primary-button" type="submit">Ändern</button></div>
           </form>

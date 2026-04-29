@@ -321,7 +321,7 @@ async def generate_entry_content(entry_id: int) -> Optional[dict]:
     finally:
         session.close()
 
-    perplexity_client = PerplexityClient(role_type="Experte")
+    perplexity_client = PerplexityClient(role_type="Fortgeschritten")
     chunks: list[str] = []
     async for chunk in perplexity_client.send_summary_stream(prompt_text, system_prompt='entry'):
         if chunk:

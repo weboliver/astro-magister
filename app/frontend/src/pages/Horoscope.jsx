@@ -421,7 +421,7 @@ export default function Horoscope(){
             displayChartBlob(cached.blob)
           }
           activeChartCacheKeyRef.current = cacheKey
-          setCachedSummary(cached.summary || streamedSummary)
+          setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
         } else if (hasCurrentGraphic) {
           activeChartCacheKeyRef.current = cacheKey
           setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
@@ -437,7 +437,7 @@ export default function Horoscope(){
             }
             const blob = await graphicResp.blob()
             const summaryText = streamedSummary || 'Kein Summary vorhanden'
-            chartCacheRef.current.set(cacheKey, { blob, summary: summaryText })
+            chartCacheRef.current.set(cacheKey, { blob })
             setCachedSummary(summaryText)
             const currentKey = computeCacheKey(currentPayload, reqSize)
             if (currentKey === cacheKey) {
@@ -514,7 +514,7 @@ export default function Horoscope(){
             <button onClick={fetchHoroscope} disabled={loading}>{loading? 'Lade...' : 'Horoskop Interpretation laden'}</button>
           </div>
           {(showSummary && (cachedSummary || resp || loading)) ? (
-            <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 220, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'auto' }}>
+            <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'auto' }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                 {summaryText || (loading ? 'Analyse wird erstellt ...' : '')}
               </ReactMarkdown>

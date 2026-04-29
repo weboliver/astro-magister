@@ -424,26 +424,27 @@ def transits(req: TransitRequest, request: Request):
 @router.post("/transits/stream")
 async def transits_stream(req: TransitRequest, request: Request):
     try:
-        user = _get_user_from_request(request)
-        rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:transits')
-        if not rate_limit.allowed:
-            log_auth_event(
-                event_type='ai_rate_limited',
-                success=False,
-                username=user.get('username') if user else None,
-                user_id=user.get('id') if user else None,
-                ip_address=get_client_ip(request),
-                user_agent=request.headers.get('user-agent'),
-                detail='Transit stream interpretation rate limit exceeded',
-            )
-            raise HTTPException(
-                status_code=429,
-                detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-            )
         result = _build_transits_response(req, request)
         response_data = result.model_dump()
         summary_prompt = response_data.pop("summary")
+        if summary_prompt:
+            user = _get_user_from_request(request)
+            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:transits')
+            if not rate_limit.allowed:
+                log_auth_event(
+                    event_type='ai_rate_limited',
+                    success=False,
+                    username=user.get('username') if user else None,
+                    user_id=user.get('id') if user else None,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get('user-agent'),
+                    detail='Transit stream interpretation rate limit exceeded',
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
+                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                )
     except HTTPException:
         raise
     except Exception as exc:
@@ -451,6 +452,11 @@ async def transits_stream(req: TransitRequest, request: Request):
         raise HTTPException(status_code=400, detail=f"Error calculating transits: {exc}")
 
     async def event_stream():
+        if not summary_prompt:
+            yield _sse_event("meta", response_data)
+            yield _sse_event("done", {"summary": ""})
+            return
+
         role_name = _resolve_role_name_for_transits(request, req)
         perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []

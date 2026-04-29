@@ -148,41 +148,10 @@ app.include_router(wiki_public_router)
 @app.get("/", tags=["root"])
 def read_root():
     return {
-        "name": "Astronex API",
+        "name": "Astro-Magister API",
         "version": "1.0.0",
-        "description": "Ephemeris and astrological calculations",
-        "docs": "/docs",
-        "endpoints": {
-            "julday": "/julday",
-            "revjul": "/revjul",
-            "sidtime": "/sidtime",
-            "calc": "/calc",
-            "houses": "/houses",
-            "planets": "/planets",
-            "fixstar": "/fixstar",
-            "solar_return": "/solar-return",
-            "age_points": "/age-points",
-            "transits": "/transits",
-            "redis_cache": "/auth/cache/redis",
-        },
-    }
+        "description": "Ephemeris and astrological calculations"}
 
 @app.get("/health", tags=["system"])
 def health_check():
     return {"status": "ok", "timestamp": datetime.datetime.now().isoformat()}
-
-
-# @app.get("/env-check", tags=["system"])
-# def env_check():
-#    return app_config.get_env_settings(exclude_keys={"API_KEY"})
-
-# @app.get("/ephepath", tags=["system"])
-# def get_ephemeris_path():
-#    path = app_config.EPHE_PATH or ""
-#    exists = bool(path) and Path(path, "sefstars.txt").exists()
-#    return {"ephe_path": path, "sefstars_present": bool(exists)}
-
-
-# @app.get("/metrics/performance", tags=["metrics"])
-# def get_performance_metrics():
-#    return performance_monitor.snapshot()

@@ -9,10 +9,10 @@ Type=oneshot
 RemainAfterExit=yes
 User=oliver
 Group=docker
-WorkingDirectory=/astronex/docker
-ExecStart=/astronex/docker/start.sh
-ExecStop=/astronex/docker/stop.sh
-ExecReload=/astronex/docker/start.sh
+WorkingDirectory=~/Projects/Python/astronex/docker
+ExecStart=~/Projects/Python/astronex/docker/start.sh
+ExecStop=~/Projects/Python/astronex/docker/stop.sh
+ExecReload=~/Projects/Python/astronex/docker/start.sh
 TimeoutStartSec=0
 
 [Install]

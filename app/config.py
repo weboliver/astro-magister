@@ -10,10 +10,7 @@ except Exception:
 from app.services.ephemeris import setpath
 
 EPHE_PATH: Optional[str] = None
-TEST: bool = True
-# JWT / Auth settings
-SECRET_KEY: str = "replace-this-with-a-secure-random-key"
-API_KEY: str = "replace-this-with-a-secure-random-key"
+TEST: bool = False
 
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -76,7 +73,7 @@ def _parse_bool(value: Optional[str], default: bool) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
-TEST = _parse_bool(get_env_setting("DEBUG"), TEST)
+TEST = _parse_bool(get_env_setting("DEBUG"), False)
 SECRET_KEY = get_env_setting("SECRET_KEY")
 API_KEY = get_env_setting("API_KEY")
 EPHE_PATH = get_env_setting("EPHEMERIS_PATH")

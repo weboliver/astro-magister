@@ -32,12 +32,26 @@ function createRequestError(status, message){
   return error
 }
 
-export default function Wiki({ directPageName = '', directOriginPage = '', directOriginLabel = '' }){
+function scrollWindowToTop(){
+  if (typeof window === 'undefined') return
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+export default function Wiki({
+  directPageName = '',
+  directOriginPage = '',
+  directOriginLabel = '',
+  targetSectionId = '',
+  targetCategoryId = '',
+  targetEntryId = '',
+}){
   const { profile } = useAuth()
   const [sections, setSections] = useState([])
   const [categories, setCategories] = useState([])
   const [entries, setEntries] = useState([])
   const [directEntries, setDirectEntries] = useState([])
+  const [relatedEntriesByEntryId, setRelatedEntriesByEntryId] = useState({})
+  const [publicPageNameByEntryId, setPublicPageNameByEntryId] = useState({})
   const [selectedSectionId, setSelectedSectionId] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [expandedEntryId, setExpandedEntryId] = useState(null)
@@ -47,6 +61,12 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
   const hasAuthToken = typeof window !== 'undefined' ? !!window.localStorage.getItem('token') : false
   const isPublicDirectPage = PUBLIC_DIRECT_PAGE_NAMES.has(String(directPageName || '').trim().toLowerCase())
   const isAdmin = Boolean(profile?.isadmin)
+  const canShowRelatedEntries = Boolean(profile)
+  const normalizedTargetSectionId = String(targetSectionId || '')
+  const normalizedTargetCategoryId = String(targetCategoryId || '')
+  const normalizedTargetEntryId = Number(targetEntryId || 0)
+
+  const wikiSectionIds = useMemo(() => new Set(sections.map((section) => Number(section.section_id))), [sections])
 
   function setRequestError(errorValue, fallbackMessage){
     if (Number(errorValue?.status) === 401){
@@ -71,6 +91,73 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
             entry,
             requestedAt: Date.now(),
           },
+        },
+      },
+    }))
+  }
+
+  async function resolvePublicPageName(entryId){
+    const normalizedEntryId = Number(entryId)
+    if (!normalizedEntryId) return ''
+
+    if (publicPageNameByEntryId[normalizedEntryId]) {
+      return publicPageNameByEntryId[normalizedEntryId]
+    }
+
+    const pageContentResponse = await get(`/auth/wiki/page-content?entry_id=${normalizedEntryId}`)
+    if (!pageContentResponse.ok) return ''
+
+    const pageContents = await pageContentResponse.json()
+    const pageId = Array.isArray(pageContents) ? Number(pageContents[0]?.page_id || 0) : 0
+    if (!pageId) return ''
+
+    const pageResponse = await get(`/auth/wiki/pages/${pageId}`)
+    if (!pageResponse.ok) return ''
+
+    const page = await pageResponse.json()
+    const pageName = String(page?.page_name || '').trim()
+    if (!pageName) return ''
+
+    setPublicPageNameByEntryId((current) => ({
+      ...current,
+      [normalizedEntryId]: pageName,
+    }))
+
+    return pageName
+  }
+
+  async function navigateToRelatedEntry(relatedEntry){
+    const normalizedEntryId = Number(relatedEntry?.entry_id || 0)
+    if (!normalizedEntryId) return
+
+    if (relatedEntry?.ispublic) {
+      const publicPageName = await resolvePublicPageName(normalizedEntryId)
+      if (publicPageName) {
+        window.dispatchEvent(new CustomEvent('astronexNavigate', {
+          detail: {
+            page: 'wiki',
+            state: {
+              directPageName: publicPageName,
+              directOriginPage: 'wiki',
+              directOriginLabel: 'Wiki',
+            },
+          },
+        }))
+        return
+      }
+    }
+
+    const normalizedCategoryId = String(relatedEntry?.category_id || '')
+    const matchingCategory = categories.find((category) => String(category.category_id) === normalizedCategoryId)
+    const nextSectionId = matchingCategory ? String(matchingCategory.section_id) : ''
+
+    window.dispatchEvent(new CustomEvent('astronexNavigate', {
+      detail: {
+        page: 'wiki',
+        state: {
+          targetSectionId: nextSectionId,
+          targetCategoryId: normalizedCategoryId,
+          targetEntryId: String(relatedEntry?.entry_id || ''),
         },
       },
     }))
@@ -146,51 +233,234 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
     }
   }
 
+  async function loadRelatedEntries(entryId){
+    const normalizedEntryId = Number(entryId)
+    if (!normalizedEntryId || !canShowRelatedEntries) return []
+
+    const [fromResponse, toResponse] = await Promise.all([
+      get(`/auth/wiki/relations?entry_from_id=${normalizedEntryId}`),
+      get(`/auth/wiki/relations?entry_to_id=${normalizedEntryId}`),
+    ])
+
+    if (!fromResponse.ok) throw createRequestError(fromResponse.status, `Verknüpfungen konnten nicht geladen werden (${fromResponse.status})`)
+    if (!toResponse.ok) throw createRequestError(toResponse.status, `Verknüpfungen konnten nicht geladen werden (${toResponse.status})`)
+
+    const [fromRelations, toRelations] = await Promise.all([fromResponse.json(), toResponse.json()])
+    const relatedIds = Array.from(new Set([
+      ...(Array.isArray(fromRelations) ? fromRelations.map((relation) => Number(relation.entry_to_id)) : []),
+      ...(Array.isArray(toRelations) ? toRelations.map((relation) => Number(relation.entry_from_id)) : []),
+    ].filter((relatedId) => relatedId && relatedId !== normalizedEntryId)))
+
+    if (!relatedIds.length) return []
+
+    const entryResponses = await Promise.all(relatedIds.map((relatedId) => get(`/auth/wiki/entries/${relatedId}`)))
+    const relatedEntries = []
+
+    for (const response of entryResponses){
+      if (!response.ok) {
+        if (response.status === 401) continue
+        throw createRequestError(response.status, `Verknüpfte Beiträge konnten nicht geladen werden (${response.status})`)
+      }
+      const relatedEntry = await response.json()
+      if (relatedEntry?.entry_id && Number(relatedEntry.entry_id) !== normalizedEntryId) {
+        relatedEntries.push(relatedEntry)
+      }
+    }
+
+    return relatedEntries.sort((left, right) => {
+      const numberDelta = Number(left.entry_number || 0) - Number(right.entry_number || 0)
+      if (numberDelta !== 0) return numberDelta
+      return String(left.entry_name || '').localeCompare(String(right.entry_name || ''), 'de')
+    })
+  }
+
   useEffect(() => {
     if (hasDirectPage) {
-      if (hasAuthToken && !isPublicDirectPage) {
+      if (hasAuthToken || canShowRelatedEntries) {
         loadSections()
         loadCategories()
       }
       loadDirectEntries(directPageName)
       return
     }
+
+    setDirectEntries([])
     loadSections()
     loadCategories()
-    loadEntries()
-  }, [])
+  }, [canShowRelatedEntries, directPageName, hasAuthToken, hasDirectPage, isPublicDirectPage])
+
+  useEffect(() => {
+    if (hasDirectPage) return
+    if (!sections.length) {
+      if (selectedSectionId) setSelectedSectionId('')
+      if (selectedCategoryId) setSelectedCategoryId('')
+      return
+    }
+
+    const nextSectionId = selectedSectionId || String(sections[0].section_id)
+    if (nextSectionId !== selectedSectionId) {
+      setSelectedSectionId(nextSectionId)
+      return
+    }
+
+    const nextFilteredCategories = categories.filter((category) => {
+      const sectionId = Number(category.section_id)
+      return wikiSectionIds.has(sectionId) && sectionId === Number(nextSectionId)
+    })
+    const nextCategoryId = nextFilteredCategories[0] ? String(nextFilteredCategories[0].category_id) : ''
+
+    if (selectedCategoryId && !nextFilteredCategories.some((category) => String(category.category_id) === String(selectedCategoryId))) {
+      setSelectedCategoryId(nextCategoryId)
+      return
+    }
+
+    if (!selectedCategoryId && nextCategoryId) {
+      setSelectedCategoryId(nextCategoryId)
+    }
+  }, [categories, hasDirectPage, sections, selectedCategoryId, selectedSectionId, wikiSectionIds])
+
+  useEffect(() => {
+    if (hasDirectPage || !sections.length) return
+    let resolvedTargetSectionId = normalizedTargetSectionId
+
+    if (!resolvedTargetSectionId && normalizedTargetCategoryId && categories.length) {
+      const matchingCategory = categories.find((category) => String(category.category_id) === normalizedTargetCategoryId)
+      resolvedTargetSectionId = matchingCategory ? String(matchingCategory.section_id) : ''
+    }
+
+    if (!resolvedTargetSectionId) return
+    if (!sections.some((section) => String(section.section_id) === resolvedTargetSectionId)) return
+    if (selectedSectionId === resolvedTargetSectionId) return
+    setSelectedSectionId(resolvedTargetSectionId)
+  }, [categories, hasDirectPage, normalizedTargetCategoryId, normalizedTargetSectionId, sections, selectedSectionId])
+
+  useEffect(() => {
+    if (hasDirectPage || !categories.length) return
+    if (!normalizedTargetCategoryId) return
+    const matchingCategory = categories.find((category) => String(category.category_id) === normalizedTargetCategoryId)
+    if (!matchingCategory) return
+
+    const matchingSectionId = String(matchingCategory.section_id)
+    if (selectedSectionId !== matchingSectionId) return
+    if (selectedCategoryId === normalizedTargetCategoryId) return
+    setSelectedCategoryId(normalizedTargetCategoryId)
+  }, [categories, hasDirectPage, normalizedTargetCategoryId, selectedCategoryId, selectedSectionId])
 
   useEffect(() => {
     if (hasDirectPage) return
     setExpandedEntryId(null)
+    if (!selectedSectionId || !selectedCategoryId) {
+      setEntries([])
+      return
+    }
     loadEntries({
       section_id: selectedSectionId,
       category_id: selectedCategoryId,
     })
-  }, [selectedSectionId, selectedCategoryId])
+  }, [hasDirectPage, selectedCategoryId, selectedSectionId])
 
   useEffect(() => {
     if (!hasDirectPage) {
-      setDirectEntries([])
       setExpandedEntryId(null)
-      loadEntries({
-        section_id: selectedSectionId,
-        category_id: selectedCategoryId,
-      })
       return
     }
+    scrollWindowToTop()
     loadDirectEntries(directPageName)
   }, [directPageName, hasDirectPage])
 
+  useEffect(() => {
+    if (hasDirectPage || !normalizedTargetEntryId || !entries.length) return
+    const matchingEntry = entries.find((entry) => Number(entry.entry_id) === normalizedTargetEntryId)
+    if (!matchingEntry) return
+
+    setExpandedEntryId(normalizedTargetEntryId)
+    scrollWindowToTop()
+  }, [entries, hasDirectPage, normalizedTargetEntryId])
+
+  useEffect(() => {
+    if (!canShowRelatedEntries) {
+      setRelatedEntriesByEntryId({})
+      return
+    }
+
+    const sourceEntries = hasDirectPage ? directEntries : entries
+    const sourceEntryIds = sourceEntries
+      .map((entry) => Number(entry.entry_id))
+      .filter((entryId) => entryId > 0)
+
+    if (!sourceEntryIds.length) {
+      setRelatedEntriesByEntryId({})
+      return
+    }
+
+    let active = true
+
+    async function loadAllRelatedEntries(){
+      try{
+        const resolvedEntries = await Promise.all(sourceEntryIds.map(async (entryId) => [entryId, await loadRelatedEntries(entryId)]))
+        if (!active) return
+
+        setRelatedEntriesByEntryId(
+          resolvedEntries.reduce((accumulator, [entryId, relatedEntries]) => {
+            accumulator[entryId] = relatedEntries
+            return accumulator
+          }, {})
+        )
+      }catch(_error){
+        if (active) {
+          setRelatedEntriesByEntryId({})
+        }
+      }
+    }
+
+    loadAllRelatedEntries()
+    return () => {
+      active = false
+    }
+  }, [canShowRelatedEntries, directEntries, entries, hasDirectPage])
+
   const filteredCategories = useMemo(() => {
-    const wikiSectionIds = new Set(sections.map((section) => Number(section.section_id)))
-    const visibleCategories = categories.filter((category) => wikiSectionIds.has(Number(category.section_id)))
-    if (!selectedSectionId) return visibleCategories
-    return visibleCategories.filter((category) => Number(category.section_id) === Number(selectedSectionId))
-  }, [categories, sections, selectedSectionId])
+    if (!selectedSectionId) return []
+
+    return categories.filter((category) => {
+      const sectionId = Number(category.section_id)
+      return wikiSectionIds.has(sectionId) && sectionId === Number(selectedSectionId)
+    })
+  }, [categories, selectedSectionId, wikiSectionIds])
 
   const visibleEntries = hasDirectPage ? directEntries : entries
   const directEditableEntry = hasDirectPage && directEntries.length > 0 ? directEntries[0] : null
+  const selectedCategory = filteredCategories.find((category) => String(category.category_id) === String(selectedCategoryId))
+
+  function renderRelatedEntries(entryId){
+    if (!canShowRelatedEntries) return null
+    const relatedEntries = relatedEntriesByEntryId[Number(entryId)] || []
+    if (!relatedEntries.length) return null
+
+    return (
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #dde1e7' }}>
+        <h4 style={{ margin: '0 0 10px', fontSize: '1rem', color: '#132238' }}>Weitere Beiträge</h4>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {relatedEntries.map((relatedEntry) => (
+            <button
+              key={`wiki-related-${entryId}-${relatedEntry.entry_id}`}
+              type="button"
+              onClick={() => navigateToRelatedEntry(relatedEntry)}
+              style={{ padding: '12px 14px', borderRadius: 10, background: '#f6f8fb', border: '1px solid #dde1e7', textAlign: 'left', cursor: 'pointer' }}
+            >
+              <div style={{ fontWeight: 700, color: '#132238', marginBottom: relatedEntry.entry_short ? 6 : 0 }}>{relatedEntry.entry_name}</div>
+              {relatedEntry.entry_short ? (
+                <div style={{ color: '#4b5d71', lineHeight: 1.5 }}>{relatedEntry.entry_short}</div>
+              ) : null}
+              <div style={{ marginTop: 10, color: '#0f766e', fontWeight: 700, textDecoration: 'underline' }}>
+                Zum Beitrag
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -234,28 +504,19 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
       </div>
 
       {!hasDirectPage ? (
-      <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0, color: '#11243d' }}>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedSectionId('')
-              setSelectedCategoryId('')
-            }}
-            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 20, fontWeight: selectedSectionId ? 600 : 800, color: selectedSectionId ? '#38506b' : '#0f766e' }}
-          >
-            Alle Bereiche
-          </button>
+      <div style={{ display: 'grid', gap: 10, marginBottom: 18, marginLeft: 0, padding: 0 }}>
+        <div style={{ display: 'flex', marginLeft: 0, padding: 0, flexWrap: 'wrap', alignItems: 'center', gap: 0, color: '#11243d' }}>
           {sections.map((section) => {
             const isActive = String(selectedSectionId) === String(section.section_id)
+            const nextSectionCategories = categories.filter((category) => Number(category.section_id) === Number(section.section_id) && wikiSectionIds.has(Number(category.section_id)))
             return (
               <React.Fragment key={`wiki-section-${section.section_id}`}>
-                <span style={{ margin: '0 10px', color: '#9aa7b4', fontSize: 20 }}>|</span>
+                <span style={{ margin: '5px', color: '#9aa7b4', fontSize: 20 }}>{section === sections[0] ? '' : '|'}</span>
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedSectionId(String(section.section_id))
-                    setSelectedCategoryId('')
+                    setSelectedCategoryId(nextSectionCategories[0] ? String(nextSectionCategories[0].category_id) : '')
                   }}
                   style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 20, fontWeight: isActive ? 800 : 600, color: isActive ? '#0f766e' : '#38506b' }}
                 >
@@ -266,30 +527,25 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
           })}
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0, color: '#11243d' }}>
-          <button
-            type="button"
-            onClick={() => setSelectedCategoryId('')}
-            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, fontWeight: selectedCategoryId ? 600 : 800, color: selectedCategoryId ? '#4b5d71' : '#0f766e' }}
-          >
-            Alle Kategorien
-          </button>
-          {filteredCategories.map((category) => {
-            const isActive = String(selectedCategoryId) === String(category.category_id)
-            return (
-              <React.Fragment key={`wiki-category-${category.category_id}`}>
-                <span style={{ margin: '0 10px', color: '#b4bcc5', fontSize: 18 }}>|</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategoryId(String(category.category_id))}
-                  style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, fontWeight: isActive ? 800 : 600, color: isActive ? '#0f766e' : '#4b5d71' }}
-                >
-                  {category.category_name}
-                </button>
-              </React.Fragment>
-            )
-          })}
-        </div>
+        {selectedSectionId ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0, color: '#11243d' }}>
+            {filteredCategories.map((category) => {
+              const isActive = String(selectedCategoryId) === String(category.category_id)
+              return (
+                <React.Fragment key={`wiki-category-${category.category_id}`}>
+                  <span style={{ margin: '5px', color: '#b4bcc5', fontSize: 18 }}>{category === filteredCategories[0] ? '' : '|'}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryId(String(category.category_id))}
+                    style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, fontWeight: isActive ? 800 : 600, color: isActive ? '#0f766e' : '#4b5d71' }}
+                  >
+                    {category.category_name}
+                  </button>
+                </React.Fragment>
+              )
+            })}
+          </div>
+        ) : null}
       </div>
       ) : null}
 
@@ -307,29 +563,23 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
           ) : null}
         </div>
       ) : null}
-      {!visibleEntries.length && !loading && !error.message ? <div className="admin-message">Keine Beiträge gefunden.</div> : null}
+      {!visibleEntries.length && !loading && !error.message ? (
+        <div className="admin-message">
+          {selectedCategory ? `Keine Beiträge für ${selectedCategory.category_name} gefunden.` : 'Keine Beiträge gefunden.'}
+        </div>
+      ) : null}
 
       <div style={{ display: 'grid', gap: 16 }}>
         {visibleEntries.map((entry) => {
           const isExpanded = Number(expandedEntryId) === Number(entry.entry_id)
           return (
-            <article key={`wiki-entry-${entry.entry_id}`} className="admin-cache-card">
+            <article id={`wiki-entry-${entry.entry_id}`} key={`wiki-entry-${entry.entry_id}`} className="admin-cache-card">
               {hasDirectPage ? (
                 <div>
-                  {isAdmin && entry?.entry_id ? (
-                    <div className="admin-action-group" style={{ marginBottom: 12 }}>
-                      <button
-                        type="button"
-                        className="admin-primary-button"
-                        onClick={() => navigateToEntryEditor(entry)}
-                      >
-                        Beitrag bearbeiten
-                      </button>
-                    </div>
-                  ) : null}
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                     {entry.entry_content || 'Kein Inhalt vorhanden.'}
                   </ReactMarkdown>
+                  {renderRelatedEntries(entry.entry_id)}
                 </div>
               ) : null}
 
@@ -352,6 +602,7 @@ export default function Wiki({ directPageName = '', directOriginPage = '', direc
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                         {entry.entry_content || 'Kein Inhalt vorhanden.'}
                       </ReactMarkdown>
+                      {renderRelatedEntries(entry.entry_id)}
                     </div>
                   ) : null}
                 </>

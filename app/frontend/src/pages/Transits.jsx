@@ -410,10 +410,7 @@ export default function Transits(){
             displayChartBlob(cachedGraphic.blob)
           }
           activeChartCacheKeyRef.current = cacheKey
-          setCachedSummary(cachedGraphic.summary || streamedSummary)
-          if (!cachedGraphic.summary) {
-            chartCacheRef.current.set(cacheKey, { ...cachedGraphic, summary: streamedSummary || 'Kein Summary vorhanden' })
-          }
+          setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
           persistPayload(transitPayload)
         } else if (hasCurrentGraphic) {
           activeChartCacheKeyRef.current = cacheKey
@@ -422,12 +419,8 @@ export default function Transits(){
         } else {
           console.debug('[Transits] fetchTransits graphic start', { cacheKey, transitPayload })
           await fetchTransitGraphic()
-          const cachedGraphicAfterFetch = chartCacheRef.current.get(cacheKey)
           const summaryText = streamedSummary || 'Kein Summary vorhanden'
-          if (cachedGraphicAfterFetch?.blob) {
-            chartCacheRef.current.set(cacheKey, { ...cachedGraphicAfterFetch, summary: summaryText })
-            setCachedSummary(summaryText)
-          }
+          setCachedSummary(summaryText)
         }
       }catch(imgErr){
         setImageError(imgErr.message || 'Graphic konnte nicht geladen werden')

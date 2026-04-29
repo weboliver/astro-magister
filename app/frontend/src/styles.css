@@ -1,6 +1,6 @@
 body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;background:radial-gradient(circle at top right,rgba(215,239,232,.7),transparent 28%),linear-gradient(180deg,#f4efe4 0%,#fbf9f4 44%,#f4f7fb 100%);background-attachment:fixed}
 nav a{color:#fff}
-input{padding:6px;margin:6px 0;width:100%}
+input{padding:6px;margin:6px 0;width:94%}
 button{padding:8px 12px}
 
 .app-nav-wrap{padding:0;background:linear-gradient(180deg,#f4efe4 0%,#f4efe4 45%,transparent 100%);max-width:1350px;margin:0 auto}

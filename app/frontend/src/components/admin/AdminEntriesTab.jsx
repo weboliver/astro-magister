@@ -404,7 +404,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
                   type="button"
                   className="admin-secondary-button"
                   onClick={() => setIsContentExpanded((current) => !current)}
-                  style={{ padding: '6px 12px' }}
+                  style={{ padding: '6px 12px', marginTop: 10 }}
                 >
                   {isContentExpanded ? 'Klein anzeigen' : 'Groß anzeigen'}
                 </button>

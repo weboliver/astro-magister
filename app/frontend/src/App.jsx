@@ -36,6 +36,7 @@ const PAGE_LABELS = {
 const FOOTER_LINKS = [
   { label: 'Impressum', pageName: 'Impressum' },
   { label: 'Datenschutz', pageName: 'Datenschutz' },
+  { label: 'Kontakt', pageName: 'Kontakt' },
 ]
 const EXTERNAL_FOOTER_LINKS = [
   { label: 'Buy me a coffee', href: 'https://buymeacoffee.com/shinengakic' },
@@ -204,6 +205,9 @@ export default function App(){
           directPageName={pageState.directPageName || ''}
           directOriginPage={pageState.directOriginPage || ''}
           directOriginLabel={pageState.directOriginLabel || ''}
+          targetSectionId={pageState.targetSectionId || ''}
+          targetCategoryId={pageState.targetCategoryId || ''}
+          targetEntryId={pageState.targetEntryId || ''}
         />
       )
     }

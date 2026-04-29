@@ -7,6 +7,8 @@ Astrology software for the Huber method, powered by Swiss Ephemeris.
 - Modularer API‑Aufbau mit Routern, Schemas und Services
 - Tests mit `pytest` (25 Tests, alle grün)
 
+Für die fachliche Aufteilung des Repos und schnelle Orientierung bei neuer Entwicklung siehe [DEVELOPMENT_MAP.md](DEVELOPMENT_MAP.md).
+
 ## Schnellstart
 Siehe auch die ausführliche Installation in `INSTALL`.
 
@@ -176,7 +178,7 @@ wget https://www.astro.com/ftp/swisseph/sefstars.txt -O astronex/resources/sefst
 ```
 - Pfad optional setzen (ansonsten erkennt die API `astronex/resources` automatisch):
 ```bash
-export SWISS_EPHE_PATH="/home/oliver/Projects/astronex/astronex/resources"
+export SWISS_EPHE_PATH="~/Projects/astronex/astronex/resources"
 ```
 - Diagnose:
 ```bash

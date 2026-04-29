@@ -390,10 +390,7 @@ export default function SolarReturn(){
           displayGraphic(cachedGraphic.graphic)
         }
         activeChartCacheKeyRef.current = cacheKey
-        setCachedSummary(cachedGraphic.summary || streamedSummary)
-        if (!cachedGraphic.summary) {
-          chartCacheRef.current.set(cacheKey, { ...cachedGraphic, summary: streamedSummary || 'Kein Summary vorhanden' })
-        }
+        setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
         persistPayload(payload)
       } else if (hasCurrentGraphic) {
         activeChartCacheKeyRef.current = cacheKey
@@ -418,7 +415,7 @@ export default function SolarReturn(){
               reader.readAsDataURL(blob)
             })
             const summaryText = streamedSummary || 'Kein Summary vorhanden'
-            chartCacheRef.current.set(cacheKey, { graphic: base64, summary: summaryText })
+            chartCacheRef.current.set(cacheKey, { graphic: base64 })
             setCachedSummary(summaryText)
             const currentKey = computeCacheKey(currentPayload)
             if (currentKey === cacheKey) {
