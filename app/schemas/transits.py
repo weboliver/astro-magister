@@ -19,6 +19,7 @@ class DateObject(BaseModel):
 
 class TransitRequest(BaseModel):
     person_id: Optional[int] = Field(default=None, description="Optional ID of the selected saved person")
+    additional_question: Optional[str] = Field(default=None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
     birthday: DateObject
     birth_location: Location
     transitdate: DateObject

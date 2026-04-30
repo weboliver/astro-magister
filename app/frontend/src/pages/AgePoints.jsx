@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { post, postWithSignal } from '../services/api'
+import { post, postStream, postWithSignal } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.css'
 import PersonSelector from '../components/PersonSelector'
 import WikiPageShortcut from '../components/WikiPageShortcut'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
+import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../utils/aiPrompt'
+import InterpretationHistory from '../components/InterpretationHistory'
+import { streamFollowup } from '../hooks/useInterpretations'
 
 const sharedAgePointsTransitCache = new Map()
 const AP_MARKER_ROTATION_OFFSET = -130
@@ -43,6 +46,9 @@ export default function AgePoints(){
   const [cachedSummary, setCachedSummary] = useState('')
   const [apMarker, setApMarker] = useState(null)
   const [showComputeSummary, setShowComputeSummary] = useState(false)
+  const [additionalQuestion, setAdditionalQuestion] = useState('')
+  const [activeInterpretationId, setActiveInterpretationId] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const imageUrlRef = useRef(null)
   const chartCacheRef = useRef(sharedAgePointsTransitCache)
   const graphicAbortRef = useRef(null)
@@ -252,6 +258,24 @@ export default function AgePoints(){
   }, [agePointOptions, selectedAgePointIndex, userSelectedAgePoint, computeDefaultAgePointIndex])
 
   async function fetchAgePoints(){
+    const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
+    if (activeInterpretationId && normalizedAdditionalQuestion) {
+      setLoading(true)
+      setResp(null)
+      setCachedSummary('')
+      setShowComputeSummary(true)
+      let streamedSummary = ''
+      try {
+        await streamFollowup(activeInterpretationId, normalizedAdditionalQuestion, {
+          onDelta: (chunk) => { streamedSummary += chunk; setCachedSummary(streamedSummary) },
+          onDone: (summary) => { streamedSummary = summary || streamedSummary; setCachedSummary(streamedSummary) },
+          onError: (err) => { setResp({ ok: false, error: err.message }) },
+        })
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
     setLoading(true)
     setResp(null)
     setCachedSummary('')
@@ -268,21 +292,11 @@ export default function AgePoints(){
       target_year: toNumber(sel.year),
       target_month: toNumber(sel.mon),
       target_day: toNumber(sel.day),
+      ...(normalizedAdditionalQuestion ? { additional_question: normalizedAdditionalQuestion } : {}),
     }
 
     async function postAgePointsStream(path, payload) {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-      }
-      const token = localStorage.getItem('token')
-      if (token) headers['Authorization'] = `Bearer ${token}`
-
-      const response = await fetch(path, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      })
+      const response = await postStream(path, payload)
 
       if (!response.ok) {
         let detail = `Request failed (${response.status})`
@@ -374,6 +388,11 @@ export default function AgePoints(){
               continue
             }
 
+            if (parsed.event === 'saved') {
+              setActiveInterpretationId(parsed.data.interpretation_id)
+              continue
+            }
+
             if (parsed.event === 'error') {
               throw new Error(parsed.data.detail || 'Streaming fehlgeschlagen')
             }
@@ -386,7 +405,12 @@ export default function AgePoints(){
         // Fallback: call regular POST once (no double-calls)
         const r = await post('/age-points', payload)
         const data = await r.json()
-        setResp({ ok: r.ok, status: r.status, data })
+        if (!r.ok) {
+          setResp({ ok: false, status: r.status, data, error: data?.detail || `Request failed (${r.status})` })
+          setCachedSummary('')
+        } else {
+          setResp({ ok: true, status: r.status, data })
+        }
         if (r.ok && data) {
           const summary = data.summary || data.summary_html || ''
           setCachedSummary(summary)
@@ -522,6 +546,7 @@ export default function AgePoints(){
   }, [agePointsLoading, selectedAgePointIndex, selectedAgePoint, fetchAgePointTransit])
 
   const computeSummaryText = (resp && resp.data && (resp.data.summary || resp.data.summary_html)) ? (resp.data.summary || resp.data.summary_html) : ''
+  const computeSummaryError = resp && resp.ok === false ? (resp.error || resp.data?.detail || 'Analyse konnte nicht geladen werden') : ''
 
   return (
     <div>
@@ -573,16 +598,40 @@ export default function AgePoints(){
           <label>Longitude</label>
           <input value={longitude} onChange={e=>setLongitude(e.target.value)} />
           </div>
+            <label>Optionale Zusatzfrage</label>
+            <textarea
+              value={additionalQuestion}
+              onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
+              maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+              rows={3}
+              placeholder="Optional: Welche zusätzliche Frage soll die KI zu diesem Alterspunkt beantworten?"
+              style={{ width: '100%', resize: 'vertical' }}
+            />
+            <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{additionalQuestion.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
             <div style={{marginTop:8}}>
-              <button onClick={fetchAgePoints} disabled={loading}>{loading? 'Lade...' : 'Alterspunkt Interpretation generieren'}</button>
+              <button onClick={fetchAgePoints} disabled={loading}>{loading? 'Lade...' : 'Alterspunkt interpretieren'}</button>
             </div>
           {(showComputeSummary && (cachedSummary || resp || loading)) ? (
             <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
+              {computeSummaryError ? (
+                <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{computeSummaryError}</div>
+              ) : null}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : '')}
+                {computeSummaryError ? '' : (cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : ''))}
               </ReactMarkdown>
             </div>
           ) : null}
+          {profile?.id && (
+            <InterpretationHistory
+              contextType="age_points"
+              userPersonsId={selectedPersonId ?? null}
+              activeId={activeInterpretationId}
+              onSelect={(id) => setActiveInterpretationId(id)}
+              onDelete={(id) => { if (activeInterpretationId === id) setActiveInterpretationId(null) }}
+              open={historyOpen}
+              onToggle={() => setHistoryOpen((v) => !v)}
+            />
+          )}
         </div>
         <div style={{ flex: '1 1 360px', minWidth: isNarrow ? 0 : 320, width: '100%', maxWidth: isNarrow ? '100%' : 750 }}>
           <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: isNarrow ? 'auto' : 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>

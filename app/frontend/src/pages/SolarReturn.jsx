@@ -2,13 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '../contexts/AuthContext'
-import { postWithSignal } from '../services/api'
+import { postStream, postWithSignal } from '../services/api'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.css'
 import PersonSelector from '../components/PersonSelector'
 import WikiPageShortcut from '../components/WikiPageShortcut'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useLogoutCleanup } from '../utils/logoutCache'
+import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../utils/aiPrompt'
+import InterpretationHistory from '../components/InterpretationHistory'
+import { streamFollowup } from '../hooks/useInterpretations'
 
 const sharedSolarReturnCache = new Map()
 const STORAGE_KEY = 'astronex_solar_return_payload'
@@ -57,18 +60,7 @@ function parseSseBlock(block) {
 }
 
 async function postSolarReturnStream(path, payload) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-  }
-  const token = localStorage.getItem('token')
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const response = await fetch(path, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  })
+  const response = await postStream(path, payload)
 
   if (!response.ok) {
     let detail = `Request failed (${response.status})`
@@ -113,6 +105,9 @@ export default function SolarReturn(){
   const [hydrated, setHydrated] = useState(false)
   const [cachedSummary, setCachedSummary] = useState('')
   const [showSummary, setShowSummary] = useState(false)
+  const [additionalQuestion, setAdditionalQuestion] = useState('')
+  const [activeInterpretationId, setActiveInterpretationId] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const chartCacheRef = useRef(sharedSolarReturnCache)
   const graphicAbortRef = useRef(null)
   const activeChartCacheKeyRef = useRef(null)
@@ -318,8 +313,28 @@ export default function SolarReturn(){
   }, [currentPayload, computeCacheKey, displayGraphic, hydrated, persistPayload])
 
   async function fetchSolar(){
-    const payload = currentPayload
-    const cacheKey = computeCacheKey(payload)
+    const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
+    if (activeInterpretationId && normalizedAdditionalQuestion) {
+      setLoading(true)
+      setResp(null)
+      setCachedSummary('')
+      setShowSummary(true)
+      let streamedSummary = ''
+      try {
+        await streamFollowup(activeInterpretationId, normalizedAdditionalQuestion, {
+          onDelta: (chunk) => { streamedSummary += chunk; setCachedSummary(streamedSummary) },
+          onDone: (summary) => { streamedSummary = summary || streamedSummary; setCachedSummary(streamedSummary) },
+          onError: (err) => { setResp({ ok: false, error: err.message }) },
+        })
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+    const payload = normalizedAdditionalQuestion
+      ? { ...currentPayload, additional_question: normalizedAdditionalQuestion }
+      : currentPayload
+    const cacheKey = computeCacheKey(currentPayload)
     const cachedGraphic = chartCacheRef.current.get(cacheKey)
     const hasCurrentGraphic = !!graphicSrc && activeChartCacheKeyRef.current === cacheKey
 
@@ -377,6 +392,11 @@ export default function SolarReturn(){
             continue
           }
 
+          if (parsed.event === 'saved') {
+            setActiveInterpretationId(parsed.data.interpretation_id)
+            continue
+          }
+
           if (parsed.event === 'error') {
             throw new Error(parsed.data.detail || 'Streaming fehlgeschlagen')
           }
@@ -390,12 +410,15 @@ export default function SolarReturn(){
           displayGraphic(cachedGraphic.graphic)
         }
         activeChartCacheKeyRef.current = cacheKey
-        setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
-        persistPayload(payload)
+        setCachedSummary(cachedGraphic.summary || streamedSummary)
+        if (!cachedGraphic.summary) {
+          chartCacheRef.current.set(cacheKey, { ...cachedGraphic, summary: streamedSummary || 'Kein Summary vorhanden' })
+        }
+        persistPayload(currentPayload)
       } else if (hasCurrentGraphic) {
         activeChartCacheKeyRef.current = cacheKey
         setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
-        persistPayload(payload)
+        persistPayload(currentPayload)
       } else {
         const ratio = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1
         const graphicSize = Math.min(1200, Math.round(750 * Math.max(1, ratio)))
@@ -403,7 +426,7 @@ export default function SolarReturn(){
           try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
           const controller = new AbortController()
           graphicAbortRef.current = controller
-          const graphicRes = await postWithSignal(`/solar-return/graphic?width=${graphicSize}&height=${graphicSize}`, payload, controller.signal)
+          const graphicRes = await postWithSignal(`/solar-return/graphic?width=${graphicSize}&height=${graphicSize}`, currentPayload, controller.signal)
           if (!graphicRes.ok) {
             setGraphicError(`Graphic request failed (${graphicRes.status})`)
           } else {
@@ -421,7 +444,7 @@ export default function SolarReturn(){
             if (currentKey === cacheKey) {
               displayGraphic(base64)
               activeChartCacheKeyRef.current = cacheKey
-              persistPayload(payload)
+              persistPayload(currentPayload)
             } else {
               console.debug('[SolarReturn] fetchSolar dropped display (stale)', { cacheKey, currentKey })
             }
@@ -444,8 +467,9 @@ export default function SolarReturn(){
   const baseSummary = resp && (resp.data && (resp.data.summary || resp.data.summary_html))
     ? (resp.data.summary || resp.data.summary_html)
     : 'Kein Summary vorhanden'
+  const summaryError = resp && resp.ok === false ? (resp.error || resp.data?.detail || 'Analyse konnte nicht geladen werden') : ''
   const summaryContent = cachedSummary || baseSummary
-  const summaryText = loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent
+  const summaryText = summaryError ? '' : (loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent)
 
   return (
     <div>
@@ -483,16 +507,40 @@ export default function SolarReturn(){
               <label>Timezone</label>
               <input style={{color:'black'}} value={timezone} onChange={e=>setTimezone(e.target.value)} />
             </div>
+            <label>Optionale Zusatzfrage</label>
+            <textarea
+              value={additionalQuestion}
+              onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
+              maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+              rows={3}
+              placeholder="Optional: Worauf soll die KI beim Solarjahr besonders eingehen?"
+              style={{ width: '100%', resize: 'vertical' }}
+            />
+            <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{additionalQuestion.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
             <div style={{marginTop:8}}>
-              <button onClick={fetchSolar} disabled={loading}>{loading? 'Lade...' : 'Solar Jahr Interpretation erstellen'}</button>
+              <button onClick={fetchSolar} disabled={loading}>{loading? 'Lade...' : 'Solar Jahr interpretieren'}</button>
             </div>
             {(showSummary && (cachedSummary || resp || loading)) ? (
               <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
+                {summaryError ? (
+                  <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+                ) : null}
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {summaryText || (loading ? 'Analyse wird erstellt ...' : '')}
                 </ReactMarkdown>
               </div>
             ) : null}
+            {profile?.id && (
+              <InterpretationHistory
+                contextType="solar"
+                userPersonsId={selectedPerson?.id ?? null}
+                activeId={activeInterpretationId}
+                onSelect={(id) => setActiveInterpretationId(id)}
+                onDelete={(id) => { if (activeInterpretationId === id) setActiveInterpretationId(null) }}
+                open={historyOpen}
+                onToggle={() => setHistoryOpen((v) => !v)}
+              />
+            )}
           </div>
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
           <div
@@ -519,7 +567,7 @@ export default function SolarReturn(){
               />
             ) : (
               <div style={{ color: '#577' }}>
-                Klicke auf "Solar Jahr Interpretation erstellen", um das Diagramm rechts neben dem Formular anzuzeigen.
+                Klicke auf "Solar Jahr interpretieren", um das Diagramm rechts neben dem Formular anzuzeigen.
               </div>
             )}
           </div>

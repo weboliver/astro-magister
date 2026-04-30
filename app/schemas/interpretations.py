@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class MessageCreate(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: str
+    position: int
+
+
+class InterpretationCreate(BaseModel):
+    user_persons_id: Optional[int] = None
+    context_type: Optional[str] = Field(None, max_length=64)
+    model: Optional[str] = Field(None, max_length=64)
+    interp_year: Optional[int] = None
+    interp_month: Optional[int] = None
+    interp_day: Optional[int] = None
+    interp_hour: Optional[int] = None
+    interp_minute: Optional[int] = None
+    location_country: Optional[str] = None
+    location_region: Optional[str] = None
+    location_city: Optional[str] = None
+    location_longitude: Optional[float] = None
+    location_latitude: Optional[float] = None
+    messages: List[MessageCreate] = []
+
+
+class FollowupMessageCreate(BaseModel):
+    """Wird für Folgefragen an eine bestehende Session verwendet."""
+    content: str = Field(..., min_length=1, max_length=4096)
+
+
+class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    position: int
+    role: str
+    content: str
+    created: datetime
+
+
+class InterpretationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_persons_id: Optional[int]
+    context_type: Optional[str]
+    model: Optional[str]
+    interp_year: Optional[int]
+    interp_month: Optional[int]
+    interp_day: Optional[int]
+    interp_hour: Optional[int]
+    interp_minute: Optional[int]
+    location_country: Optional[str]
+    location_region: Optional[str]
+    location_city: Optional[str]
+    location_longitude: Optional[float]
+    location_latitude: Optional[float]
+    created: datetime
+    messages: List[MessageOut] = []
+
+
+class InterpretationListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    context_type: Optional[str]
+    created: datetime
+    interp_year: Optional[int]
+    interp_month: Optional[int]
+    interp_day: Optional[int]
+    location_city: Optional[str]
+    user_persons_id: Optional[int]
+    first_question: Optional[str] = None
+
+
+class InterpretationCreatedOut(BaseModel):
+    id: int

@@ -102,6 +102,21 @@ export async function post(path, payload, includeAuth = true){
   return resp
 }
 
+export async function postStream(path, payload, includeAuth = true){
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+  }
+  let resp = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload), credentials: 'include' })
+  if (includeAuth && resp.status === 401){
+    const ok = await refreshAccessToken()
+    if (ok){
+      resp = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload), credentials: 'include' })
+    }
+  }
+  return resp
+}
+
 export async function postWithSignal(path, payload, signal, includeAuth = true){
   const headers = { 'Content-Type': 'application/json' }
   let resp = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload), signal, credentials: 'include' })

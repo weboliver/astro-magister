@@ -35,6 +35,7 @@ from app.routers.timezone import router as timezone_router
 from app.routers.persons import router as persons_router
 from app.routers.cache import router as cache_router
 from app.routers.wiki import router as wiki_router, public_router as wiki_public_router
+from app.routers.interpretations import router as interpretations_router
 from app.services.performance import PerformanceMonitor
 from app.services.db_init import init_users_db
 
@@ -88,6 +89,9 @@ app = FastAPI(
     description="Ephemeris and astrological calculations using Swiss Ephemeris 2025",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 app.add_middleware(
     CORSMiddleware,
@@ -119,14 +123,6 @@ async def track_performance(request: Request, call_next):
     loop = asyncio.get_running_loop()
     loop.call_soon(LOGGER.info, "performance %s %.3fms", request.url.path, elapsed * 1000)
     return response
-# Also initialize critical resources at import time to support TestClient usage
-# that doesn't trigger the lifespan startup immediately.
-if getattr(app_config, 'TEST', False):
-    app_config.init_swisseph_path()
-    try:
-        init_users_db()
-    except Exception:
-        pass
 # Include routers
 app.include_router(date_time_router)
 app.include_router(positions_router)
@@ -144,6 +140,7 @@ app.include_router(persons_router)
 app.include_router(cache_router)
 app.include_router(wiki_router)
 app.include_router(wiki_public_router)
+app.include_router(interpretations_router)
 
 @app.get("/", tags=["root"])
 def read_root():

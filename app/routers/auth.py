@@ -44,7 +44,7 @@ ACCESS_COOKIE_NAME = (app_config.get_env_setting('AUTH_ACCESS_COOKIE_NAME') or '
 REFRESH_COOKIE_NAME = (app_config.get_env_setting('AUTH_REFRESH_COOKIE_NAME') or 'astronex_refresh_token').strip() or 'astronex_refresh_token'
 COOKIE_SAMESITE = (app_config.get_env_setting('AUTH_COOKIE_SAMESITE') or 'lax').strip() or 'lax'
 COOKIE_DOMAIN = (app_config.get_env_setting('AUTH_COOKIE_DOMAIN') or '').strip() or None
-COOKIE_SECURE = (app_config.get_env_setting('AUTH_COOKIE_SECURE') or ('0' if getattr(app_config, 'TEST', False) else '1')).strip().lower() in {'1', 'true', 'yes', 'on'}
+COOKIE_SECURE = (app_config.get_env_setting('AUTH_COOKIE_SECURE') or '1').strip().lower() in {'1', 'true', 'yes', 'on'}
 REFRESH_TOKEN_MAX_AGE_SECONDS = int(app_config.get_env_setting('REFRESH_TOKEN_EXPIRE_SECONDS') or 7 * 24 * 3600)
 
 

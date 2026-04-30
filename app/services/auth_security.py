@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, time as datetime_time, timedelta, timezone
 from threading import Lock
 from time import time
 from typing import Optional
@@ -10,7 +11,7 @@ import re
 import httpx
 
 import app.config as app_config
-from app.db.models.users import AuthAuditLog
+from app.db.models.users import AuthAuditLog, UserProfile
 from app.db.session import get_session
 
 
@@ -18,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 def _get_int_setting(name: str, default: int, test_default: Optional[int] = None) -> int:
-    if getattr(app_config, 'TEST', False) and test_default is not None:
-        return test_default
     raw_value = app_config.get_env_setting(name)
     if raw_value:
         return int(raw_value)
@@ -33,8 +32,8 @@ REFRESH_RATE_LIMIT_ATTEMPTS = _get_int_setting('REFRESH_RATE_LIMIT_ATTEMPTS', 30
 REFRESH_RATE_LIMIT_WINDOW_SECONDS = _get_int_setting('REFRESH_RATE_LIMIT_WINDOW_SECONDS', 300)
 FAILED_LOGIN_LOCKOUT_THRESHOLD = _get_int_setting('FAILED_LOGIN_LOCKOUT_THRESHOLD', 5)
 FAILED_LOGIN_LOCKOUT_SECONDS = _get_int_setting('FAILED_LOGIN_LOCKOUT_SECONDS', 3600)
-AI_RATE_LIMIT_ATTEMPTS = _get_int_setting('AI_RATE_LIMIT_ATTEMPTS', 6, test_default=1000)
-AI_RATE_LIMIT_WINDOW_SECONDS = _get_int_setting('AI_RATE_LIMIT_WINDOW_SECONDS', 1800)
+AI_DAILY_LIMIT_DEFAULT = _get_int_setting('AI_DAILY_LIMIT_DEFAULT', 5, test_default=5)
+AI_DAILY_LIMIT_POWERUSER = _get_int_setting('AI_DAILY_LIMIT_POWERUSER', 50, test_default=50)
 TURNSTILE_SECRET_KEY = (app_config.get_env_setting('TURNSTILE_SECRET_KEY') or '').strip()
 TURNSTILE_VERIFY_URL = (app_config.get_env_setting('TURNSTILE_VERIFY_URL') or 'https://challenges.cloudflare.com/turnstile/v0/siteverify').strip()
 REDIS_URL = (app_config.get_env_setting('REDIS_URL') or '').strip()
@@ -51,6 +50,9 @@ class RateLimitResult:
     count: int
     retry_after_seconds: int
     remaining: int
+    limit: int = 0
+    is_poweruser: bool = False
+    is_admin: bool = False
 
 
 class _LocalStore:
@@ -167,7 +169,13 @@ def check_rate_limit(scope: str, identifier: str, limit: int, window_seconds: in
     count, retry_after_seconds = _get_store().incr(key, window_seconds)
     allowed = count <= limit
     remaining = max(0, limit - count)
-    return RateLimitResult(allowed=allowed, count=count, retry_after_seconds=retry_after_seconds, remaining=remaining)
+    return RateLimitResult(
+        allowed=allowed,
+        count=count,
+        retry_after_seconds=retry_after_seconds,
+        remaining=remaining,
+        limit=limit,
+    )
 
 
 def build_rate_limit_identifier(request, user_id: Optional[int] = None) -> str:
@@ -176,9 +184,56 @@ def build_rate_limit_identifier(request, user_id: Optional[int] = None) -> str:
     return f'ip:{get_client_ip(request)}'
 
 
+def _seconds_until_next_utc_midnight(now: Optional[datetime] = None) -> int:
+    current_time = now or datetime.now(timezone.utc)
+    next_midnight = datetime.combine(current_time.date() + timedelta(days=1), datetime_time.min, tzinfo=timezone.utc)
+    return max(1, int((next_midnight - current_time).total_seconds()))
+
+
+def _get_ai_limit_flags(user_id: Optional[int]) -> tuple[bool, bool]:
+    if user_id is None:
+        return False, False
+
+    session = get_session()
+    try:
+        profile = session.query(UserProfile).filter(UserProfile.user_id == int(user_id)).first()
+    finally:
+        session.close()
+
+    if not profile:
+        return False, False
+    return bool(getattr(profile, 'isadmin', False)), bool(getattr(profile, 'is_poweruser', False))
+
+
 def check_ai_rate_limit(request, user_id: Optional[int] = None, scope: str = 'ai') -> RateLimitResult:
+    is_admin, is_poweruser = _get_ai_limit_flags(user_id)
+    if is_admin:
+        return RateLimitResult(
+            allowed=True,
+            count=0,
+            retry_after_seconds=0,
+            remaining=0,
+            limit=0,
+            is_poweruser=is_poweruser,
+            is_admin=True,
+        )
+
+    daily_limit = AI_DAILY_LIMIT_POWERUSER if is_poweruser else AI_DAILY_LIMIT_DEFAULT
+    current_time = datetime.now(timezone.utc)
+    daily_scope = f'ai:{current_time.strftime("%Y%m%d")}'
     identifier = build_rate_limit_identifier(request, user_id=user_id)
-    return check_rate_limit(scope, identifier, AI_RATE_LIMIT_ATTEMPTS, AI_RATE_LIMIT_WINDOW_SECONDS)
+    result = check_rate_limit(daily_scope, identifier, daily_limit, _seconds_until_next_utc_midnight(current_time))
+    result.limit = daily_limit
+    result.is_poweruser = is_poweruser
+    return result
+
+
+def build_ai_rate_limit_error_detail(rate_limit: RateLimitResult) -> str:
+    daily_limit = rate_limit.limit or (AI_DAILY_LIMIT_POWERUSER if rate_limit.is_poweruser else AI_DAILY_LIMIT_DEFAULT)
+    detail = f'Das Kontingent von {daily_limit} Abfragen am Tag ist verbraucht, kommen Sie bitte morgen wieder'
+    if not rate_limit.is_poweruser and not rate_limit.is_admin:
+        detail += ' Ein Upgrade auf 50 Abfragen am Tag ist Nutzern mit Spenderstatus aktiv vorbehalten (Buy me a coffee).'
+    return detail
 
 
 def get_login_lock(username: str) -> int:
@@ -223,8 +278,6 @@ def validate_password_strength(password: str) -> Optional[str]:
 
 
 async def verify_turnstile_token(token: Optional[str], remote_ip: str) -> bool:
-    if getattr(app_config, 'TEST', False):
-        return True
     if _is_placeholder_secret(TURNSTILE_SECRET_KEY):
         return True
     if not token:

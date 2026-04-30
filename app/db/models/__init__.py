@@ -6,6 +6,7 @@ Existing imports like `from app.db import models` will still provide `User`,
 from .users import *
 from .locations import *
 from .wiki import *
+from .interpretations import *
 
 __all__ = [
     "User",
@@ -25,4 +26,6 @@ __all__ = [
     "Relation",
     "Page",
     "PageContent",
+    "UserInterpretation",
+    "UserInterpretationMessage",
 ]

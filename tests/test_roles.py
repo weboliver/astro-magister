@@ -29,13 +29,12 @@ def test_init_users_db_seeds_roles_when_table_is_empty(monkeypatch):
         assert session.query(Role).count() == 3
 
 
-def test_init_users_db_adds_role_columns_with_default(monkeypatch):
+def test_init_users_db_creates_role_columns_on_fresh_db(monkeypatch):
+    """On a fresh SQLite DB, create_all must create all ORM-defined role columns
+    with the correct defaults.  Column additions on existing PostgreSQL databases
+    are now handled by Alembic revisions (alembic upgrade head)."""
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-
-    with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE user_profiles (user_id INTEGER PRIMARY KEY)"))
-        conn.execute(text("CREATE TABLE user_persons (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL)"))
 
     monkeypatch.setattr(db_init, "get_engine", lambda: engine)
     monkeypatch.setattr(db_init, "get_session", lambda: SessionLocal())
@@ -49,9 +48,6 @@ def test_init_users_db_adds_role_columns_with_default(monkeypatch):
         assert 'role_id' in profile_columns
         assert 'is_poweruser' in profile_columns
         assert 'role_id' in person_columns
-        assert str(profile_columns['role_id'][4]) == '1'
-        assert str(profile_columns['is_poweruser'][4]).lower() in {'false', '0'}
-        assert str(person_columns['role_id'][4]) == '1'
 
         conn.execute(text("INSERT INTO user_profiles (user_id) VALUES (10)"))
         conn.execute(text("INSERT INTO user_persons (user_id, name) VALUES (20, 'Test')"))

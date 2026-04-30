@@ -133,7 +133,7 @@ def list_entries(
     q: str | None = Query(default=None),
     active_only: bool | None = Query(default=None),
     wiki_active_only: bool | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
     return wiki_service.list_entries(

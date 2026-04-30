@@ -104,6 +104,14 @@ class UserProfile(Base):
         primaryjoin='foreign(UserProfile.user_id) == User.id',
     )
 
+    interpretations = relationship(
+        'UserInterpretation',
+        primaryjoin='UserProfile.user_id == foreign(UserInterpretation.user_id)',
+        back_populates='user_profile',
+        cascade='all, delete-orphan',
+        passive_deletes=True,
+    )
+
 
 class UserPerson(Base):
     __tablename__ = 'user_persons'
@@ -127,6 +135,14 @@ class UserPerson(Base):
     birth_city = Column(Text)
     birth_latitude = Column(Float)
     birth_longitude = Column(Float)
+
+    interpretations = relationship(
+        'UserInterpretation',
+        primaryjoin='UserPerson.id == foreign(UserInterpretation.user_persons_id)',
+        back_populates='user_person',
+        cascade='all, delete-orphan',
+        passive_deletes=True,
+    )
 
 
 class RefreshToken(Base):

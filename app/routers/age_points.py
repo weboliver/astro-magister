@@ -16,10 +16,13 @@ from astronex.chart import Chart
 from pytz import timezone as pytz_timezone
 from app.static.texte import get_general_anweisung
 from app.routers.transits import TransitRequest, DateObject, Location, transits
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set
+from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
-from app.services.auth_security import check_ai_rate_limit, get_client_ip, log_auth_event
+from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
+from app.db.session import get_session
+from app.services import interpretation_store as _istore
+from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 
 # Protected router (requires authentication for most age-points endpoints)
 router = APIRouter(tags=["age-points"], dependencies=[Depends(require_authenticated_user)])
@@ -375,7 +378,12 @@ def _build_age_points_response(req: AgePointsRequest, http_request: Request) -> 
         transit_sections = _build_transit_sections_for_summary(filtered_points, req, http_request)
 
     summary_prompt = _build_target_year_summary(filtered_points, req.target_year, transit_sections)
-    return AgePointsResponse(kind=req.kind, target_year=req.target_year, age_points=filtered_points, summary=summary_prompt)
+    return AgePointsResponse(
+        kind=req.kind,
+        target_year=req.target_year,
+        age_points=filtered_points,
+        summary=append_additional_question(summary_prompt, getattr(req, 'additional_question', None)),
+    )
 
 
 @router.post("/age-points", response_model=AgePointsResponse)
@@ -390,29 +398,33 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
 
     result = _build_age_points_response(req, http_request)
     if result.summary:
-        if getattr(app_config, 'TEST', False) and getattr(PerplexityClient, '__module__', '') == 'app.services.perplexity':
-            return result
         try:
             user = _get_user_from_request(http_request)
-            rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
-            if not rate_limit.allowed:
-                log_auth_event(
-                    event_type='ai_rate_limited',
-                    success=False,
-                    username=user.get('username') if user else None,
-                    user_id=user.get('id') if user else None,
-                    ip_address=get_client_ip(http_request),
-                    user_agent=http_request.headers.get('user-agent'),
-                    detail='Age-points interpretation rate limit exceeded',
-                )
-                raise HTTPException(
-                    status_code=429,
-                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-                )
             role_name = _resolve_role_name_for_age_points(http_request, req)
             perplexity_client = PerplexityClient(role_type=role_name)
-            result.summary = perplexity_client.send_summary_text(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+            cached_summary = perplexity_client.get_cached_summary(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+            if cached_summary is not None:
+                result.summary = cached_summary
+            else:
+                rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
+                if not rate_limit.allowed:
+                    log_auth_event(
+                        event_type='ai_rate_limited',
+                        success=False,
+                        username=user.get('username') if user else None,
+                        user_id=user.get('id') if user else None,
+                        ip_address=get_client_ip(http_request),
+                        user_agent=http_request.headers.get('user-agent'),
+                        detail='Age-points interpretation rate limit exceeded',
+                    )
+                    raise HTTPException(
+                        status_code=429,
+                        detail=build_ai_rate_limit_error_detail(rate_limit),
+                        headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                    )
+                result.summary = perplexity_client.send_summary_text(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception("Error getting AI summary for /age-points")
             raise HTTPException(status_code=502, detail=f"Fehler beim Abrufen der KI-Antwort: {exc}")
@@ -421,27 +433,34 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
 
 @router.post("/age-points/stream")
 async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
+    cached_summary = None
+    perplexity_client = None
     try:
-        user = _get_user_from_request(http_request)
-        rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
-        if not rate_limit.allowed:
-            log_auth_event(
-                event_type='ai_rate_limited',
-                success=False,
-                username=user.get('username') if user else None,
-                user_id=user.get('id') if user else None,
-                ip_address=get_client_ip(http_request),
-                user_agent=http_request.headers.get('user-agent'),
-                detail='Age-points stream interpretation rate limit exceeded',
-            )
-            raise HTTPException(
-                status_code=429,
-                detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-            )
         result = _build_age_points_response(req, http_request)
         response_data = result.model_dump()
         summary_prompt = response_data.pop("summary")
+        if summary_prompt:
+            user = _get_user_from_request(http_request)
+            role_name = _resolve_role_name_for_age_points(http_request, req)
+            perplexity_client = PerplexityClient(role_type=role_name)
+            cached_summary = perplexity_client.get_cached_summary(summary_prompt, AGE_POINTS_SYSTEM_PROMPT)
+            if cached_summary is None:
+                rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
+                if not rate_limit.allowed:
+                    log_auth_event(
+                        event_type='ai_rate_limited',
+                        success=False,
+                        username=user.get('username') if user else None,
+                        user_id=user.get('id') if user else None,
+                        ip_address=get_client_ip(http_request),
+                        user_agent=http_request.headers.get('user-agent'),
+                        detail='Age-points stream interpretation rate limit exceeded',
+                    )
+                    raise HTTPException(
+                        status_code=429,
+                        detail=build_ai_rate_limit_error_detail(rate_limit),
+                        headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                    )
     except HTTPException:
         raise
     except Exception as exc:
@@ -449,16 +468,13 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
         raise HTTPException(status_code=400, detail=f"Fehler beim Berechnen der Alterspunkte: {exc}")
 
     async def event_stream():
-        if getattr(app_config, 'TEST', False) and getattr(PerplexityClient, '__module__', '') == 'app.services.perplexity':
-            yield _sse_event("meta", response_data)
-            yield _sse_event("done", {"summary": summary_prompt or ""})
-            return
-
-        role_name = _resolve_role_name_for_age_points(http_request, req)
-        perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []
 
         yield _sse_event("meta", response_data)
+
+        if cached_summary is not None:
+            yield _sse_event("done", {"summary": cached_summary})
+            return
 
         try:
             if summary_prompt:
@@ -490,6 +506,32 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
                     logger.exception("Failed to set Perplexity cache for age-points")
 
             yield _sse_event("done", {"summary": full_summary})
+            if summary_prompt and full_summary and user:
+                try:
+                    db = get_session()
+                    try:
+                        _ic = InterpretationCreate(
+                            user_persons_id=getattr(req, 'person_id', None),
+                            context_type="age_points",
+                            model=perplexity_client.model,
+                            interp_year=getattr(req, 'year', None),
+                            interp_month=getattr(req, 'month', None),
+                            interp_day=getattr(req, 'day', None),
+                            interp_hour=getattr(req, 'hour', None),
+                            interp_minute=getattr(req, 'minute', None),
+                            location_latitude=getattr(req, 'latitude', None),
+                            location_longitude=getattr(req, 'longitude', None),
+                            messages=[
+                                InterpMessageCreate(role="user", content=summary_prompt, position=0),
+                                InterpMessageCreate(role="assistant", content=full_summary, position=1),
+                            ],
+                        )
+                        _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
+                        yield _sse_event("saved", {"interpretation_id": _saved.id})
+                    finally:
+                        db.close()
+                except Exception:
+                    logger.exception("Failed to save interpretation after age-points stream")
         except Exception as exc:
             logger.exception("Error streaming /age-points/stream")
             yield _sse_event("error", {"detail": str(exc)})

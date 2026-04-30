@@ -9,10 +9,13 @@ from app.static.texte import get_general_anweisung
 from app.static.zodiac_names import get_zodiac_name
 from app.schemas.datetime_models import DateTimeRequest, HousesResponse
 from pytz import timezone as pytz_timezone
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set
+from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
-from app.services.auth_security import check_ai_rate_limit, get_client_ip, log_auth_event
+from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
+from app.db.session import get_session
+from app.services import interpretation_store as _istore
+from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 
 router = APIRouter(tags=["houses"], dependencies=[Depends(require_authenticated_user)])
 logger = logging.getLogger(__name__)
@@ -90,7 +93,7 @@ def _build_houses_response(request: DateTimeRequest) -> HousesResponse:
         latitude=latitude,
         longitude=longitude,
         houses=house_entries,
-        summary=summary_text,
+        summary=append_additional_question(summary_text, getattr(request, 'additional_question', None)),
     )
 
 @router.post("/houses", response_model=HousesResponse)
@@ -105,28 +108,34 @@ def get_houses(request: DateTimeRequest):
 
 @router.post("/houses/stream")
 async def get_houses_stream(payload: DateTimeRequest, request: Request):
+    cached_summary = None
+    perplexity_client = None
     try:
         result = _build_houses_response(payload)
         response_data = result.model_dump()
         summary_prompt = response_data.pop("summary")
         if summary_prompt:
             user = _get_user_from_request(request)
-            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:houses')
-            if not rate_limit.allowed:
-                log_auth_event(
-                    event_type='ai_rate_limited',
-                    success=False,
-                    username=user.get('username') if user else None,
-                    user_id=user.get('id') if user else None,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get('user-agent'),
-                    detail='Houses stream interpretation rate limit exceeded',
-                )
-                raise HTTPException(
-                    status_code=429,
-                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-                )
+            role_name = _resolve_role_name_for_houses(request, payload)
+            perplexity_client = PerplexityClient(role_type=role_name)
+            cached_summary = perplexity_client.get_cached_summary(summary_prompt, HOUSES_SYSTEM_PROMPT)
+            if cached_summary is None:
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:houses')
+                if not rate_limit.allowed:
+                    log_auth_event(
+                        event_type='ai_rate_limited',
+                        success=False,
+                        username=user.get('username') if user else None,
+                        user_id=user.get('id') if user else None,
+                        ip_address=get_client_ip(request),
+                        user_agent=request.headers.get('user-agent'),
+                        detail='Houses stream interpretation rate limit exceeded',
+                    )
+                    raise HTTPException(
+                        status_code=429,
+                        detail=build_ai_rate_limit_error_detail(rate_limit),
+                        headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                    )
     except HTTPException:
         raise
     except Exception as e:
@@ -139,11 +148,13 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
             yield _sse_event("done", {"summary": ""})
             return
 
-        role_name = _resolve_role_name_for_houses(request, payload)
-        perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []
 
         yield _sse_event("meta", response_data)
+
+        if cached_summary is not None:
+            yield _sse_event("done", {"summary": cached_summary})
+            return
 
         try:
             async for chunk in perplexity_client.send_summary_stream(
@@ -175,6 +186,31 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
                 logger.exception("Failed to set Perplexity cache for houses")
 
             yield _sse_event("done", {"summary": full_summary})
+            try:
+                db = get_session()
+                try:
+                    _ic = InterpretationCreate(
+                        user_persons_id=getattr(payload, 'person_id', None),
+                        context_type="houses",
+                        model=perplexity_client.model,
+                        interp_year=payload.year,
+                        interp_month=payload.month,
+                        interp_day=payload.day,
+                        interp_hour=getattr(payload, 'hour', None),
+                        interp_minute=getattr(payload, 'minute', None),
+                        location_latitude=getattr(payload, 'latitude', None),
+                        location_longitude=getattr(payload, 'longitude', None),
+                        messages=[
+                            InterpMessageCreate(role="user", content=summary_prompt or "", position=0),
+                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
+                        ],
+                    )
+                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
+                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                finally:
+                    db.close()
+            except Exception:
+                logger.exception("Failed to save interpretation after houses stream")
         except Exception as exc:
             logger.exception("Error streaming /houses/stream")
             yield _sse_event("error", {"detail": str(exc)})

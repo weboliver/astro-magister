@@ -20,10 +20,13 @@ try:
 except Exception:
     TimezoneFinder = None
 from app.services.horoscope_graphics import draw_chart_png
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set
+from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
-from app.services.auth_security import check_ai_rate_limit, get_client_ip, log_auth_event
+from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
+from app.db.session import get_session
+from app.services import interpretation_store as _istore
+from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 
 router = APIRouter(tags=["solar"], dependencies=[Depends(require_authenticated_user)])
 logger = logging.getLogger(__name__)
@@ -359,7 +362,7 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
         planets=planet_list,
         houses=list(houses_list) if houses_list else [None]*12,
         aspects=aspects,
-        summary=summary,
+        summary=append_additional_question(summary, getattr(request, 'additional_question', None)),
     )
 
 
@@ -370,28 +373,34 @@ def get_solar_return(request: SolarReturnRequest):
 
 @router.post("/solar-return/stream")
 async def get_solar_return_stream(payload: SolarReturnRequest, request: Request):
+    cached_summary = None
+    perplexity_client = None
     try:
         result = _build_solar_return_response(payload)
         response_data = result.model_dump()
         summary_prompt = response_data.pop("summary")
         if summary_prompt:
             user = _get_user_from_request(request)
-            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:solar-return')
-            if not rate_limit.allowed:
-                log_auth_event(
-                    event_type='ai_rate_limited',
-                    success=False,
-                    username=user.get('username') if user else None,
-                    user_id=user.get('id') if user else None,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get('user-agent'),
-                    detail='Solar return stream interpretation rate limit exceeded',
-                )
-                raise HTTPException(
-                    status_code=429,
-                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-                )
+            role_name = _resolve_role_name_for_solar_return(request, payload)
+            perplexity_client = PerplexityClient(role_type=role_name)
+            cached_summary = perplexity_client.get_cached_summary(summary_prompt, SOLAR_RETURN_SYSTEM_PROMPT)
+            if cached_summary is None:
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:solar-return')
+                if not rate_limit.allowed:
+                    log_auth_event(
+                        event_type='ai_rate_limited',
+                        success=False,
+                        username=user.get('username') if user else None,
+                        user_id=user.get('id') if user else None,
+                        ip_address=get_client_ip(request),
+                        user_agent=request.headers.get('user-agent'),
+                        detail='Solar return stream interpretation rate limit exceeded',
+                    )
+                    raise HTTPException(
+                        status_code=429,
+                        detail=build_ai_rate_limit_error_detail(rate_limit),
+                        headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                    )
     except HTTPException:
         raise
     except Exception as exc:
@@ -404,11 +413,13 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
             yield _sse_event("done", {"summary": ""})
             return
 
-        role_name = _resolve_role_name_for_solar_return(request, payload)
-        perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []
 
         yield _sse_event("meta", response_data)
+
+        if cached_summary is not None:
+            yield _sse_event("done", {"summary": cached_summary})
+            return
 
         try:
             async for chunk in perplexity_client.send_summary_stream(
@@ -438,6 +449,31 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
                 logger.exception("Failed to set Perplexity cache for solar return")
 
             yield _sse_event("done", {"summary": full_summary})
+            try:
+                db = get_session()
+                try:
+                    _ic = InterpretationCreate(
+                        user_persons_id=getattr(payload, 'person_id', None),
+                        context_type="solar",
+                        model=perplexity_client.model,
+                        interp_year=getattr(payload, 'birth_year', None),
+                        interp_month=getattr(payload, 'birth_month', None),
+                        interp_day=getattr(payload, 'birth_day', None),
+                        interp_hour=getattr(payload, 'birth_hour', None),
+                        interp_minute=getattr(payload, 'birth_minute', None),
+                        location_latitude=getattr(payload, 'latitude', None),
+                        location_longitude=getattr(payload, 'longitude', None),
+                        messages=[
+                            InterpMessageCreate(role="user", content=summary_prompt or "", position=0),
+                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
+                        ],
+                    )
+                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
+                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                finally:
+                    db.close()
+            except Exception:
+                logger.exception("Failed to save interpretation after solar stream")
         except Exception as exc:
             logger.exception("Error streaming /solar-return/stream")
             yield _sse_event("error", {"detail": str(exc)})

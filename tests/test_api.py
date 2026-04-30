@@ -2,15 +2,21 @@ import pytest
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
+from types import SimpleNamespace
+import app.services.auth_security as auth_security
 from app.services.auth_security import RateLimitResult
 import app.routers.horoscope as horoscope_router
+import app.routers.age_points as age_points_router
 from app.services import auth as auth_service
 from app.db.models.users import AuthAuditLog, User, UserProfile
 from app.db.session import get_session
-from tests.support import PASSWORD, build_lazy_authenticated_client, grant_poweruser
+from tests.support import PASSWORD, build_authenticated_client, build_lazy_authenticated_client, grant_admin, grant_poweruser
 from app.main import app
 
 client = build_lazy_authenticated_client()
+
+
+FREE_USER_LIMIT_MESSAGE = 'Das Kontingent von 5 Abfragen am Tag ist verbraucht, kommen Sie bitte morgen wieder Ein Upgrade auf 50 Abfragen am Tag ist Nutzern mit Spenderstatus aktiv vorbehalten (Buy me a coffee).'
 
 
 def test_public_auth_endpoints_remain_accessible_without_bearer_token():
@@ -231,6 +237,13 @@ def test_admin_user_cleanup_deletes_old_users_with_empty_profiles():
 
 
 def test_horoscope_interpretation_rate_limit_returns_429(monkeypatch):
+    class _DummyPerplexityClient:
+        def __init__(self, role_type=None):
+            self.role_type = role_type
+
+        def get_cached_summary(self, summary, system_prompt=None):
+            return None
+
     monkeypatch.setattr(
         horoscope_router,
         '_build_horoscope_response_data',
@@ -256,6 +269,7 @@ def test_horoscope_interpretation_rate_limit_returns_429(monkeypatch):
         'check_ai_rate_limit',
         lambda request, user_id=None, scope='ai': RateLimitResult(False, 7, 123, 0),
     )
+    monkeypatch.setattr(horoscope_router, 'PerplexityClient', _DummyPerplexityClient)
 
     response = client.post('/horoscope', json={
         'year': 2000,
@@ -269,8 +283,294 @@ def test_horoscope_interpretation_rate_limit_returns_429(monkeypatch):
     })
 
     assert response.status_code == 429
-    assert 'Zu viele KI-Abfragen' in response.json()['detail']
+    assert response.json()['detail'] == FREE_USER_LIMIT_MESSAGE
     assert response.headers.get('retry-after') == '123'
+
+
+def test_horoscope_interpretation_rate_limit_returns_poweruser_message(monkeypatch):
+    class _DummyPerplexityClient:
+        def __init__(self, role_type=None):
+            self.role_type = role_type
+
+        def get_cached_summary(self, summary, system_prompt=None):
+            return None
+
+    monkeypatch.setattr(
+        horoscope_router,
+        '_build_horoscope_response_data',
+        lambda payload: {
+            'target_year': payload.year,
+            'return_year': payload.year,
+            'return_month': payload.month,
+            'return_day': payload.day,
+            'return_hour': float(payload.hour),
+            'julian_day': 0.0,
+            'natal_sun_longitude': 0.0,
+            'solar_return_longitude': 0.0,
+            'longitude_difference': 0.0,
+            'iterations': 0,
+            'planets': [],
+            'houses': [None] * 12,
+            'aspects': [],
+            'summary_prompt': 'blocked',
+        },
+    )
+    monkeypatch.setattr(
+        horoscope_router,
+        'check_ai_rate_limit',
+        lambda request, user_id=None, scope='ai': RateLimitResult(False, 51, 123, 0, limit=50, is_poweruser=True),
+    )
+    monkeypatch.setattr(horoscope_router, 'PerplexityClient', _DummyPerplexityClient)
+
+    response = client.post('/horoscope', json={
+        'year': 2000,
+        'month': 1,
+        'day': 1,
+        'hour': 12,
+        'minute': 0,
+        'second': 0,
+        'latitude': 53.55,
+        'longitude': 10.0,
+    })
+
+    assert response.status_code == 429
+    assert response.json()['detail'] == 'Das Kontingent von 50 Abfragen am Tag ist verbraucht, kommen Sie bitte morgen wieder'
+    assert response.headers.get('retry-after') == '123'
+
+
+def test_age_points_rate_limit_returns_429_instead_of_502(monkeypatch):
+    class _DummyPerplexityClient:
+        def __init__(self, role_type=None):
+            self.role_type = role_type
+
+        def get_cached_summary(self, summary, system_prompt=None):
+            return None
+
+    monkeypatch.setattr(
+        age_points_router,
+        '_build_age_points_response',
+        lambda req, http_request: age_points_router.AgePointsResponse(
+            kind=req.kind,
+            target_year=req.target_year,
+            age_points=[],
+            summary='blocked',
+        ),
+    )
+    monkeypatch.setattr(
+        age_points_router,
+        'check_ai_rate_limit',
+        lambda request, user_id=None, scope='ai': RateLimitResult(False, 6, 123, 0, limit=5),
+    )
+    monkeypatch.setattr(age_points_router, 'PerplexityClient', _DummyPerplexityClient)
+
+    response = client.post('/age-points', json={
+        'year': 2000,
+        'month': 1,
+        'day': 1,
+        'hour': 12,
+        'minute': 0,
+        'second': 0,
+        'latitude': 53.55,
+        'longitude': 10.0,
+        'timezone': 'Europe/Berlin',
+        'kind': 'radix',
+        'target_year': 2026,
+    })
+
+    assert response.status_code == 429
+    assert response.json()['detail'] == FREE_USER_LIMIT_MESSAGE
+    assert response.headers.get('retry-after') == '123'
+
+
+def test_horoscope_cached_summary_bypasses_rate_limit(monkeypatch):
+    class _DummyPerplexityClient:
+        def __init__(self, role_type=None):
+            self.role_type = role_type
+
+        def get_cached_summary(self, summary, system_prompt=None):
+            return 'Antwort aus Cache'
+
+        def send_summary_text(self, summary, system_prompt=None):
+            raise AssertionError('send_summary_text darf bei Cache-Treffer nicht aufgerufen werden')
+
+    monkeypatch.setattr(
+        horoscope_router,
+        '_build_horoscope_response_data',
+        lambda payload: {
+            'target_year': payload.year,
+            'return_year': payload.year,
+            'return_month': payload.month,
+            'return_day': payload.day,
+            'return_hour': float(payload.hour),
+            'julian_day': 0.0,
+            'natal_sun_longitude': 0.0,
+            'solar_return_longitude': 0.0,
+            'longitude_difference': 0.0,
+            'iterations': 0,
+            'planets': [],
+            'houses': [float(index) for index in range(12)],
+            'aspects': [],
+            'summary_prompt': 'cached prompt',
+        },
+    )
+    monkeypatch.setattr(
+        horoscope_router,
+        'check_ai_rate_limit',
+        lambda request, user_id=None, scope='ai': (_ for _ in ()).throw(AssertionError('Rate-Limit darf bei Cache-Treffer nicht geprüft werden')),
+    )
+    monkeypatch.setattr(horoscope_router, 'PerplexityClient', _DummyPerplexityClient)
+
+    response = client.post('/horoscope', json={
+        'year': 2000,
+        'month': 1,
+        'day': 1,
+        'hour': 12,
+        'minute': 0,
+        'second': 0,
+        'latitude': 53.55,
+        'longitude': 10.0,
+    })
+
+    assert response.status_code == 200
+    assert response.json()['summary'] == 'Antwort aus Cache'
+
+
+def test_age_points_stream_cached_summary_bypasses_rate_limit(monkeypatch):
+    class _DummyPerplexityClient:
+        def __init__(self, role_type=None):
+            self.role_type = role_type
+
+        def get_cached_summary(self, summary, system_prompt=None):
+            return 'Antwort aus Cache'
+
+        async def send_summary_stream(self, summary, system_prompt=None):
+            raise AssertionError('send_summary_stream darf bei Cache-Treffer nicht aufgerufen werden')
+
+    monkeypatch.setattr(
+        age_points_router,
+        '_build_age_points_response',
+        lambda req, http_request: age_points_router.AgePointsResponse(
+            kind=req.kind,
+            target_year=req.target_year,
+            age_points=[],
+            summary='cached prompt',
+        ),
+    )
+    monkeypatch.setattr(
+        age_points_router,
+        'check_ai_rate_limit',
+        lambda request, user_id=None, scope='ai': (_ for _ in ()).throw(AssertionError('Rate-Limit darf bei Cache-Treffer nicht geprüft werden')),
+    )
+    monkeypatch.setattr(age_points_router, 'PerplexityClient', _DummyPerplexityClient)
+
+    response = client.post('/age-points/stream', json={
+        'year': 2000,
+        'month': 1,
+        'day': 1,
+        'hour': 12,
+        'minute': 0,
+        'second': 0,
+        'latitude': 53.55,
+        'longitude': 10.0,
+        'timezone': 'Europe/Berlin',
+        'kind': 'radix',
+        'target_year': 2026,
+    })
+
+    assert response.status_code == 200
+    assert 'event: done' in response.text
+    assert 'Antwort aus Cache' in response.text
+
+
+def test_check_ai_rate_limit_enforces_free_user_daily_limit(monkeypatch):
+    username = f'ai_limit_free_{uuid.uuid4().hex[:8]}'
+    build_authenticated_client(username=username)
+    user = auth_service.authenticate_user(username, PASSWORD)
+    assert user is not None
+
+    monkeypatch.setattr(auth_security, '_store', auth_security._LocalStore(), raising=False)
+
+    request = SimpleNamespace(headers={}, client=SimpleNamespace(host='127.0.0.1'))
+    scope = f'ai:test-free:{uuid.uuid4().hex}'
+
+    for _ in range(5):
+        result = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope=scope)
+        assert result.allowed is True
+        assert result.limit == 5
+        assert result.is_poweruser is False
+        assert result.is_admin is False
+
+    blocked = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope=scope)
+    assert blocked.allowed is False
+    assert blocked.limit == 5
+    assert blocked.retry_after_seconds > 0
+
+
+def test_check_ai_rate_limit_is_global_across_ai_endpoints(monkeypatch):
+        username = f'ai_limit_global_{uuid.uuid4().hex[:8]}'
+        build_authenticated_client(username=username)
+        user = auth_service.authenticate_user(username, PASSWORD)
+        assert user is not None
+
+        monkeypatch.setattr(auth_security, '_store', auth_security._LocalStore(), raising=False)
+
+        request = SimpleNamespace(headers={}, client=SimpleNamespace(host='127.0.0.1'))
+        scopes = ['ai:age-points', 'ai:horoscope', 'ai:planets', 'ai:houses', 'ai:transits']
+
+        for scope in scopes:
+            result = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope=scope)
+            assert result.allowed is True
+            assert result.limit == 5
+
+        blocked = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope='ai:solar-return')
+        assert blocked.allowed is False
+        assert blocked.limit == 5
+        assert blocked.retry_after_seconds > 0
+
+
+def test_check_ai_rate_limit_enforces_poweruser_daily_limit(monkeypatch):
+    username = f'ai_limit_power_{uuid.uuid4().hex[:8]}'
+    build_authenticated_client(username=username)
+    grant_poweruser(username)
+    user = auth_service.authenticate_user(username, PASSWORD)
+    assert user is not None
+
+    monkeypatch.setattr(auth_security, '_store', auth_security._LocalStore(), raising=False)
+
+    request = SimpleNamespace(headers={}, client=SimpleNamespace(host='127.0.0.1'))
+    scope = f'ai:test-power:{uuid.uuid4().hex}'
+
+    for _ in range(50):
+        result = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope=scope)
+        assert result.allowed is True
+        assert result.limit == 50
+        assert result.is_poweruser is True
+        assert result.is_admin is False
+
+    blocked = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope=scope)
+    assert blocked.allowed is False
+    assert blocked.limit == 50
+    assert blocked.retry_after_seconds > 0
+
+
+def test_check_ai_rate_limit_bypasses_admin(monkeypatch):
+    username = f'ai_limit_admin_{uuid.uuid4().hex[:8]}'
+    build_authenticated_client(username=username)
+    grant_admin(username)
+    user = auth_service.authenticate_user(username, PASSWORD)
+    assert user is not None
+
+    monkeypatch.setattr(auth_security, '_store', auth_security._LocalStore(), raising=False)
+
+    request = SimpleNamespace(headers={}, client=SimpleNamespace(host='127.0.0.1'))
+    scope = f'ai:test-admin:{uuid.uuid4().hex}'
+
+    for _ in range(60):
+        result = auth_security.check_ai_rate_limit(request, user_id=user['id'], scope=scope)
+        assert result.allowed is True
+        assert result.is_admin is True
+        assert result.limit == 0
+        assert result.retry_after_seconds == 0
 
 
 def test_logout_requires_bearer_auth():

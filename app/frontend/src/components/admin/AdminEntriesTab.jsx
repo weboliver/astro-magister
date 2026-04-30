@@ -49,6 +49,8 @@ export default function AdminEntriesTab({ entryEditRequest }){
   const [selectedEntry, setSelectedEntry] = useState(null)
   const [hasLoadedSearch, setHasLoadedSearch] = useState(false)
   const [isContentExpanded, setIsContentExpanded] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
 
   async function loadSections(){
     try{
@@ -221,6 +223,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
   useEffect(() => {
     const query = entryQuery.trim()
     const handle = window.setTimeout(() => {
+      setCurrentPage(1)
       loadEntries({
         q: query,
         section_id: entrySectionFilter,
@@ -229,6 +232,11 @@ export default function AdminEntriesTab({ entryEditRequest }){
     }, query ? 250 : 0)
     return () => window.clearTimeout(handle)
   }, [entryQuery, entrySectionFilter, entryCategoryFilter])
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE))
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [entries, currentPage])
 
   useEffect(() => {
     if (!isContentExpanded) return undefined
@@ -319,7 +327,11 @@ export default function AdminEntriesTab({ entryEditRequest }){
             <div className="admin-message">{hasLoadedSearch ? 'Keine Beiträge gefunden.' : 'Wähle Suchkriterien, um Beiträge zu laden.'}</div>
           ) : null}
           <div className="admin-cache-grid">
-            {entries.map((entry) => {
+            {(() => {
+              const totalPages = Math.min(10, Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE)))
+              const start = (currentPage - 1) * ITEMS_PER_PAGE
+              const paged = entries.slice(start, start + ITEMS_PER_PAGE)
+              return paged.map((entry) => {
               const category = categories.find((item) => Number(item.category_id) === Number(entry.category_id))
               const section = sections.find((item) => Number(item.section_id) === Number(category?.section_id))
               return (
@@ -351,8 +363,22 @@ export default function AdminEntriesTab({ entryEditRequest }){
                   </div>
                 </article>
               )
-            })}
+            })
+            })()}
           </div>
+          {entries.length > ITEMS_PER_PAGE ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+              <div style={{ color: '#374151' }}>Seite {currentPage} von {Math.min(10, Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE)))}</div>
+              <div>
+                <button type="button" className="admin-secondary-button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                  Zurück
+                </button>
+                <button type="button" className="admin-secondary-button" onClick={() => setCurrentPage((p) => Math.min(Math.min(10, Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE))), p + 1))} disabled={currentPage === Math.min(10, Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE)))} style={{ marginLeft: 8 }}>
+                  Weiter
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div style={{ width: 460, maxWidth: '100%' }}>

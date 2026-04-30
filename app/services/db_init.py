@@ -1,7 +1,8 @@
-from sqlalchemy import inspect, text
+from pathlib import Path
+
+from sqlalchemy import text
 
 from app.db.models.users import Role
-from app.db.models.wiki import Section
 from app.db.session import Base, get_engine, get_session
 
 
@@ -12,73 +13,25 @@ DEFAULT_ROLES = [
 ]
 
 
-def _ensure_role_columns(engine):
-    inspector = inspect(engine)
-    required_columns = {
-        'user_profiles': {
-            'role_id': 'INTEGER NOT NULL DEFAULT 1',
-            'is_poweruser': 'BOOLEAN NOT NULL DEFAULT false',
-        },
-        'user_persons': {
-            'role_id': 'INTEGER NOT NULL DEFAULT 1',
-        },
-    }
+def _run_alembic_upgrade() -> None:
+    """Run ``alembic upgrade head`` using the project's alembic.ini."""
+    from alembic.config import Config
+    from alembic import command as alembic_command
 
-    with engine.begin() as conn:
-        for table_name, columns in required_columns.items():
-            existing_columns = {column['name'] for column in inspector.get_columns(table_name)}
-            for column_name, column_sql in columns.items():
-                if column_name not in existing_columns:
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"))
+    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    alembic_cfg = Config(str(ini_path))
+    alembic_command.upgrade(alembic_cfg, "head")
 
 
-def _ensure_wiki_columns(engine):
-    inspector = inspect(engine)
-    required_columns = {
-        'sections': {
-            'wiki_active': 'BOOLEAN NOT NULL DEFAULT true',
-        },
-        'entries': {
-            'generate_text': 'TEXT',
-            'ispublic': "BOOLEAN NOT NULL DEFAULT false",
-        },
-    }
-
-    with engine.begin() as conn:
-        for table_name, columns in required_columns.items():
-            existing_columns = {column['name'] for column in inspector.get_columns(table_name)}
-            for column_name, column_sql in columns.items():
-                if column_name not in existing_columns:
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"))
-
-
-def _ensure_user_columns(engine):
-    inspector = inspect(engine)
-    created_column_sql = 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' if getattr(engine.dialect, 'name', '') == 'sqlite' else 'TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()'
-    required_columns = {
-        'users': {
-            'created': created_column_sql,
-        },
-    }
-
-    with engine.begin() as conn:
-        for table_name, columns in required_columns.items():
-            existing_columns = {column['name'] for column in inspector.get_columns(table_name)}
-            for column_name, column_sql in columns.items():
-                if column_name not in existing_columns:
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"))
-
-
-def init_users_db():
-    engine = get_engine()
-    Base.metadata.create_all(bind=engine)
-    _ensure_role_columns(engine)
-    _ensure_wiki_columns(engine)
-    _ensure_user_columns(engine)
+def _seed_roles(engine) -> None:
+    """Insert default roles if the table is empty."""
     session = get_session()
     try:
         if session.query(Role).count() == 0:
-            session.add_all(Role(role_id=role_id, role_name=role_name) for role_id, role_name in DEFAULT_ROLES)
+            session.add_all(
+                Role(role_id=role_id, role_name=role_name)
+                for role_id, role_name in DEFAULT_ROLES
+            )
             session.commit()
     except Exception:
         session.rollback()
@@ -86,12 +39,51 @@ def init_users_db():
     finally:
         session.close()
 
+
+def _reset_pg_sequences(engine) -> None:
+    """Repair PostgreSQL sequences after bulk data imports."""
     try:
-        if getattr(engine.dialect, 'name', '') == 'postgresql':
-            with engine.begin() as conn:
-                conn.execute(text("SELECT setval(pg_get_serial_sequence('users','id'), COALESCE((SELECT MAX(id) FROM users), 1), true)"))
-                conn.execute(text("SELECT setval(pg_get_serial_sequence('user_persons','id'), COALESCE((SELECT MAX(id) FROM user_persons), 1), true)"))
-                conn.execute(text("SELECT setval(pg_get_serial_sequence('refresh_tokens','id'), COALESCE((SELECT MAX(id) FROM refresh_tokens), 1), true)"))
-                conn.execute(text("SELECT setval(pg_get_serial_sequence('roles','role_id'), COALESCE((SELECT MAX(role_id) FROM roles), 1), true)"))
+        with engine.begin() as conn:
+            for table, col in [
+                ("users", "id"),
+                ("user_persons", "id"),
+                ("refresh_tokens", "id"),
+                ("roles", "role_id"),
+            ]:
+                conn.execute(
+                    text(
+                        f"SELECT setval("
+                        f"pg_get_serial_sequence('{table}', '{col}'), "
+                        f"COALESCE((SELECT MAX({col}) FROM {table}), 1), true)"
+                    )
+                )
     except Exception:
         pass
+
+
+def init_users_db() -> None:
+    """Initialise the database schema and seed required reference data.
+
+    * **PostgreSQL**: delegates all schema management to Alembic
+      (``alembic upgrade head``).  For an existing database that was
+      previously managed without Alembic, run once:
+      ``alembic stamp 0001``
+      before the first deployment with this version.
+
+    * **SQLite** (used by the test suite): falls back to
+      ``Base.metadata.create_all`` so tests remain self-contained without
+      needing a running Alembic environment.
+    """
+    engine = get_engine()
+    dialect = getattr(engine.dialect, "name", "")
+
+    if dialect == "postgresql":
+        _run_alembic_upgrade()
+    else:
+        # SQLite / other in-process engines (tests)
+        Base.metadata.create_all(bind=engine)
+
+    _seed_roles(engine)
+
+    if dialect == "postgresql":
+        _reset_pg_sequences(engine)

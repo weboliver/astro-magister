@@ -22,9 +22,11 @@ router = APIRouter(tags=["positions"], dependencies=[Depends(require_authenticat
 logger = logging.getLogger(__name__)
 
 # Perplexity AI streaming/caching
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set
+from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
 from app.services import auth as auth_service
-from app.services.auth_security import check_ai_rate_limit, get_client_ip, log_auth_event
+from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
+from app.services import interpretation_store as _istore
+from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 
 PLANETS_SYSTEM_PROMPT = (
     "planets"
@@ -138,7 +140,7 @@ def get_calc(
             julian_day=jd,
             planets=[planet],
             status=0,
-            summary=summary_text,
+            summary=append_additional_question(summary_text, getattr(request, 'additional_question', None)),
         )
     except HTTPException:
         raise
@@ -252,7 +254,7 @@ def get_planets(
             julian_day=jd,
             planets=planet_list,
             status=0,
-            summary=summary_text,
+            summary=append_additional_question(summary_text, getattr(request, 'additional_question', None)),
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error calculating planets: {str(e)}")
@@ -260,6 +262,8 @@ def get_planets(
 
 @router.post("/planets/stream")
 async def get_planets_stream(payload: DateTimeRequest, request: Request):
+    cached_summary = None
+    perplexity_client = None
     try:
         # Reuse existing logic to compute positions and a summary
         result = get_planets(payload)
@@ -269,22 +273,29 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
         }
         if response_data["summary_prompt"]:
             user = _get_user_from_request(request)
-            rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:planets')
-            if not rate_limit.allowed:
-                log_auth_event(
-                    event_type='ai_rate_limited',
-                    success=False,
-                    username=user.get('username') if user else None,
-                    user_id=user.get('id') if user else None,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get('user-agent'),
-                    detail='Planets stream interpretation rate limit exceeded',
-                )
-                raise HTTPException(
-                    status_code=429,
-                    detail='Zu viele KI-Abfragen. Bitte später erneut versuchen.',
-                    headers={'Retry-After': str(rate_limit.retry_after_seconds)},
-                )
+            role_name = _resolve_role_name_for_planets(request, payload)
+            perplexity_client = PerplexityClient(role_type=role_name)
+            cached_summary = perplexity_client.get_cached_summary(
+                response_data["summary_prompt"],
+                PLANETS_SYSTEM_PROMPT,
+            )
+            if cached_summary is None:
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:planets')
+                if not rate_limit.allowed:
+                    log_auth_event(
+                        event_type='ai_rate_limited',
+                        success=False,
+                        username=user.get('username') if user else None,
+                        user_id=user.get('id') if user else None,
+                        ip_address=get_client_ip(request),
+                        user_agent=request.headers.get('user-agent'),
+                        detail='Planets stream interpretation rate limit exceeded',
+                    )
+                    raise HTTPException(
+                        status_code=429,
+                        detail=build_ai_rate_limit_error_detail(rate_limit),
+                        headers={'Retry-After': str(rate_limit.retry_after_seconds)},
+                    )
     except HTTPException:
         raise
     except Exception as e:
@@ -298,12 +309,14 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
             yield _sse_event("done", {"summary": ""})
             return
 
-        role_name = _resolve_role_name_for_planets(request, payload)
-        perplexity_client = PerplexityClient(role_type=role_name)
         summary_parts = []
         meta_payload = {key: value for key, value in response_data.items() if key != "summary_prompt"}
 
         yield _sse_event("meta", meta_payload)
+
+        if cached_summary is not None:
+            yield _sse_event("done", {"summary": cached_summary})
+            return
 
         try:
             async for chunk in perplexity_client.send_summary_stream(
@@ -337,6 +350,31 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
                 logger.exception("Failed to set Perplexity cache for planets")
 
             yield _sse_event("done", {"summary": full_summary})
+            try:
+                db = get_session()
+                try:
+                    _ic = InterpretationCreate(
+                        user_persons_id=getattr(payload, 'person_id', None),
+                        context_type="planets",
+                        model=perplexity_client.model,
+                        interp_year=payload.year,
+                        interp_month=payload.month,
+                        interp_day=payload.day,
+                        interp_hour=getattr(payload, 'hour', None),
+                        interp_minute=getattr(payload, 'minute', None),
+                        location_latitude=getattr(payload, 'latitude', None),
+                        location_longitude=getattr(payload, 'longitude', None),
+                        messages=[
+                            InterpMessageCreate(role="user", content=response_data["summary_prompt"] or "", position=0),
+                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
+                        ],
+                    )
+                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
+                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                finally:
+                    db.close()
+            except Exception:
+                logger.exception("Failed to save interpretation after planets stream")
         except Exception as exc:
             logger.exception("Error streaming /planets/stream")
             yield _sse_event("error", {"detail": str(exc)})

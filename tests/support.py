@@ -2,14 +2,27 @@ import uuid
 from typing import Callable
 
 from fastapi.testclient import TestClient
-import app.config as app_config
 from app.db.models.users import User
 from app.db.session import get_session
 from app.main import app
 from app.services import auth as auth_service
+from app.services import auth_security
+import app.routers.auth as auth_router
 
-# Ensure FastAPI starts in test mode before any clients are created
-app_config.TEST = True
+
+async def _always_valid_turnstile(token, remote_ip):
+    return True
+
+
+auth_security.verify_turnstile_token = _always_valid_turnstile
+auth_security.LOGIN_RATE_LIMIT_ATTEMPTS = 1000
+auth_security.REGISTER_RATE_LIMIT_ATTEMPTS = 1000
+auth_security.REFRESH_RATE_LIMIT_ATTEMPTS = 1000
+auth_router.verify_turnstile_token = _always_valid_turnstile
+auth_router.LOGIN_RATE_LIMIT_ATTEMPTS = 1000
+auth_router.REGISTER_RATE_LIMIT_ATTEMPTS = 1000
+auth_router.REFRESH_RATE_LIMIT_ATTEMPTS = 1000
+auth_router.COOKIE_SECURE = False
 
 
 PASSWORD = "Secret123!"
@@ -48,10 +61,9 @@ def ensure_test_user(client: TestClient, username: str = "test_user") -> None:
         assert auth_service.admin_set_password(existing_user.id, PASSWORD)
 
 
-def build_authenticated_client(client: TestClient | None = None) -> TestClient:
+def build_authenticated_client(client: TestClient | None = None, username: str = "test_user") -> TestClient:
     """Return a TestClient that already carries an Authorization header."""
     client = client or TestClient(app)
-    username = "test_user"
     ensure_test_user(client, username)
     login = client.post("/auth/login", json={"username": username, "password": PASSWORD})
     assert login.status_code == 200, login.text
@@ -61,12 +73,18 @@ def build_authenticated_client(client: TestClient | None = None) -> TestClient:
     return client
 
 
-def build_lazy_authenticated_client(client: TestClient | None = None) -> LazyTestClient:
+def build_lazy_authenticated_client(client: TestClient | None = None, username: str = "test_user") -> LazyTestClient:
     """Return a lazy proxy so test collection does not hit the database."""
-    return LazyTestClient(lambda: build_authenticated_client(client))
+    return LazyTestClient(lambda: build_authenticated_client(client, username=username))
 
 
 def grant_poweruser(username: str = "test_user") -> None:
     user = auth_service.authenticate_user(username, PASSWORD)
     assert user is not None, f"User {username} must exist"
     assert auth_service.admin_update_user(user['id'], {'is_poweruser': True})
+
+
+def grant_admin(username: str = "test_user") -> None:
+    user = auth_service.authenticate_user(username, PASSWORD)
+    assert user is not None, f"User {username} must exist"
+    assert auth_service.admin_update_user(user['id'], {'isadmin': True})

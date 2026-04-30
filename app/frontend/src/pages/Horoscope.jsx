@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { postWithSignal } from '../services/api'
+import { postStream, postWithSignal } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.css'
@@ -10,6 +10,9 @@ import PersonSelector from '../components/PersonSelector'
 import WikiPageShortcut from '../components/WikiPageShortcut'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useLogoutCleanup } from '../utils/logoutCache'
+import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../utils/aiPrompt'
+import InterpretationHistory from '../components/InterpretationHistory'
+import { streamFollowup } from '../hooks/useInterpretations'
 
 const sharedChartCache = new Map()
 
@@ -65,18 +68,7 @@ function parseSseBlock(block) {
 // revoking the currently active URL too early.
 
 async function postHoroscopeStream(path, payload) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-  }
-  const token = localStorage.getItem('token')
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const response = await fetch(path, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  })
+  const response = await postStream(path, payload)
 
   if (!response.ok) {
     let detail = `Request failed (${response.status})`
@@ -116,6 +108,9 @@ export default function Horoscope(){
   const [imageError, setImageError] = useState('')
   const [cachedSummary, setCachedSummary] = useState('')
   const [showSummary, setShowSummary] = useState(false)
+  const [additionalQuestion, setAdditionalQuestion] = useState('')
+  const [activeInterpretationId, setActiveInterpretationId] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const imageUrlRef = useRef(null)
   const chartCacheRef = useRef(sharedChartCache)
   const graphicAbortRef = useRef(null)
@@ -344,12 +339,31 @@ export default function Horoscope(){
     const cacheKey = computeCacheKey(currentPayload, reqSize)
     const cachedGraphic = chartCacheRef.current.get(cacheKey)
     const hasCurrentGraphic = !!chartImage && activeChartCacheKeyRef.current === cacheKey
-
+    const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
+    if (activeInterpretationId && normalizedAdditionalQuestion) {
+      setLoading(true)
+      setResp(null)
+      setCachedSummary('')
+      setShowSummary(true)
+      let streamedSummary = ''
+      try {
+        await streamFollowup(activeInterpretationId, normalizedAdditionalQuestion, {
+          onDelta: (chunk) => { streamedSummary += chunk; setCachedSummary(streamedSummary) },
+          onDone: (summary) => { streamedSummary = summary || streamedSummary; setCachedSummary(streamedSummary) },
+          onError: (err) => { setResp({ ok: false, error: err.message }) },
+        })
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
     setLoading(true); setResp(null)
     setImageError('')
     setCachedSummary('')
     setShowSummary(true)
-    const payload = currentPayload
+    const payload = normalizedAdditionalQuestion
+      ? { ...currentPayload, additional_question: normalizedAdditionalQuestion }
+      : currentPayload
     if (!cachedGraphic && !hasCurrentGraphic) {
       const previousUrl = imageUrlRef.current
       setChartImage(null)
@@ -403,6 +417,11 @@ export default function Horoscope(){
               const baseData = prev?.data || metaData || {}
               return { ok: true, status: streamResp.status, data: { ...baseData, summary: streamedSummary } }
             })
+            continue
+          }
+
+          if (parsed.event === 'saved') {
+            setActiveInterpretationId(parsed.data.interpretation_id)
             continue
           }
 
@@ -470,8 +489,9 @@ export default function Horoscope(){
   const baseSummary = resp && (resp.data && (resp.data.summary || resp.data.summary_html))
     ? (resp.data.summary || resp.data.summary_html)
     : 'Kein Summary vorhanden'
+  const summaryError = resp && resp.ok === false ? (resp.error || resp.data?.detail || 'Analyse konnte nicht geladen werden') : ''
   const summaryContent = cachedSummary || baseSummary
-  const summaryText = loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent
+  const summaryText = summaryError ? '' : (loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent)
 
   return (
     <div>
@@ -510,16 +530,40 @@ export default function Horoscope(){
               <input value={longitude} onChange={e=>setLongitude(e.target.value)} />
             </>
           )}
+          <label>Optionale Zusatzfrage</label>
+          <textarea
+            value={additionalQuestion}
+            onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
+            maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+            rows={3}
+            placeholder="Optional: Worauf soll die KI bei der Auswertung besonders eingehen?"
+            style={{ width: '100%', resize: 'vertical' }}
+          />
+          <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{additionalQuestion.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
           <div style={{marginTop:8}}>
-            <button onClick={fetchHoroscope} disabled={loading}>{loading? 'Lade...' : 'Horoskop Interpretation laden'}</button>
+            <button onClick={fetchHoroscope} disabled={loading}>{loading? 'Lade...' : 'Horoskop interpretieren'}</button>
           </div>
           {(showSummary && (cachedSummary || resp || loading)) ? (
             <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'auto' }}>
+              {summaryError ? (
+                <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+              ) : null}
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                 {summaryText || (loading ? 'Analyse wird erstellt ...' : '')}
               </ReactMarkdown>
             </div>
           ) : null}
+          {profile?.id && (
+            <InterpretationHistory
+              contextType="horoscope"
+              userPersonsId={selectedPerson?.id ?? null}
+              activeId={activeInterpretationId}
+              onSelect={(id) => setActiveInterpretationId(id)}
+              onDelete={(id) => { if (activeInterpretationId === id) setActiveInterpretationId(null) }}
+              open={historyOpen}
+              onToggle={() => setHistoryOpen((v) => !v)}
+            />
+          )}
         </div>
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
           <div style={{ border: '1px solid #dde1e7', marginTop: (isNarrow ? 0 : -70), borderRadius: 12, padding: 12, minHeight: 320, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
@@ -530,7 +574,7 @@ export default function Horoscope(){
               <img src={chartImage} alt="Horoskop Diagramm" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
             )}
             {!chartImage && !imageLoading && !imageError && (
-              <div style={{ color: '#577' }}>Klicke auf «Horoskop Interpretation laden», um das Chart rechts neben dem Formular anzuzeigen und eine Auswertung zu erhalten.</div>
+              <div style={{ color: '#577' }}>Klicke auf «Horoskop interpretieren», um das Chart rechts neben dem Formular anzuzeigen und eine Auswertung zu erhalten.</div>
             )}
           </div>
         </div>

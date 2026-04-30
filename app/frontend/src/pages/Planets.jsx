@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { postWithSignal } from '../services/api'
+import { postStream, postWithSignal } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.css'
@@ -10,6 +10,9 @@ import PersonSelector from '../components/PersonSelector'
 import WikiPageShortcut from '../components/WikiPageShortcut'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useLogoutCleanup } from '../utils/logoutCache'
+import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../utils/aiPrompt'
+import InterpretationHistory from '../components/InterpretationHistory'
+import { streamFollowup } from '../hooks/useInterpretations'
 
 const sharedPlanetsCache = new Map()
 const STORAGE_KEY = 'astronex_planets_chart_payload'
@@ -63,18 +66,7 @@ function formatDateTimeValue(year, month, day, hour, minute, second) {
 }
 
 async function postPlanetsStream(path, payload) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-  }
-  const token = localStorage.getItem('token')
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const response = await fetch(path, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  })
+  const response = await postStream(path, payload)
 
   if (!response.ok) {
     let detail = `Request failed (${response.status})`
@@ -114,6 +106,9 @@ export default function Planets(){
   const [hydrated, setHydrated] = useState(false)
   const [cachedSummary, setCachedSummary] = useState('')
   const [showSummary, setShowSummary] = useState(false)
+  const [additionalQuestion, setAdditionalQuestion] = useState('')
+  const [activeInterpretationId, setActiveInterpretationId] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const imageUrlRef = useRef(null)
   const chartCacheRef = useRef(sharedPlanetsCache)
   const graphicAbortRef = useRef(null)
@@ -329,13 +324,33 @@ export default function Planets(){
   }, [profile, selectedPerson])
 
   async function fetchPlanets(){
+    const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
+    if (activeInterpretationId && normalizedAdditionalQuestion) {
+      setLoading(true)
+      setResp(null)
+      setCachedSummary('')
+      setShowSummary(true)
+      let streamedSummary = ''
+      try {
+        await streamFollowup(activeInterpretationId, normalizedAdditionalQuestion, {
+          onDelta: (chunk) => { streamedSummary += chunk; setCachedSummary(streamedSummary) },
+          onDone: (summary) => { streamedSummary = summary || streamedSummary; setCachedSummary(streamedSummary) },
+          onError: (err) => { setResp({ ok: false, error: err.message }) },
+        })
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
     setLoading(true)
     setResp(null)
     setImageError('')
     setCachedSummary('')
     setShowSummary(true)
 
-    const payload = currentPayload
+    const payload = normalizedAdditionalQuestion
+      ? { ...currentPayload, additional_question: normalizedAdditionalQuestion }
+      : currentPayload
     const reqSize = computeGraphicSize()
     const cacheKey = computeCacheKey(payload, reqSize)
     try {
@@ -402,6 +417,11 @@ export default function Planets(){
             continue
           }
 
+          if (parsed.event === 'saved') {
+            setActiveInterpretationId(parsed.data.interpretation_id)
+            continue
+          }
+
           if (parsed.event === 'error') {
             throw new Error(parsed.data.detail || 'Streaming fehlgeschlagen')
           }
@@ -454,8 +474,9 @@ export default function Planets(){
   const baseSummary = resp && (resp.data && (resp.data.summary || resp.data.summary_html))
     ? (resp.data.summary || resp.data.summary_html)
     : 'Kein Summary vorhanden'
+  const summaryError = resp && resp.ok === false ? (resp.error || resp.data?.detail || 'Analyse konnte nicht geladen werden') : ''
   const summaryContent = cachedSummary || baseSummary
-  const summaryText = loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent
+  const summaryText = summaryError ? '' : (loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent)
 
   return (
     <div>
@@ -487,16 +508,40 @@ export default function Planets(){
             <label>Longitude</label>
             <input value={longitude} onChange={e=>setLongitude(e.target.value)} />
           </div>
+          <label>Optionale Zusatzfrage</label>
+          <textarea
+            value={additionalQuestion}
+            onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
+            maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+            rows={3}
+            placeholder="Optional: Worauf soll die KI bei der Interpretation besonders eingehen?"
+            style={{ width: '100%', resize: 'vertical' }}
+          />
+          <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{additionalQuestion.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
           <div style={{marginTop:8}}>
             <button onClick={fetchPlanets} disabled={loading}>{loading? 'Lade...' : 'Planeten Positionen interpretieren'}</button>
           </div>
             {(showSummary && (cachedSummary || resp || loading)) ? (
               <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
+                {summaryError ? (
+                  <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+                ) : null}
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {summaryText || (loading ? 'Analyse wird erstellt ...' : '')}
                 </ReactMarkdown>
               </div>
             ) : null}
+          {profile?.id && (
+            <InterpretationHistory
+              contextType="planets"
+              userPersonsId={selectedPerson?.id ?? null}
+              activeId={activeInterpretationId}
+              onSelect={(id) => setActiveInterpretationId(id)}
+              onDelete={(id) => { if (activeInterpretationId === id) setActiveInterpretationId(null) }}
+              open={historyOpen}
+              onToggle={() => setHistoryOpen((v) => !v)}
+            />
+          )}
         </div>
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
           <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
@@ -507,7 +552,7 @@ export default function Planets(){
               <img src={chartImage} alt="Planeten Positionen" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
             )}
             {!chartImage && !imageLoading && !imageError && (
-              <div style={{ color: '#577' }}>Klicke auf «Fetch Planets», um das Chart rechts neben dem Formular anzuzeigen.</div>
+              <div style={{ color: '#577' }}>Klicke auf «Planeten Positionen interpretieren», um das Chart rechts neben dem Formular anzuzeigen.</div>
             )}
           </div>
         </div>

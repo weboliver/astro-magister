@@ -26,6 +26,7 @@ class DateResponse(BaseModel):
 
 class DateTimeRequest(BaseModel):
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person whose role should be used for interpretation")
+    additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
     year: int = Field(..., description="Year", json_schema_extra={"example": 2000})
     month: int = Field(..., ge=1, le=12, description="Month (1-12)", json_schema_extra={"example": 1})
     day: int = Field(..., ge=1, le=31, description="Day (1-31)", json_schema_extra={"example": 1})
@@ -113,6 +114,7 @@ class FixstarResponse(BaseModel):
 
 class SolarReturnRequest(BaseModel):
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person whose role should be used for interpretation")
+    additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
     birth_year: int = Field(..., description="Birth year", json_schema_extra={"example": 1990})
     birth_month: int = Field(..., ge=1, le=12, description="Birth month", json_schema_extra={"example": 6})
     birth_day: int = Field(..., ge=1, le=31, description="Birth day", json_schema_extra={"example": 15})

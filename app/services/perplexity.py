@@ -6,6 +6,7 @@ Der API Key wird aus der .env-Datei per `API_KEY` gelesen.
 Endpoint: POST https://api.perplexity.ai/chat/completions
 Auth:     Authorization: Bearer <API_KEY>
 """
+import asyncio
 from typing import Optional, Dict, Any, AsyncIterator, List
 import json
 import logging
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 # Verfügbare Modelle: sonar | sonar-pro | sonar-reasoning-pro | sonar-deep-research
 DEFAULT_MODEL_PRO = "sonar-pro"
-DEFAULT_MODEL_DEEP_PRO = "sonar-reasoning-pro"
+DEFAULT_MODEL_DEEP_PRO = "sonar-pro"
 DEFAULT_MODEL = "sonar"
 _THINK_OPEN_TAG = "<think>"
 _THINK_CLOSE_TAG = "</think>"
@@ -68,6 +69,21 @@ def _looks_like_prompt_echo(prompt: str, response_text: str) -> bool:
         return len(normalized_response) / len(normalized_prompt) >= 0.9
 
     return False
+
+
+def append_additional_question(summary: Optional[str], additional_question: Optional[str]) -> Optional[str]:
+    if summary is None:
+        return None
+
+    normalized_question = (additional_question or "").strip()
+    if not normalized_question:
+        return summary
+
+    return (
+        f"{summary}\n\n"
+        f"Zusatzfrage des Nutzers:\n{normalized_question}\n\n"
+        "Beantworte diese Zusatzfrage explizit und beziehe sie in die Interpretation ein."
+    )
 
 
 class _CacheBackend:
@@ -366,7 +382,7 @@ class PerplexityClient:
             self.model = DEFAULT_MODEL_PRO
         self.tokens = 3072
         if self.role_type == "Fortgeschritten":
-            self.tokens = 4096
+            self.tokens = 6192
         elif self.role_type == "Experte":
             self.tokens = 9216
 
@@ -527,6 +543,23 @@ class PerplexityClient:
             resp.raise_for_status()
             return resp.json()
 
+    def get_cached_summary(self, summary: str, system_prompt: Optional[str] = None) -> Optional[str]:
+        resolved = self._resolve_system_prompt(system_prompt)
+        if resolved is None:
+            resolved = self.system_prompt_for_summary("horoskop")
+
+        key = _make_cache_key(summary, resolved, self.model)
+        cached = _cache_get(key)
+        if cached is None:
+            return None
+
+        if _looks_like_prompt_echo(summary, cached):
+            logger.warning("Verwerfe verunreinigten Perplexity-Cache-Eintrag, der den Prompt spiegelt")
+            _cache_delete(key)
+            return None
+
+        return cached
+
     async def send_summary_stream(
         self,
         summary: str,
@@ -538,15 +571,10 @@ class PerplexityClient:
         if resolved is None:
             resolved = self.system_prompt_for_summary("horoskop")
         try:
-            key = _make_cache_key(summary, resolved, self.model)
-            cached = _cache_get(key)
+            cached = self.get_cached_summary(summary, resolved)
             if cached is not None:
-                if _looks_like_prompt_echo(summary, cached):
-                    logger.warning("Verwerfe verunreinigten Perplexity-Cache-Eintrag, der den Prompt spiegelt")
-                    _cache_delete(key)
-                else:
-                    yield cached
-                    return
+                yield cached
+                return
         except Exception:
             pass
         disable_search = True
@@ -568,10 +596,18 @@ class PerplexityClient:
             self.model,
             len(summary),
         )
+        normalized_prompt = _normalize_prompt_echo_text(summary)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async with client.stream("POST", PERPLEXITY_API_URL, json=payload, headers=headers) as resp:
                 resp.raise_for_status()
                 think_filter = _ThinkStreamFilter()
+                buffered_chunks: list[str] = []
+                buffered_text = ""
+                prompt_prefix_pending = True
+
+                def _buffer_or_yield(chunk: str) -> AsyncIterator[str]:
+                    raise NotImplementedError
+
                 async for line in resp.aiter_lines():
                     if not line or not line.startswith("data:"):
                         continue
@@ -597,11 +633,44 @@ class PerplexityClient:
                     if content:
                         filtered = think_filter.process(content)
                         if filtered:
-                            yield filtered
+                            if prompt_prefix_pending:
+                                buffered_chunks.append(filtered)
+                                buffered_text += filtered
+                                normalized_buffer = _normalize_prompt_echo_text(buffered_text)
+                                if normalized_buffer and not normalized_prompt.startswith(normalized_buffer):
+                                    prompt_prefix_pending = False
+                                    for chunk in buffered_chunks:
+                                        yield chunk
+                                    buffered_chunks.clear()
+                                    buffered_text = ""
+                            else:
+                                yield filtered
 
                 remainder = think_filter.flush()
                 if remainder:
-                    yield remainder
+                    if prompt_prefix_pending:
+                        buffered_chunks.append(remainder)
+                        buffered_text += remainder
+                    else:
+                        yield remainder
+
+                if prompt_prefix_pending and buffered_text:
+                    if _looks_like_prompt_echo(summary, buffered_text):
+                        logger.warning("Perplexity-Stream hat den Prompt gespiegelt, wechsle auf Text-Fallback ohne Cache")
+                        fallback_text = await asyncio.to_thread(
+                            self.send_summary_text,
+                            summary,
+                            resolved,
+                            False,
+                            True,
+                        )
+                        if fallback_text and not _looks_like_prompt_echo(summary, fallback_text):
+                            yield fallback_text
+                            return
+                        raise ValueError("Perplexity hat im Stream den Prompt statt einer Interpretation zurückgegeben")
+
+                    for chunk in buffered_chunks:
+                        yield chunk
 
     def send_summary_text(
         self,
@@ -616,13 +685,9 @@ class PerplexityClient:
             system_prompt = self.system_prompt_for_summary("horoskop")
         key = _make_cache_key(summary, system_prompt, self.model)
         if use_cache:
-            cached = _cache_get(key)
+            cached = self.get_cached_summary(summary, system_prompt)
             if cached is not None:
-                if _looks_like_prompt_echo(summary, cached):
-                    logger.warning("Verwerfe verunreinigten Perplexity-Cache-Eintrag, der den Prompt spiegelt")
-                    _cache_delete(key)
-                else:
-                    return cached
+                return cached
 
         result = self.send_summary(summary=summary, system_prompt=system_prompt)
         try:
