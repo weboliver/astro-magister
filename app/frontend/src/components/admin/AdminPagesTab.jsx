@@ -30,7 +30,7 @@ export default function AdminPagesTab({ onEditEntry }){
     setPageLoading(true)
     setPageError('')
     try{
-      const resp = await get('/auth/wiki/pages')
+      const resp = await get('/wiki/pages')
       if (!resp.ok) throw new Error(`Pages konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setPages(Array.isArray(data) ? data : [])
@@ -43,7 +43,7 @@ export default function AdminPagesTab({ onEditEntry }){
 
   async function loadSections(){
     try{
-      const resp = await get('/auth/wiki/sections')
+      const resp = await get('/wiki/sections')
       if (!resp.ok) throw new Error(`Sections konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setSections(Array.isArray(data) ? data : [])
@@ -54,7 +54,7 @@ export default function AdminPagesTab({ onEditEntry }){
 
   async function loadCategories(){
     try{
-      const resp = await get('/auth/wiki/categories')
+      const resp = await get('/wiki/categories')
       if (!resp.ok) throw new Error(`Categories konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setCategories(Array.isArray(data) ? data : [])
@@ -64,7 +64,7 @@ export default function AdminPagesTab({ onEditEntry }){
   }
 
   async function fetchEntry(entryId){
-    const resp = await get(`/auth/wiki/entries/${entryId}`)
+    const resp = await get(`/wiki/entries/${entryId}`)
     if (!resp.ok) throw new Error(`Beitrag ${entryId} konnte nicht geladen werden (${resp.status})`)
     return resp.json()
   }
@@ -79,7 +79,7 @@ export default function AdminPagesTab({ onEditEntry }){
     setPageError('')
     try{
       const params = new URLSearchParams({ page_id: String(pageId) })
-      const resp = await get(`/auth/wiki/page-content?${params.toString()}`)
+      const resp = await get(`/wiki/page-content?${params.toString()}`)
       if (!resp.ok) throw new Error(`Zuordnungen konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       const contentRows = Array.isArray(data) ? data : []
@@ -114,7 +114,7 @@ export default function AdminPagesTab({ onEditEntry }){
       if (filters.q) params.set('q', filters.q)
       if (filters.section_id) params.set('section_id', String(filters.section_id))
       if (filters.category_id) params.set('category_id', String(filters.category_id))
-      const resp = await get(`/auth/wiki/entries?${params.toString()}`)
+      const resp = await get(`/wiki/entries?${params.toString()}`)
       if (!resp.ok) throw new Error(`Beiträge konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setEntrySearchResults(Array.isArray(data) ? data : [])
@@ -155,8 +155,8 @@ export default function AdminPagesTab({ onEditEntry }){
       }
       const isUpdate = !!selectedPage.page_id
       const resp = isUpdate
-        ? await put(`/auth/wiki/pages/${selectedPage.page_id}`, payload)
-        : await post('/auth/wiki/pages', payload)
+        ? await put(`/wiki/pages/${selectedPage.page_id}`, payload)
+        : await post('/wiki/pages', payload)
       if (!resp.ok) throw new Error(`${isUpdate ? 'Speichern' : 'Anlegen'} fehlgeschlagen. Eventuell existiert die Seite schon? (${resp.status})`)
       const saved = await resp.json()
       await loadPages()
@@ -175,7 +175,7 @@ export default function AdminPagesTab({ onEditEntry }){
     setPageError('')
     setPageSuccess('')
     try{
-      const resp = await del(`/auth/wiki/pages/${pageId}`)
+      const resp = await del(`/wiki/pages/${pageId}`)
       if (!resp.ok) throw new Error(`Löschen fehlgeschlagen (${resp.status})`)
       await loadPages()
       if (selectedPage?.page_id === pageId){
@@ -197,7 +197,7 @@ export default function AdminPagesTab({ onEditEntry }){
     setPageError('')
     setPageSuccess('')
     try{
-      const resp = await post('/auth/wiki/page-content', {
+      const resp = await post('/wiki/page-content', {
         page_id: selectedPage.page_id,
         entry_id: entry.entry_id,
       })
@@ -214,7 +214,7 @@ export default function AdminPagesTab({ onEditEntry }){
     setPageError('')
     setPageSuccess('')
     try{
-      const resp = await del(`/auth/wiki/page-content/${pageContentId}`)
+      const resp = await del(`/wiki/page-content/${pageContentId}`)
       if (!resp.ok) throw new Error(`Zuordnung konnte nicht gelöscht werden (${resp.status})`)
       await loadPageAssignments(selectedPage?.page_id)
       setPageSuccess('Zuordnung gelöscht')

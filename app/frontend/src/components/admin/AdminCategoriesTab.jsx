@@ -21,7 +21,7 @@ export default function AdminCategoriesTab(){
 
   async function loadSections(){
     try{
-      const resp = await get('/auth/wiki/sections')
+      const resp = await get('/wiki/sections')
       if (!resp.ok) throw new Error(`Bereiche konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setSections(Array.isArray(data) ? data : [])
@@ -34,7 +34,7 @@ export default function AdminCategoriesTab(){
     setCategoryLoading(true)
     setCategoryError('')
     try{
-      const resp = await get('/auth/wiki/categories')
+      const resp = await get('/wiki/categories')
       if (!resp.ok) throw new Error(`Kategorien konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setCategories(Array.isArray(data) ? data : [])
@@ -88,8 +88,8 @@ export default function AdminCategoriesTab(){
       }
       const isUpdate = !!selectedCategory.category_id
       const resp = isUpdate
-        ? await put(`/auth/wiki/categories/${selectedCategory.category_id}`, payload)
-        : await post('/auth/wiki/categories', payload)
+        ? await put(`/wiki/categories/${selectedCategory.category_id}`, payload)
+        : await post('/wiki/categories', payload)
       if (!resp.ok) throw new Error(`${isUpdate ? 'Speichern' : 'Anlegen'} fehlgeschlagen (${resp.status})`)
       const saved = await resp.json()
       await loadCategories()
@@ -108,7 +108,7 @@ export default function AdminCategoriesTab(){
     setCategoryError('')
     setCategorySuccess('')
     try{
-      const resp = await del(`/auth/wiki/categories/${categoryId}`)
+      const resp = await del(`/wiki/categories/${categoryId}`)
       if (!resp.ok) throw new Error(`Löschen fehlgeschlagen (${resp.status})`)
       await loadCategories()
       if (selectedCategory?.category_id === categoryId) setSelectedCategory(null)

@@ -164,7 +164,8 @@ def create_refresh_token(user_id: int, days: int = 7) -> str:
         session.add(row)
         session.commit()
         return token
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Failed to create refresh token for user {user_id}: {e}")
         session.rollback()
         return None
     finally:
@@ -187,7 +188,8 @@ def verify_refresh_token(token: str) -> Optional[int]:
         if datetime.now(timezone.utc) > exp:
             return None
         return user_id
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to verify refresh token: {e}")
         return None
 
 
@@ -446,7 +448,9 @@ def get_profile(user_id: int) -> Optional[dict]:
         session.close()
     if not row:
         return None
-    return {k: getattr(row, k) for k in keys}
+    result = {k: getattr(row, k) for k in keys}
+    result['id'] = user_id
+    return result
 
 
 def update_profile(user_id: int, profile: dict) -> bool:
@@ -464,7 +468,8 @@ def update_profile(user_id: int, profile: dict) -> bool:
                 if not tzname:
                     # fallback to closest
                     tzname = tf.closest_timezone_at(lat=lat, lng=lng)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get birth timezone: {e}")
                 tzname = None
         # residence timezone fallback
         if not res_tz and profile.get('residence_latitude') is not None and profile.get('residence_longitude') is not None:
@@ -476,9 +481,11 @@ def update_profile(user_id: int, profile: dict) -> bool:
                 res_tz = tf2.timezone_at(lat=rlat, lng=rlng)
                 if not res_tz:
                     res_tz = tf2.closest_timezone_at(lat=rlat, lng=rlng)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get residence timezone: {e}")
                 res_tz = None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to get user timezone: {e}")
         tzname = None
 
     row = session.query(UserProfile).filter(UserProfile.user_id == user_id).first()

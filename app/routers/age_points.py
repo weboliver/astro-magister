@@ -142,8 +142,8 @@ def _compute_decimal_hour(request: AgePointsRequest) -> float:
             )
             ut = local_dt.astimezone(pytz_timezone('UTC'))
             decimal_hour = ut.hour + ut.minute / 60.0 + ut.second / 3600.0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to parse timezone: {e}")
     else:
         print("No timezone provided, using given hour as UT")
     return decimal_hour
@@ -474,6 +474,33 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
 
         if cached_summary is not None:
             yield _sse_event("done", {"summary": cached_summary})
+            if summary_prompt and user:
+                try:
+                    db = get_session()
+                    try:
+                        _interp_id = _istore.save_or_append_stream_result(
+                            db,
+                            user_id=user['id'],
+                            interpretation_id=getattr(req, 'interpretation_id', None),
+                            user_question=getattr(req, 'additional_question', None) or "",
+                            query_content=summary_prompt or "",
+                            assistant_content=cached_summary,
+                            user_persons_id=getattr(req, 'person_id', None),
+                            context_type="age_points",
+                            model=perplexity_client.model,
+                            interp_year=getattr(req, 'target_year', None),
+                            interp_month=getattr(req, 'target_month', None),
+                            interp_day=getattr(req, 'target_day', None),
+                            interp_hour=None,
+                            interp_minute=None,
+                            location_latitude=getattr(req, 'latitude', None),
+                            location_longitude=getattr(req, 'longitude', None),
+                        )
+                        yield _sse_event("saved", {"interpretation_id": _interp_id})
+                    finally:
+                        db.close()
+                except Exception:
+                    logger.exception("Failed to save cached interpretation for age-points")
             return
 
         try:
@@ -506,28 +533,31 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
                     logger.exception("Failed to set Perplexity cache for age-points")
 
             yield _sse_event("done", {"summary": full_summary})
+            logger.info("AGE-POINTS SAVE CHECK: summary_prompt=%s full_summary_len=%d user=%s",
+                        bool(summary_prompt), len(full_summary), user)
             if summary_prompt and full_summary and user:
                 try:
                     db = get_session()
                     try:
-                        _ic = InterpretationCreate(
+                        _interp_id = _istore.save_or_append_stream_result(
+                            db,
+                            user_id=user['id'],
+                            interpretation_id=getattr(req, 'interpretation_id', None),
+                            user_question=getattr(req, 'additional_question', None) or "",
+                            query_content=summary_prompt or "",
+                            assistant_content=full_summary,
                             user_persons_id=getattr(req, 'person_id', None),
                             context_type="age_points",
                             model=perplexity_client.model,
-                            interp_year=getattr(req, 'year', None),
-                            interp_month=getattr(req, 'month', None),
-                            interp_day=getattr(req, 'day', None),
-                            interp_hour=getattr(req, 'hour', None),
-                            interp_minute=getattr(req, 'minute', None),
+                            interp_year=getattr(req, 'target_year', None),
+                            interp_month=getattr(req, 'target_month', None),
+                            interp_day=getattr(req, 'target_day', None),
+                            interp_hour=None,
+                            interp_minute=None,
                             location_latitude=getattr(req, 'latitude', None),
                             location_longitude=getattr(req, 'longitude', None),
-                            messages=[
-                                InterpMessageCreate(role="user", content=summary_prompt, position=0),
-                                InterpMessageCreate(role="assistant", content=full_summary, position=1),
-                            ],
                         )
-                        _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
-                        yield _sse_event("saved", {"interpretation_id": _saved.id})
+                        yield _sse_event("saved", {"interpretation_id": _interp_id})
                     finally:
                         db.close()
                 except Exception:

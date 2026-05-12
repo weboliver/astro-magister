@@ -126,6 +126,7 @@ export default function AdminCacheTab(){
             onChange={(event) => setValueMaxLength(Number(event.target.value) || 50)}
           />
         </label>
+        {/* Werte anzeigen – ausgeblendet
         <label className="admin-checkbox">
           <input
             type="checkbox"
@@ -134,6 +135,7 @@ export default function AdminCacheTab(){
           />
           <span>Werte anzeigen</span>
         </label>
+        */}
       </div>
 
       {error ? <div className="admin-message admin-error">{error}</div> : null}

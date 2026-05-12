@@ -13,11 +13,26 @@ import Admin from './pages/Admin'
 import Wiki from './pages/Wiki'
 import { useAuth } from './contexts/AuthContext'
 import { clearStoredSession } from './services/api'
+import { useSeoMeta } from './hooks/useSeoMeta'
 
 const MOBILE_MENU_BREAKPOINT = 850
 const TOP_NAV_MIN_WIDTH = 200
 const RESTRICTED_PROFILE_PAGES = new Set(['horoscope', 'planets', 'houses', 'transits', 'solar', 'agepoints'])
 const SELF_STYLED_PAGES = new Set(['admin', 'settings'])
+const PAGE_META = {
+  dashboard: { title: 'Startseite', description: 'Astro-Magister – dein Portal für astrologische Selbsterfahrung. Horoskop, Planeten, Häuser, Transite und mehr.' },
+  horoscope: { title: 'Horoskop', description: 'Dein persönliches Horoskop auf einen Blick – Planetenstellungen und astrologische Deutungen.' },
+  planets: { title: 'Planeten', description: 'Planetenpositionen und astrologische Bedeutungen im Überblick.' },
+  houses: { title: 'Häuser', description: 'Die astrologischen Häuser und ihre Deutungen in deinem Horoskop.' },
+  transits: { title: 'Transite', description: 'Aktuelle Transite und ihre astrologische Wirkung auf dein Geburtshoroskop.' },
+  solar: { title: 'Solar Jahr', description: 'Das solare Rückkehrhoroskop für dein aktuelles Lebensjahr.' },
+  agepoints: { title: 'Alterspunkte', description: 'Die Alterspunkt-Methode nach Bruno Huber – deine persönliche Jahressteuerung.' },
+  wiki: { title: 'Wiki', description: 'Das astrologische Wiki von Astro-Magister – Begriffe, Planeten, Aspekte und mehr erklärt.' },
+  settings: { title: 'Profil', description: 'Deine Profileinstellungen auf Astro-Magister.' },
+  admin: { title: 'Admin', description: 'Administrationsoberfläche von Astro-Magister.' },
+  login: { title: 'Login', description: 'Melde dich bei Astro-Magister an.' },
+  register: { title: 'Registrierung', description: 'Erstelle ein kostenloses Konto bei Astro-Magister.' },
+}
 const HISTORY_STATE_MARKER = 'astronex-navigation'
 const PAGE_LABELS = {
   dashboard: 'Startseite',
@@ -61,6 +76,9 @@ export default function App(){
   const [menuOpen, setMenuOpen] = useState(false)
   const needsProfileSetup = !!user && !profile?.birth_year
   const isAdmin = profile?.isadmin === true
+
+  const currentPageMeta = PAGE_META[page] || PAGE_META.dashboard
+  useSeoMeta(currentPageMeta.title, currentPageMeta.description)
 
   function normalizePageState(nextState){
     return nextState && typeof nextState === 'object' ? nextState : {}
@@ -264,6 +282,7 @@ export default function App(){
             </div>
             {menuOpen && (
               <div className="app-nav-mobile-menu">
+                <span className={getNavItemClassName('wiki')} onClick={()=>navigateTo('wiki')}>Wiki</span>
                 {user ? (
                   <>
                     {!needsProfileSetup && <span className={getNavItemClassName('horoscope')} onClick={()=>navigateTo('horoscope')}>Horoskop</span>}
@@ -272,7 +291,6 @@ export default function App(){
                     {!needsProfileSetup && <span className={getNavItemClassName('transits')} onClick={()=>navigateTo('transits')}>Transite</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('solar')} onClick={()=>navigateTo('solar')}>Solar Jahr</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('agepoints')} onClick={()=>navigateTo('agepoints')}>Alterspunkte</span>}
-                    <span className={getNavItemClassName('wiki')} onClick={()=>navigateTo('wiki')}>Wiki</span>
                     <span className={getNavItemClassName('settings')} onClick={()=>navigateTo('settings')}>Profil</span>
                     {isAdmin && <span className={getNavItemClassName('admin')} onClick={()=>navigateTo('admin')}>Admin</span>}
                     <span className="app-nav-link app-nav-link-logout" onClick={logout}>Logout</span>
@@ -287,6 +305,7 @@ export default function App(){
           <div className="app-nav-desktop">
             <div className="app-nav-group">
             <span className={getNavItemClassName('dashboard')} onClick={()=>navigateTo('dashboard')}>Startseite</span>
+            <span className={getNavItemClassName('wiki')} onClick={()=>navigateTo('wiki')}>Wiki</span>
             {user ? (
               <>
                 {!needsProfileSetup && <span className={getNavItemClassName('horoscope')} onClick={()=>navigateTo('horoscope')}>Horoskop</span>}
@@ -295,7 +314,6 @@ export default function App(){
                 {!needsProfileSetup && <span className={getNavItemClassName('transits')} onClick={()=>navigateTo('transits')}>Transite</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('solar')} onClick={()=>navigateTo('solar')}>Solar Jahr</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('agepoints')} onClick={()=>navigateTo('agepoints')}>Alterspunkte</span>}
-                <span className={getNavItemClassName('wiki')} onClick={()=>navigateTo('wiki')}>Wiki</span>
                 <span className={getNavItemClassName('settings')} onClick={()=>navigateTo('settings')}>Profil</span>
                 {isAdmin && <span className={getNavItemClassName('admin')} onClick={()=>navigateTo('admin')}>Admin</span>}
               </>

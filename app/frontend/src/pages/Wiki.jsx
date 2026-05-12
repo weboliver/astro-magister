@@ -104,14 +104,14 @@ export default function Wiki({
       return publicPageNameByEntryId[normalizedEntryId]
     }
 
-    const pageContentResponse = await get(`/auth/wiki/page-content?entry_id=${normalizedEntryId}`)
+    const pageContentResponse = await get(`/wiki/page-content?entry_id=${normalizedEntryId}`)
     if (!pageContentResponse.ok) return ''
 
     const pageContents = await pageContentResponse.json()
     const pageId = Array.isArray(pageContents) ? Number(pageContents[0]?.page_id || 0) : 0
     if (!pageId) return ''
 
-    const pageResponse = await get(`/auth/wiki/pages/${pageId}`)
+    const pageResponse = await get(`/wiki/pages/${pageId}`)
     if (!pageResponse.ok) return ''
 
     const page = await pageResponse.json()
@@ -165,7 +165,7 @@ export default function Wiki({
 
   async function loadSections(){
     try{
-      const resp = await get('/auth/wiki/sections?wiki_active_only=true')
+      const resp = await get('/wiki/sections?wiki_active_only=true')
       if (!resp.ok) throw createRequestError(resp.status, `Bereiche konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setSections(Array.isArray(data) ? data : [])
@@ -177,7 +177,7 @@ export default function Wiki({
 
   async function loadCategories(){
     try{
-      const resp = await get('/auth/wiki/categories')
+      const resp = await get('/wiki/categories')
       if (!resp.ok) throw createRequestError(resp.status, `Kategorien konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setCategories(Array.isArray(data) ? data : [])
@@ -194,7 +194,7 @@ export default function Wiki({
       const params = new URLSearchParams({ limit: '20', wiki_active_only: 'true' })
       if (filters.section_id) params.set('section_id', String(filters.section_id))
       if (filters.category_id) params.set('category_id', String(filters.category_id))
-      const resp = await get(`/auth/wiki/entries?${params.toString()}`)
+      const resp = await get(`/wiki/entries?${params.toString()}`)
       if (!resp.ok) throw createRequestError(resp.status, `Beiträge konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setEntries(Array.isArray(data) ? data : [])
@@ -217,9 +217,7 @@ export default function Wiki({
     setError({ message: '', requiresLogin: false })
     try{
       const params = new URLSearchParams({ page_name: normalizedPageName })
-      const usePublicEndpoint = isPublicDirectPage || !hasAuthToken
-      const endpoint = usePublicEndpoint ? '/wiki/page-entries' : '/auth/wiki/page-entries'
-      const resp = await get(`${endpoint}?${params.toString()}`, !usePublicEndpoint)
+      const resp = await get(`/wiki/page-entries?${params.toString()}`)
       if (!resp.ok) throw createRequestError(resp.status, `Direkter Wiki-Eintrag konnte nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       const nextEntries = Array.isArray(data) ? data : []
@@ -238,8 +236,8 @@ export default function Wiki({
     if (!normalizedEntryId || !canShowRelatedEntries) return []
 
     const [fromResponse, toResponse] = await Promise.all([
-      get(`/auth/wiki/relations?entry_from_id=${normalizedEntryId}`),
-      get(`/auth/wiki/relations?entry_to_id=${normalizedEntryId}`),
+      get(`/wiki/relations?entry_from_id=${normalizedEntryId}`),
+      get(`/wiki/relations?entry_to_id=${normalizedEntryId}`),
     ])
 
     if (!fromResponse.ok) throw createRequestError(fromResponse.status, `Verknüpfungen konnten nicht geladen werden (${fromResponse.status})`)
@@ -253,7 +251,7 @@ export default function Wiki({
 
     if (!relatedIds.length) return []
 
-    const entryResponses = await Promise.all(relatedIds.map((relatedId) => get(`/auth/wiki/entries/${relatedId}`)))
+    const entryResponses = await Promise.all(relatedIds.map((relatedId) => get(`/wiki/entries/${relatedId}`)))
     const relatedEntries = []
 
     for (const response of entryResponses){
@@ -418,6 +416,41 @@ export default function Wiki({
       active = false
     }
   }, [canShowRelatedEntries, directEntries, entries, hasDirectPage])
+
+  // Update page title and meta description when an entry is expanded or a direct page is shown
+  useEffect(() => {
+    const SITE_NAME = 'Astro-Magister'
+    const sourceEntries = hasDirectPage ? directEntries : entries
+    const expandedEntry = sourceEntries.find((entry) => Number(entry.entry_id) === Number(expandedEntryId))
+    const entryName = String(expandedEntry?.entry_name || '').trim()
+
+    let title
+    let description
+    if (entryName) {
+      title = `${entryName} – Wiki | ${SITE_NAME}`
+      description = expandedEntry?.short_description
+        ? String(expandedEntry.short_description).slice(0, 155)
+        : `${entryName} – astrologischer Wiki-Eintrag auf ${SITE_NAME}.`
+    } else if (hasDirectPage && directPageName) {
+      title = `${directPageName} | ${SITE_NAME}`
+      description = `Wiki-Seite „${directPageName}" auf ${SITE_NAME}.`
+    } else {
+      title = `Wiki | ${SITE_NAME}`
+      description = 'Das astrologische Wiki von Astro-Magister – Begriffe, Planeten, Aspekte und mehr erklärt.'
+    }
+
+    document.title = title
+    const descEl = document.querySelector('meta[name="description"]')
+    if (descEl) descEl.setAttribute('content', description)
+    const ogTitle = document.querySelector('meta[property="og:title"]')
+    if (ogTitle) ogTitle.setAttribute('content', title)
+    const ogDesc = document.querySelector('meta[property="og:description"]')
+    if (ogDesc) ogDesc.setAttribute('content', description)
+    const twTitle = document.querySelector('meta[name="twitter:title"]')
+    if (twTitle) twTitle.setAttribute('content', title)
+    const twDesc = document.querySelector('meta[name="twitter:description"]')
+    if (twDesc) twDesc.setAttribute('content', description)
+  }, [directEntries, directPageName, entries, expandedEntryId, hasDirectPage])
 
   const filteredCategories = useMemo(() => {
     if (!selectedSectionId) return []

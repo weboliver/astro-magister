@@ -375,14 +375,14 @@ class PerplexityClient:
         self.timeout = timeout
         self.role_type = role_type or "Laie"
         self.text_type = "ausführlich" if self.role_type in {"Fortgeschritten", "Experte"} else "kurz"
-        self.token_count = "(je 50 - 100 tokens)" if self.text_type == "kurz" else "(je 100 - 150 tokens)"
+        self.token_count = "(je 50 - 75 tokens)" if self.text_type == "kurz" else "(je 75 - 100 tokens)"
         if self.role_type == "Experte":
             self.model = DEFAULT_MODEL_DEEP_PRO
         elif self.role_type == "Fortgeschritten":
             self.model = DEFAULT_MODEL_PRO
-        self.tokens = 3072
+        self.tokens = 4096
         if self.role_type == "Fortgeschritten":
-            self.tokens = 6192
+            self.tokens = 8192
         elif self.role_type == "Experte":
             self.tokens = 9216
 
@@ -419,9 +419,9 @@ class PerplexityClient:
                 "Schreibe am Anfang die Überschrift: Horoskop Interpretation - [Datum]\n"
                 "Überschrift 2: Sternzeichen und Aszendent danach kurze Erläuterung zum Sternzeichen und zum Aszendenten.\n"
                 "Zeige am Anfang die wichtigsten Erkenntnisse an. Liste danach in dieser Reihenfolge:"\
-                "1. Häuserspitzen, als Bullet Liste mit Bedeutung (je 50-70 Tokens).\n"\
-                "2. Planeten, als Bullet Liste mit Bedeutung (je 50-70 Tokens).\n"\
-                "3. Aspekte, als Bullet Liste mit Bedeutung (je 50-70 Tokens).\n"\
+                "1. Häuserspitzen, als Bullet Liste mit Bedeutung (je 50-75 Tokens).\n"\
+                "2. Planeten, als Bullet Liste mit Bedeutung (je 50-75 Tokens).\n"\
+                "3. Aspekte, als Bullet Liste mit Bedeutung (je 50-75 Tokens).\n"\
                 "Füge am Ende eine Zusammenfassung mit psychologischer Gesamtschau an.\n"
                 f"{allgemeine_deutung}\n"
             )
@@ -431,9 +431,9 @@ class PerplexityClient:
                 "Schreibe am Anfang die Überschrift: Horoskop Interpretation - [Datum]\n"
                 "Überschrift 2: Sternzeichen und Aszendent danach kurze Erläuterung zum Sternzeichen und zum Aszendenten.\n"
                 "Zeige am Anfang die wichtigsten Erkenntnisse an. Liste danach in dieser Reihenfolge:"\
-                "1. Häuserspitzen, als Bullet Liste mit Bedeutung ausführlich (je 50-100 Tokens).\n"\
-                "2. Planeten, als Bullet Liste mit Bedeutung ausführlich (je 100-150 Tokens).\n"\
-                "3. Aspekte, als Bullet Liste mit Bedeutung ausführlich (je 100-150 Tokens).\n"\
+                "1. Häuserspitzen, als Bullet Liste mit Bedeutung ausführlich (je 75-100 Tokens).\n"\
+                "2. Planeten, als Bullet Liste mit Bedeutung ausführlich (je 75-100 Tokens).\n"\
+                "3. Aspekte, als Bullet Liste mit Bedeutung ausführlich (je 75-100 Tokens).\n"\
                 "Füge am Ende eine Zusammenfassung / psychologische Gesamtschau an.\n"
                 f"{allgemeine_deutung}\n"
             )
@@ -575,8 +575,8 @@ class PerplexityClient:
             if cached is not None:
                 yield cached
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Cache miss: {e}")
         disable_search = True
         if system_prompt == "entry":
             disable_search = False

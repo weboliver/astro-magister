@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class AgePointsRequest(BaseModel):
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person")
+    interpretation_id: Optional[int] = Field(None, description="ID einer bestehenden Interpretations-Session; wenn gesetzt wird die Frage daran angehängt")
     additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
     year: int = Field(..., ge=1, le=3000, description="Jahreszahl des Radix")
     month: int = Field(..., ge=1, le=12, description="Monat des Radix")

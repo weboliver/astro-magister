@@ -27,7 +27,6 @@ const createEmptyPersonForm = () => ({
   birth_hour: null,
   birth_minute: null,
   birth_second: null,
-  birth_country: '',
   birth_country: 'GM',
   birth_region: '',
   birth_city: '',

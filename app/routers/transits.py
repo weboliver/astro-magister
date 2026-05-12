@@ -5,6 +5,7 @@ from typing import Optional, List, Dict
 import asyncio
 import json
 import logging
+logger = logging.getLogger(__name__)
 from app.services.ephemeris import julday, planets, houses
 from astronex.chart import zodnames, planames, Chart, aspnames, planclass, aspclass, orbs
 from app.services.planet_names import get_planet_name
@@ -66,17 +67,14 @@ def _decimal_hour(dt: DateObject):
 
 def _to_utc_components(dt: DateObject):
     try:
-        local_dt = datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
-        if dt.timezone:
-            local_dt = pytz_timezone(dt.timezone).localize(local_dt, is_dst=True)
-            local_dt = local_dt.astimezone(pytz_timezone('UTC'))
-        return (
-            local_dt.year,
-            local_dt.month,
-            local_dt.day,
-            local_dt.hour + local_dt.minute / 60.0 + local_dt.second / 3600.0,
+        return datetime(
+            dt.year,
+            dt.month,
+            dt.day,
+            dt.hour + dt.minute / 60.0 + dt.second / 3600.0,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to parse local datetime, using UTC: {e}")
         return (dt.year, dt.month, dt.day, _decimal_hour(dt))
 
 def _planet_entries(jd, lat, lon):
@@ -91,8 +89,9 @@ def _planet_entries(jd, lat, lon):
     out = []
     chart = Chart()
     try:
-        chart.houses = list(hs) if hs else [None] * 12
-    except Exception:
+        chart = _build_chart(birth_jd, lat, lon)
+    except Exception as e:
+        logger.warning(f"Failed to calculate houses, using defaults: {e}")
         chart.houses = [None] * 12
     for ix, entry in enumerate(planet_entries):
         lon_val = entry.get('longitude')
@@ -113,7 +112,8 @@ def _planet_entries(jd, lat, lon):
             deg_int = int(deg_from_cusp)
             minutes_h = int((deg_from_cusp - deg_int) * 60)
             house_deg = f"{deg_int:02d}\u00b0 {minutes_h:02d}\u2032"
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to calculate house degree: {e}")
             hidx = None
             hlabel = None
             house_deg = None
@@ -151,7 +151,8 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
             p['house_at_natal_index'] = p.get('house_index')
             p['house_at_natal'] = p.get('house')
             p['house_at_natal_degree'] = p.get('house_degree')
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to set natal house fields: {e}")
             p['house_at_natal_index'] = None
             p['house_at_natal'] = None
             p['house_at_natal_degree'] = None
@@ -162,7 +163,8 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
             p['house_at_transit_index'] = p.get('house_index')
             p['house_at_transit'] = p.get('house')
             p['house_at_transit_degree'] = p.get('house_degree')
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to set transit house fields: {e}")
             p['house_at_transit_index'] = None
             p['house_at_transit'] = None
             p['house_at_transit_degree'] = None
@@ -170,11 +172,13 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
     # compute houses lists for cross-checking
     try:
         transit_houses = houses(jd_transit, req.transit_location.latitude, req.transit_location.longitude) or [None] * 12
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to calculate transit houses: {e}")
         transit_houses = [None] * 12
     try:
         natal_houses = houses(jd_birth, req.birth_location.latitude, req.birth_location.longitude) or [None] * 12
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to calculate natal houses: {e}")
         natal_houses = [None] * 12
 
     # annotate natal planets with their house in the transit chart
@@ -195,12 +199,13 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
                 p['house_at_transit_index'] = hidx
                 p['house_at_transit'] = hlab
                 p['house_at_transit_degree'] = f"{di:02d}\u00b0 {mi:02d}\u2032"
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to calculate transit house: {e}")
                 p['house_at_transit_index'] = None
                 p['house_at_transit'] = None
                 p['house_at_transit_degree'] = None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to set transit house fields: {e}")
 
     # annotate transit planets with their house in the natal chart
     try:
@@ -208,12 +213,14 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
         # ensure natal_houses look valid; if not, try recomputing
         try:
             valid = any(isinstance(x, (int, float)) for x in natal_houses)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to validate natal houses: {e}")
             valid = False
         if not valid:
             try:
                 natal_houses = houses(jd_birth, req.birth_location.latitude, req.birth_location.longitude) or [None] * 12
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to recompute natal houses: {e}")
                 natal_houses = [None] * 12
 
         nh_chart.houses = list(natal_houses)
@@ -222,7 +229,8 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
             hidx = None
             try:
                 hidx = nh_chart.which_house(plon)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get natal house: {e}")
                 hidx = None
 
             if hidx is None or not (0 <= hidx < len(nh_chart.houses)):
@@ -476,6 +484,35 @@ async def transits_stream(req: TransitRequest, request: Request):
 
         if cached_summary is not None:
             yield _sse_event("done", {"summary": cached_summary})
+            if summary_prompt and user:
+                try:
+                    db = get_session()
+                    try:
+                        _interp_id = _istore.save_or_append_stream_result(
+                            db,
+                            user_id=user['id'],
+                            interpretation_id=getattr(req, 'interpretation_id', None),
+                            user_question=getattr(req, 'additional_question', None) or "",
+                            query_content=summary_prompt or "",
+                            assistant_content=cached_summary,
+                            user_persons_id=getattr(req, 'person_id', None),
+                            context_type="transits",
+                            model=perplexity_client.model,
+                            interp_year=req.transitdate.year,
+                            interp_month=req.transitdate.month,
+                            interp_day=req.transitdate.day,
+                            interp_hour=req.transitdate.hour,
+                            interp_minute=req.transitdate.minute,
+                            location_latitude=req.birth_location.latitude,
+                            location_longitude=req.birth_location.longitude,
+                            transit_location_latitude=req.transit_location.latitude,
+                            transit_location_longitude=req.transit_location.longitude,
+                        )
+                        yield _sse_event("saved", {"interpretation_id": _interp_id})
+                    finally:
+                        db.close()
+                except Exception:
+                    logger.exception("Failed to save cached interpretation for transits")
             return
 
         try:
@@ -509,7 +546,13 @@ async def transits_stream(req: TransitRequest, request: Request):
             try:
                 db = get_session()
                 try:
-                    _ic = InterpretationCreate(
+                    _interp_id = _istore.save_or_append_stream_result(
+                        db,
+                        user_id=user['id'],
+                        interpretation_id=getattr(req, 'interpretation_id', None),
+                        user_question=getattr(req, 'additional_question', None) or "",
+                        query_content=summary_prompt or "",
+                        assistant_content=full_summary,
                         user_persons_id=getattr(req, 'person_id', None),
                         context_type="transits",
                         model=perplexity_client.model,
@@ -518,15 +561,12 @@ async def transits_stream(req: TransitRequest, request: Request):
                         interp_day=req.transitdate.day,
                         interp_hour=req.transitdate.hour,
                         interp_minute=req.transitdate.minute,
-                        location_latitude=req.transit_location.latitude,
-                        location_longitude=req.transit_location.longitude,
-                        messages=[
-                            InterpMessageCreate(role="user", content=summary_prompt or "", position=0),
-                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
-                        ],
+                        location_latitude=req.birth_location.latitude,
+                        location_longitude=req.birth_location.longitude,
+                        transit_location_latitude=req.transit_location.latitude,
+                        transit_location_longitude=req.transit_location.longitude,
                     )
-                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
-                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                    yield _sse_event("saved", {"interpretation_id": _interp_id})
                 finally:
                     db.close()
             except Exception:

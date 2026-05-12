@@ -28,7 +28,8 @@ from astronex.config import ORBS as CONFIG_ORBS
 from pytz import timezone as pytz_timezone
 try:
     from timezonefinder import TimezoneFinder
-except Exception:
+except Exception as e:
+    logger.debug(f"TimezoneFinder not available: {e}")
     TimezoneFinder = None
 
 router = APIRouter(tags=["horoscope"], dependencies=[Depends(require_authenticated_user)])
@@ -57,8 +58,8 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
     # Ensure Swiss Ephemeris search path is initialized (covers import-order races)
     try:
         app_config.init_swisseph_path()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Swiss Ephemeris init failed: {e}")
     # compute decimal hour in UT
     decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
     if getattr(request, 'timezone', None):
@@ -102,7 +103,8 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
     chart.planets = [p['longitude'] for p in planet_list]
     try:
         raw_aspects = chart.aspects()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Chart aspects calculation failed: {e}")
         raw_aspects = []
         pl = chart.planets[:]
         for i in range(len(pl)):
@@ -398,6 +400,33 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
 
         if cached_summary is not None:
             yield _sse_event("done", {"summary": cached_summary})
+            if user:
+                try:
+                    db = get_session()
+                    try:
+                        _interp_id = _istore.save_or_append_stream_result(
+                            db,
+                            user_id=user['id'],
+                            interpretation_id=getattr(payload, 'interpretation_id', None),
+                            user_question=getattr(payload, 'additional_question', None) or "",
+                            query_content=response_data['summary_prompt'] or "",
+                            assistant_content=cached_summary,
+                            user_persons_id=getattr(payload, 'person_id', None),
+                            context_type="horoscope",
+                            model=perplexity_client.model,
+                            interp_year=payload.year,
+                            interp_month=payload.month,
+                            interp_day=payload.day,
+                            interp_hour=getattr(payload, 'hour', None),
+                            interp_minute=getattr(payload, 'minute', None),
+                            location_latitude=getattr(payload, 'latitude', None),
+                            location_longitude=getattr(payload, 'longitude', None),
+                        )
+                        yield _sse_event("saved", {"interpretation_id": _interp_id})
+                    finally:
+                        db.close()
+                except Exception:
+                    logger.exception("Failed to save cached interpretation for horoscope")
             return
 
         try:
@@ -437,7 +466,13 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
             try:
                 db = get_session()
                 try:
-                    _ic = InterpretationCreate(
+                    _interp_id = _istore.save_or_append_stream_result(
+                        db,
+                        user_id=user['id'],
+                        interpretation_id=getattr(payload, 'interpretation_id', None),
+                        user_question=getattr(payload, 'additional_question', None) or "",
+                        query_content=response_data['summary_prompt'] or "",
+                        assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="horoscope",
                         model=perplexity_client.model,
@@ -448,13 +483,8 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                         interp_minute=getattr(payload, 'minute', None),
                         location_latitude=getattr(payload, 'latitude', None),
                         location_longitude=getattr(payload, 'longitude', None),
-                        messages=[
-                            InterpMessageCreate(role="user", content=response_data['summary_prompt'] or "", position=0),
-                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
-                        ],
                     )
-                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
-                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                    yield _sse_event("saved", {"interpretation_id": _interp_id})
                 finally:
                     db.close()
             except Exception:

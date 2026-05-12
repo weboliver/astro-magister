@@ -268,8 +268,9 @@ def change_password(payload: ChangePasswordIn, user=Depends(require_authenticate
 
 @router.get('/auth/profile', response_model=ProfileOut)
 def get_profile(user=Depends(require_authenticated_user)):
-    prof = auth_service.get_profile(user['id'])
-    return prof or {}
+    prof = auth_service.get_profile(user['id']) or {}
+    prof['username'] = user.get('username')
+    return prof
 
 
 @router.put('/auth/profile')

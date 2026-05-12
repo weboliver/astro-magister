@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from typing import Optional
+import logging
 from sqlalchemy import func, or_
 
 from app.db.models.wiki import Category, Entry, Page, PageContent, Relation, Section
 from app.db.session import get_session
 from app.services.perplexity import PerplexityClient
+
+logger = logging.getLogger(__name__)
 
 
 def _model_to_dict(instance) -> dict:

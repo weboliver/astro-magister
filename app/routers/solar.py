@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import json
 import logging
+logger = logging.getLogger(__name__)
 
 from app.services.ephemeris import julday, revjul, calc_ut, calc_ut_with_speed, houses
 from app import config as app_config
@@ -17,7 +18,8 @@ from app.services.planet_names import get_planet_name
 from app.static.zodiac_names import get_zodiac_name
 try:
     from timezonefinder import TimezoneFinder
-except Exception:
+except Exception as e:
+    logger.debug(f"TimezoneFinder not available: {e}")
     TimezoneFinder = None
 from app.services.horoscope_graphics import draw_chart_png
 from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
@@ -71,9 +73,8 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
             )
             ut = local_dt.astimezone(pytz_timezone('UTC'))
             birth_hour = ut.hour + ut.minute / 60.0 + ut.second / 3600.0
-        except Exception:
-            # fallback: keep naive birth_hour (assume given in UT)
-            pass
+        except Exception as e:
+            logger.debug(f"Timezone parse failed, using UT: {e}")
     elif TimezoneFinder and (request.latitude != 0.0 or request.longitude != 0.0):
         try:
             tf = TimezoneFinder()
@@ -140,8 +141,8 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
                 try:
                     app_config.init_swisseph_path()
                     flags, lon, speed_lon, error = calc_ut_with_speed(current_jd, ephe_id, 4)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to reinit Swiss Ephemeris for Chiron: {e}")
             if not error:
                 sign_idx = int(lon // 30) % 12
                 deg_in_sign = lon - sign_idx * 30
@@ -419,6 +420,33 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
 
         if cached_summary is not None:
             yield _sse_event("done", {"summary": cached_summary})
+            if summary_prompt and user:
+                try:
+                    db = get_session()
+                    try:
+                        _interp_id = _istore.save_or_append_stream_result(
+                            db,
+                            user_id=user['id'],
+                            interpretation_id=getattr(payload, 'interpretation_id', None),
+                            user_question=getattr(payload, 'additional_question', None) or "",
+                            query_content=summary_prompt or "",
+                            assistant_content=cached_summary,
+                            user_persons_id=getattr(payload, 'person_id', None),
+                            context_type="solar",
+                            model=perplexity_client.model,
+                            interp_year=result.return_year,
+                            interp_month=result.return_month,
+                            interp_day=result.return_day,
+                            interp_hour=None,
+                            interp_minute=None,
+                            location_latitude=getattr(payload, 'latitude', None),
+                            location_longitude=getattr(payload, 'longitude', None),
+                        )
+                        yield _sse_event("saved", {"interpretation_id": _interp_id})
+                    finally:
+                        db.close()
+                except Exception:
+                    logger.exception("Failed to save cached interpretation for solar")
             return
 
         try:
@@ -452,24 +480,25 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
             try:
                 db = get_session()
                 try:
-                    _ic = InterpretationCreate(
+                    _interp_id = _istore.save_or_append_stream_result(
+                        db,
+                        user_id=user['id'],
+                        interpretation_id=getattr(payload, 'interpretation_id', None),
+                        user_question=getattr(payload, 'additional_question', None) or "",
+                        query_content=summary_prompt or "",
+                        assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="solar",
                         model=perplexity_client.model,
-                        interp_year=getattr(payload, 'birth_year', None),
-                        interp_month=getattr(payload, 'birth_month', None),
-                        interp_day=getattr(payload, 'birth_day', None),
-                        interp_hour=getattr(payload, 'birth_hour', None),
-                        interp_minute=getattr(payload, 'birth_minute', None),
+                        interp_year=result.return_year,
+                        interp_month=result.return_month,
+                        interp_day=result.return_day,
+                        interp_hour=None,
+                        interp_minute=None,
                         location_latitude=getattr(payload, 'latitude', None),
                         location_longitude=getattr(payload, 'longitude', None),
-                        messages=[
-                            InterpMessageCreate(role="user", content=summary_prompt or "", position=0),
-                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
-                        ],
                     )
-                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
-                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                    yield _sse_event("saved", {"interpretation_id": _interp_id})
                 finally:
                     db.close()
             except Exception:

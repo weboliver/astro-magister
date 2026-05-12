@@ -58,6 +58,12 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: /workspace
       WATCHFILES_FORCE_POLLING: "true"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     volumes:
       - ../:/workspace
     command: >
@@ -106,8 +112,10 @@ services:
     image: astronex-nginx:letsencrypt
     container_name: astronex-nginx
     depends_on:
-      - api
-      - frontend
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     env_file:
       - ../.env
     environment:

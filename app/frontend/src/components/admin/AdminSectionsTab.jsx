@@ -21,7 +21,7 @@ export default function AdminSectionsTab(){
     setSectionLoading(true)
     setSectionError('')
     try{
-      const resp = await get('/auth/wiki/sections')
+      const resp = await get('/wiki/sections')
       if (!resp.ok) throw new Error(`Bereiche konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setSections(Array.isArray(data) ? data : [])
@@ -69,8 +69,8 @@ export default function AdminSectionsTab(){
       }
       const isUpdate = !!selectedSection.section_id
       const resp = isUpdate
-        ? await put(`/auth/wiki/sections/${selectedSection.section_id}`, payload)
-        : await post('/auth/wiki/sections', payload)
+        ? await put(`/wiki/sections/${selectedSection.section_id}`, payload)
+        : await post('/wiki/sections', payload)
       if (!resp.ok) throw new Error(`${isUpdate ? 'Speichern' : 'Anlegen'} fehlgeschlagen (${resp.status})`)
       const saved = await resp.json()
       await loadSections()
@@ -89,7 +89,7 @@ export default function AdminSectionsTab(){
     setSectionError('')
     setSectionSuccess('')
     try{
-      const resp = await del(`/auth/wiki/sections/${sectionId}`)
+      const resp = await del(`/wiki/sections/${sectionId}`)
       if (!resp.ok) throw new Error(`Löschen fehlgeschlagen (${resp.status})`)
       await loadSections()
       if (selectedSection?.section_id === sectionId) setSelectedSection(null)

@@ -21,6 +21,7 @@ if load_dotenv:
     load_dotenv(env_path)
 
 from app import config as app_config
+from app.services.auth_security import _is_placeholder_secret
 from app.routers.date_time import router as date_time_router
 from app.routers.positions import router as positions_router
 from app.routers.houses import router as houses_router
@@ -69,14 +70,14 @@ async def lifespan(app: FastAPI):
     app_config.init_swisseph_path()
     try:
         init_users_db()
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.warning(f"Database initialization failed: {e}")
     # ensure country translations use German labels in the UI
     try:
         import astronex.countries as ac
         ac.install('de')
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.debug(f"Country translations not available: {e}")
     print(f"INIT Done in: {home_dir}")
     try:
         yield
@@ -93,10 +94,12 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+cors_origins_env = app_config.get_env_setting("CORS_ORIGINS")
+cors_origins_list = [o.strip() for o in cors_origins_env.split(",")] if cors_origins_env else []
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins_list,
+    allow_credentials=bool(cors_origins_list),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -112,6 +115,15 @@ home_dir.mkdir(parents=True, exist_ok=True)
 app.home_dir = str(home_dir)
 app.config_file = 'cfg.ini'
 app.version = '1.2'
+
+turnstile_secret = app_config.get_env_setting("TURNSTILE_SECRET_KEY")
+if _is_placeholder_secret(turnstile_secret):
+    if not app_config.DEBUG:
+        raise ValueError(
+            "Turnstile configuration error: TURNSTILE_SECRET_KEY is a placeholder. "
+            "Set a valid key or set DEBUG=true for development."
+        )
+    LOGGER.warning("Turnstile: using placeholder secret - captcha disabled in dev mode")
 
 @app.middleware("http")
 async def track_performance(request: Request, call_next):

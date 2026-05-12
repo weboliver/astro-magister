@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from app.db.models.interpretations import UserInterpretation
 from app.db.session import get_session
 from app.routers.auth import _get_user_from_request, require_authenticated_user
+from app.services import auth as auth_service
 from app.schemas.interpretations import (
     FollowupMessageCreate,
     InterpretationCreate,
@@ -72,6 +73,10 @@ def _to_list_item(interp: UserInterpretation) -> InterpretationListItem:
 @router.post("", response_model=InterpretationCreatedOut, status_code=201)
 def create_interpretation(payload: InterpretationCreate, request: Request):
     user = _require_user(request)
+    if payload.user_persons_id is not None:
+        person = auth_service.get_person(user["id"], payload.user_persons_id)
+        if not person:
+            raise HTTPException(status_code=403, detail="Person not found or access denied")
     db = get_session()
     try:
         interp = store.create_interpretation(db, user_id=user["id"], payload=payload)
@@ -89,6 +94,7 @@ def list_interpretations(
     request: Request,
     context_type: Optional[str] = Query(None),
     user_persons_id: Optional[int] = Query(None),
+    own_profile_only: bool = Query(False),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -100,6 +106,7 @@ def list_interpretations(
             user_id=user["id"],
             context_type=context_type,
             user_persons_id=user_persons_id,
+            own_profile_only=own_profile_only,
             limit=limit,
             offset=offset,
         )
@@ -136,6 +143,8 @@ def get_interpretation(interpretation_id: int, request: Request):
             location_city=interp.location_city,
             location_longitude=interp.location_longitude,
             location_latitude=interp.location_latitude,
+            transit_location_latitude=interp.transit_location_latitude,
+            transit_location_longitude=interp.transit_location_longitude,
             created=interp.created,
             messages=[MessageOut.model_validate(m) for m in messages],
         )
@@ -199,13 +208,18 @@ async def followup_message(
                 headers={"Retry-After": str(rate_limit.retry_after_seconds)},
             )
 
-        # Bisherige Kette laden und neue Frage anhängen
+        # Bisherige Kette laden und neue Frage anhängen (nur query + assistant als Kontext)
         existing_messages = store.get_messages_ordered(db, interpretation_id)
         history = store.build_message_history(existing_messages)
         history.append({"role": "user", "content": payload.content})
 
-        # Nutzerfrage sofort persistieren
-        store.append_message(db, interp, role="user", content=payload.content)
+        # Nächste Gesprächsrunde bestimmen
+        next_pos = store.get_next_round_position(db, interpretation_id)
+
+        # Nutzerfrage und Query sofort persistieren (beide mit identischer Position)
+        store.append_message(db, interp, role="user", content=payload.content, position=next_pos)
+        query_content = json.dumps(history, ensure_ascii=False)
+        store.append_message(db, interp, role="query", content=query_content, position=next_pos)
 
         perplexity_client = PerplexityClient(role_type=None)
         model_name = interp.model or perplexity_client.model
@@ -271,9 +285,9 @@ async def followup_message(
 
             # KI-Antwort persistieren
             try:
-                store.append_message(db, interp, role="assistant", content=full_answer)
-            except Exception:
-                logger.exception("Failed to persist assistant message for interpretation %d", interpretation_id)
+                store.append_message(db, interp, role="assistant", content=full_answer, position=next_pos)
+            except Exception as e:
+                logger.exception(f"Failed to persist assistant message for interpretation {interpretation_id}: {e}")
 
             yield _sse_event("done", {"summary": full_answer})
 

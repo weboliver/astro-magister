@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+
+# API-Endpunkte – kein crawlbarer Inhalt
+Disallow: /auth/
+Disallow: /wiki/
+Disallow: /getPosition
+Disallow: /planets
+Disallow: /transits
+Disallow: /houses
+Disallow: /horoscope
+Disallow: /solar-return
+Disallow: /age-points
+Disallow: /interpretations
+Disallow: /persons
+Disallow: /timezone
+Disallow: /locations
+
+Sitemap: https://www.astro-magister.de/sitemap.xml

@@ -9,8 +9,9 @@ import PersonSelector from '../components/PersonSelector'
 import WikiPageShortcut from '../components/WikiPageShortcut'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../utils/aiPrompt'
-import InterpretationHistory from '../components/InterpretationHistory'
-import { streamFollowup } from '../hooks/useInterpretations'
+import InterpretationHistoryDropdown from '../components/InterpretationHistoryDropdown'
+import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
+import { printInterpretationAsPdf } from '../utils/pdfExport'
 
 const sharedAgePointsTransitCache = new Map()
 const AP_MARKER_ROTATION_OFFSET = -130
@@ -48,7 +49,11 @@ export default function AgePoints(){
   const [showComputeSummary, setShowComputeSummary] = useState(false)
   const [additionalQuestion, setAdditionalQuestion] = useState('')
   const [activeInterpretationId, setActiveInterpretationId] = useState(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [dropdownRefreshToken, setDropdownRefreshToken] = useState(0)
+  const [followups, setFollowups] = useState([])
+  const [currentFollowup, setCurrentFollowup] = useState('')
+  const followupBaseRef = useRef('')
+  const summaryRef = useRef(null)
   const imageUrlRef = useRef(null)
   const chartCacheRef = useRef(sharedAgePointsTransitCache)
   const graphicAbortRef = useRef(null)
@@ -191,6 +196,10 @@ export default function AgePoints(){
     setCachedSummary('')
     setChartError('')
     setChartLoading(false)
+    setActiveInterpretationId(null)
+    setAdditionalQuestion('')
+    setFollowups([])
+    setCurrentFollowup('')
   }, [activeSubjectKey, selectedPersonId, selectedPerson])
 
   useEffect(() => () => {
@@ -210,6 +219,8 @@ export default function AgePoints(){
     // Ensure compute-summary textarea is hidden/cleared when the page is first opened
     setShowComputeSummary(false)
     setCachedSummary('')
+    setFollowups([])
+    setCurrentFollowup('')
   }, [])
 
   useEffect(() => {
@@ -259,16 +270,28 @@ export default function AgePoints(){
 
   async function fetchAgePoints(){
     const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
-    if (activeInterpretationId && normalizedAdditionalQuestion) {
+    if (activeInterpretationId) {
+      const normalizedFollowup = normalizeAdditionalQuestion(currentFollowup)
+      if (!normalizedFollowup || followups.length >= 10) return
       setLoading(true)
-      setResp(null)
-      setCachedSummary('')
       setShowComputeSummary(true)
-      let streamedSummary = ''
+      followupBaseRef.current = cachedSummary
+      const questionText = normalizedFollowup
+      const questionNumber = followups.length + 1
+      const separatorPrefix = `\n\n---\n\n**Zusatzfrage ${questionNumber}:** ${questionText}\n\n`
+      let streamedText = ''
       try {
-        await streamFollowup(activeInterpretationId, normalizedAdditionalQuestion, {
-          onDelta: (chunk) => { streamedSummary += chunk; setCachedSummary(streamedSummary) },
-          onDone: (summary) => { streamedSummary = summary || streamedSummary; setCachedSummary(streamedSummary) },
+        await streamFollowup(activeInterpretationId, normalizedFollowup, {
+          onDelta: (chunk) => {
+            streamedText += chunk
+            setCachedSummary(followupBaseRef.current + separatorPrefix + streamedText)
+          },
+          onDone: (summary) => {
+            const finalText = summary || streamedText
+            setCachedSummary(followupBaseRef.current + separatorPrefix + finalText)
+            setFollowups(prev => [...prev, { question: questionText }])
+            setCurrentFollowup('')
+          },
           onError: (err) => { setResp({ ok: false, error: err.message }) },
         })
       } finally {
@@ -557,7 +580,7 @@ export default function AgePoints(){
       <PersonSelector helperText="Person wählen, deren Age Points berechnet werden sollen" />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, alignItems: 'flex-start' }}>
         <div className="container-400pt" style={{ flex: '1 1 360px', minWidth: isNarrow ? 0 : 320, width: '100%' }}>
-          <label>Alterspunkte</label>
+          <label><b>Alterspunkte</b></label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 }}>
             {agePointOptions.length > 0 ? (
               <select
@@ -577,6 +600,7 @@ export default function AgePoints(){
             )}
           </div>
           {agePointsError && <p style={{ color: '#c00', margin: '0 0 8px 0' }}>{agePointsError}</p>}
+          <div style={{marginTop:8, display: 'none'}}>
           <label>Datum & Uhrzeit</label>
           <Flatpickr
             value={datetimeLocal}
@@ -590,7 +614,6 @@ export default function AgePoints(){
               setDatetimeLocal(formatDateTimeValue(y, m, d, hh, mm, ss))
               }}
             />
-          <div style={{marginTop:8, display: 'none'}}>
           <label>Timezone</label>
           <input className="tz-input" value={timezone} onChange={e=>setTimezone(e.target.value)} />
           <label>Latitude</label>
@@ -598,40 +621,160 @@ export default function AgePoints(){
           <label>Longitude</label>
           <input value={longitude} onChange={e=>setLongitude(e.target.value)} />
           </div>
-            <label>Optionale Zusatzfrage</label>
-            <textarea
-              value={additionalQuestion}
-              onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
-              maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
-              rows={3}
-              placeholder="Optional: Welche zusätzliche Frage soll die KI zu diesem Alterspunkt beantworten?"
-              style={{ width: '100%', resize: 'vertical' }}
+          {profile?.id && (
+            <InterpretationHistoryDropdown
+              contextType="age_points"
+              userPersonsId={selectedPersonId ?? null}
+              refreshToken={activeInterpretationId || dropdownRefreshToken}
+              selectedInterpretationId={activeInterpretationId}
+              onClear={() => {
+                setActiveInterpretationId(null)
+                setCachedSummary('')
+                setShowComputeSummary(false)
+                setAdditionalQuestion('')
+                setFollowups([])
+                setCurrentFollowup('')
+              }}
+              onLoad={(interp) => {
+                setActiveInterpretationId(interp.id)
+                const allMsgs = [...(interp.messages || [])].sort((a, b) => a.position - b.position)
+                let content = ''
+                let followupNum = 0
+                let pendingQuestion = null
+                for (const msg of allMsgs) {
+                  if (msg.role === 'assistant') {
+                    if (!content) {
+                      content = msg.content
+                    } else {
+                      const prefix = pendingQuestion
+                        ? `\n\n---\n\n**Zusatzfrage ${followupNum}:** ${pendingQuestion}\n\n`
+                        : '\n\n---\n\n'
+                      content += prefix + msg.content
+                      pendingQuestion = null
+                    }
+                  } else if (msg.role === 'user' && msg.position > 1) {
+                    followupNum++
+                    pendingQuestion = msg.content
+                  }
+                }
+                if (content) { setCachedSummary(content); setShowComputeSummary(true) }
+                // Erste Nutzerfrage ins Zusatzfrage-Feld laden
+                const firstUserMsg = (interp.messages || []).find(m => m.role === 'user')
+                if (firstUserMsg?.content) setAdditionalQuestion(firstUserMsg.content)
+                // Folgefragen (position > 1) als disabled anzeigen
+                const followupMsgs = (interp.messages || [])
+                  .filter(m => m.role === 'user' && m.position > 1)
+                  .sort((a, b) => a.position - b.position)
+                setFollowups(followupMsgs.map(m => ({ question: m.content })))
+                setCurrentFollowup('')
+                // Passenden Alterspunkt im Dropdown selektieren
+                if (interp.interp_year && interp.interp_month && interp.interp_day) {
+                  const idx = agePointOptions.findIndex(ap =>
+                    Number(ap.year) === interp.interp_year &&
+                    Number(ap.mon) === interp.interp_month &&
+                    Number(ap.day) === interp.interp_day
+                  )
+                  if (idx !== -1) { setSelectedAgePointIndex(idx); setUserSelectedAgePoint(true) }
+                }
+              }}
             />
+          )}
+          <label><b>Optionale Zusatzfrage</b></label>
+          <textarea
+            value={additionalQuestion}
+            onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
+            maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+            rows={3}
+            placeholder="Optional: Welche zusätzliche Frage soll die KI zu diesem Alterspunkt beantworten?"
+            style={{ width: '100%', resize: 'vertical', background: activeInterpretationId ? '#f5f5f5' : undefined }}
+            disabled={!!activeInterpretationId}
+          />
+          {!activeInterpretationId && (
             <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{additionalQuestion.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
-            <div style={{marginTop:8}}>
-              <button onClick={fetchAgePoints} disabled={loading}>{loading? 'Lade...' : 'Alterspunkt interpretieren'}</button>
-            </div>
+          )}
           {(showComputeSummary && (cachedSummary || resp || loading)) ? (
-            <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '90%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
+            <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
               {computeSummaryError ? (
                 <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{computeSummaryError}</div>
               ) : null}
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {computeSummaryError ? '' : (cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : ''))}
-              </ReactMarkdown>
+              <div ref={summaryRef}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {computeSummaryError ? '' : (cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : ''))}
+                </ReactMarkdown>
+              </div>
             </div>
           ) : null}
-          {profile?.id && (
-            <InterpretationHistory
-              contextType="age_points"
-              userPersonsId={selectedPersonId ?? null}
-              activeId={activeInterpretationId}
-              onSelect={(id) => setActiveInterpretationId(id)}
-              onDelete={(id) => { if (activeInterpretationId === id) setActiveInterpretationId(null) }}
-              open={historyOpen}
-              onToggle={() => setHistoryOpen((v) => !v)}
-            />
+          {cachedSummary && (
+            <div style={{ marginTop: 4, textAlign: 'right' }}>
+              <button
+                onClick={() => {
+                  const subject = activeSubject
+                  const birthDate = subject ? `${subject.birth_day ?? '?'}.${subject.birth_month ?? '?'}.${subject.birth_year ?? '?'}` : ''
+                  printInterpretationAsPdf(`Alterspunkt Auswertung – ${agePointLabel}`, summaryRef.current, { personName: selectedPerson?.name || profile?.username || 'Eigenes Profil', birthDate, birthCity: subject?.birth_city || '', birthRegionCode: subject?.birth_region || '', birthCountryCode: subject?.birth_country || '', additionalQuestion, imageUrl: chartImage })
+                }}
+                title="Druckversion erzeugen"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
+              >
+                <img src="/x-pdf-32.png" alt="PDF herunterladen" style={{ width: 28, height: 28, verticalAlign: 'middle' }} />
+              </button>
+            </div>
           )}
+          {followups.map((fu, idx) => (
+            <div key={idx} style={{ marginTop: 12 }}>
+              <label><b>Zusatzfrage {idx + 1}</b></label>
+              <textarea
+                value={fu.question}
+                rows={3}
+                style={{ width: '100%', resize: 'vertical', background: '#f5f5f5' }}
+                disabled
+              />
+            </div>
+          ))}
+          {activeInterpretationId && followups.length < 10 && (
+            <div style={{ marginTop: 12 }}>
+              <label><b>Zusatzfrage {followups.length + 1}</b> <span style={{ color: '#c00' }}>*</span></label>
+              <textarea
+                value={currentFollowup}
+                onChange={(e) => setCurrentFollowup(e.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
+                maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+                rows={3}
+                placeholder="Ihre Frage zur Vertiefung der Auswertung"
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+              <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{currentFollowup.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
+            </div>
+          )}
+          {activeInterpretationId && followups.length >= 10 && (
+            <div style={{ marginTop: 12, color: '#888', fontSize: 13 }}>Maximale Anzahl von 10 Zusatzfragen erreicht.</div>
+          )}
+          <div style={{marginTop:8, display:'flex', flexWrap:'wrap', gap:8, alignItems:'center'}}>
+            <button
+              onClick={fetchAgePoints}
+              disabled={loading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
+            >
+              {loading ? 'Lade...' : (activeInterpretationId ? 'Auswertung vertiefen' : 'Alterspunkt interpretieren')}
+            </button>
+            {activeInterpretationId && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm('Auswertung wirklich löschen?')) return
+                  const ok = await deleteInterpretation(activeInterpretationId)
+                  if (ok) {
+                    setActiveInterpretationId(null)
+                    setCachedSummary('')
+                    setShowSummary(false)
+                    setFollowups([])
+                    setCurrentFollowup('')
+                    setDropdownRefreshToken(t => t + 1)
+                  }
+                }}
+                disabled={loading}
+                style={{ background: '#fff0f0', border: '1px solid #f5c6c6', color: '#b42318', cursor: 'pointer' }}
+              >
+                Auswertung löschen
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ flex: '1 1 360px', minWidth: isNarrow ? 0 : 320, width: '100%', maxWidth: isNarrow ? '100%' : 750 }}>
           <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: isNarrow ? 'auto' : 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>

@@ -1,6 +1,9 @@
 from typing import Optional
 from pathlib import Path
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from dotenv import dotenv_values
@@ -37,7 +40,10 @@ def _read_env_file() -> dict:
 def get_env_settings(exclude_keys: Optional[set] = None) -> dict:
     exclude = exclude_keys or set()
     raw = _read_env_file()
-    print(f"Raw env settings from file: {raw}")
+    if DEBUG:
+        sensitive_keys = {'SECRET_KEY', 'API_KEY', 'DB_PASSWORD', 'TURNSTILE_SECRET_KEY', 'TURNSTILE_VERIFY_URL'}
+        redacted = {k: '***REDACTED***' if k in sensitive_keys else v for k, v in raw.items()}
+        logger.debug(f"Env settings loaded: {redacted}")
     settings = {}
     for key in raw:
         if key in exclude:

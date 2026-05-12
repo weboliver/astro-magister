@@ -65,8 +65,8 @@ def get_calc(
                 )
                 ut = local_dt.astimezone(pytz_timezone('UTC'))
                 decimal_hour = ut.hour + ut.minute / 60.0 + ut.second / 3600.0
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Timezone parse failed: {e}")
         jd = julday(request.year, request.month, request.day, decimal_hour)
         ephe_id = _EPHEMERIS_ID.get(planet_id, planet_id)
         flags, lon, error = calc_ut(jd, ephe_id, 4)
@@ -75,8 +75,8 @@ def get_calc(
             try:
                 app_config.init_swisseph_path()
                 flags, lon, error = calc_ut(jd, ephe_id, 4)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to reinitialize Swiss Ephemeris for Chiron: {e}")
         speed_lon = None
         if error:
             raise HTTPException(status_code=400, detail=f"Calculation error: {error}")
@@ -316,6 +316,33 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
 
         if cached_summary is not None:
             yield _sse_event("done", {"summary": cached_summary})
+            if user:
+                try:
+                    db = get_session()
+                    try:
+                        _interp_id = _istore.save_or_append_stream_result(
+                            db,
+                            user_id=user['id'],
+                            interpretation_id=getattr(payload, 'interpretation_id', None),
+                            user_question=getattr(payload, 'additional_question', None) or "",
+                            query_content=response_data["summary_prompt"] or "",
+                            assistant_content=cached_summary,
+                            user_persons_id=getattr(payload, 'person_id', None),
+                            context_type="planets",
+                            model=perplexity_client.model,
+                            interp_year=payload.year,
+                            interp_month=payload.month,
+                            interp_day=payload.day,
+                            interp_hour=getattr(payload, 'hour', None),
+                            interp_minute=getattr(payload, 'minute', None),
+                            location_latitude=getattr(payload, 'latitude', None),
+                            location_longitude=getattr(payload, 'longitude', None),
+                        )
+                        yield _sse_event("saved", {"interpretation_id": _interp_id})
+                    finally:
+                        db.close()
+                except Exception:
+                    logger.exception("Failed to save cached interpretation for planets")
             return
 
         try:
@@ -353,7 +380,13 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
             try:
                 db = get_session()
                 try:
-                    _ic = InterpretationCreate(
+                    _interp_id = _istore.save_or_append_stream_result(
+                        db,
+                        user_id=user['id'],
+                        interpretation_id=getattr(payload, 'interpretation_id', None),
+                        user_question=getattr(payload, 'additional_question', None) or "",
+                        query_content=response_data["summary_prompt"] or "",
+                        assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="planets",
                         model=perplexity_client.model,
@@ -364,13 +397,8 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
                         interp_minute=getattr(payload, 'minute', None),
                         location_latitude=getattr(payload, 'latitude', None),
                         location_longitude=getattr(payload, 'longitude', None),
-                        messages=[
-                            InterpMessageCreate(role="user", content=response_data["summary_prompt"] or "", position=0),
-                            InterpMessageCreate(role="assistant", content=full_summary, position=1),
-                        ],
                     )
-                    _saved = _istore.create_interpretation(db, user_id=user['id'], payload=_ic)
-                    yield _sse_event("saved", {"interpretation_id": _saved.id})
+                    yield _sse_event("saved", {"interpretation_id": _interp_id})
                 finally:
                     db.close()
             except Exception:

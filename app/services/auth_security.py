@@ -279,7 +279,8 @@ def validate_password_strength(password: str) -> Optional[str]:
 
 async def verify_turnstile_token(token: Optional[str], remote_ip: str) -> bool:
     if _is_placeholder_secret(TURNSTILE_SECRET_KEY):
-        return True
+        logger.warning("Turnstile validation bypass attempted - placeholder secret in use")
+        return False
     if not token:
         return False
     try:

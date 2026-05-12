@@ -19,7 +19,10 @@ const apiProxy = {
   '/getPosition': { target: proxyTarget, changeOrigin: true, secure: false },
   '/planets': { target: proxyTarget, changeOrigin: true, secure: false },
   '/solar-return': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/age-points': { target: proxyTarget, changeOrigin: true, secure: false }
+  '/age-points': { target: proxyTarget, changeOrigin: true, secure: false },
+  '/interpretations': { target: proxyTarget, changeOrigin: true, secure: false },
+  '/persons': { target: proxyTarget, changeOrigin: true, secure: false },
+  '/timezone': { target: proxyTarget, changeOrigin: true, secure: false }
 }
 
 export default defineConfig({

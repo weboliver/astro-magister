@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 
 class ProfileOut(BaseModel):
+    id: Optional[int] = None
+    username: Optional[str] = None
     role_id: Optional[int] = 1
     birth_year: Optional[int] = None
     birth_month: Optional[int] = None

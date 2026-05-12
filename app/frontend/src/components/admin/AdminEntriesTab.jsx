@@ -54,7 +54,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
 
   async function loadSections(){
     try{
-      const resp = await get('/auth/wiki/sections')
+      const resp = await get('/wiki/sections')
       if (!resp.ok) throw new Error(`Bereiche konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setSections(Array.isArray(data) ? data : [])
@@ -65,7 +65,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
 
   async function loadCategories(){
     try{
-      const resp = await get('/auth/wiki/categories')
+      const resp = await get('/wiki/categories')
       if (!resp.ok) throw new Error(`Kategorien konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setCategories(Array.isArray(data) ? data : [])
@@ -83,7 +83,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
       if (filters.section_id) params.set('section_id', String(filters.section_id))
       if (filters.category_id) params.set('category_id', String(filters.category_id))
       params.set('limit', '100')
-      const resp = await get(`/auth/wiki/entries?${params.toString()}`)
+      const resp = await get(`/wiki/entries?${params.toString()}`)
       if (!resp.ok) throw new Error(`Beiträge konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setEntries(Array.isArray(data) ? data : [])
@@ -148,8 +148,8 @@ export default function AdminEntriesTab({ entryEditRequest }){
       }
       const isUpdate = !!selectedEntry.entry_id
       const resp = isUpdate
-        ? await put(`/auth/wiki/entries/${selectedEntry.entry_id}`, payload)
-        : await post('/auth/wiki/entries', payload)
+        ? await put(`/wiki/entries/${selectedEntry.entry_id}`, payload)
+        : await post('/wiki/entries', payload)
       if (!resp.ok) throw new Error(`${isUpdate ? 'Speichern' : 'Anlegen'} fehlgeschlagen (${resp.status})`)
       const saved = await resp.json()
       await loadEntries({
@@ -175,7 +175,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
     setEntryError('')
     setEntrySuccess('')
     try{
-      const resp = await post(`/auth/wiki/entries/${selectedEntry.entry_id}/generate-text`, {})
+      const resp = await post(`/wiki/entries/${selectedEntry.entry_id}/generate-text`, {})
       if (!resp.ok) throw new Error(`Generierung fehlgeschlagen (${resp.status})`)
       const saved = await resp.json()
       editEntry(saved)
@@ -193,7 +193,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
     setEntryError('')
     setEntrySuccess('')
     try{
-      const resp = await del(`/auth/wiki/entries/${entryId}`)
+      const resp = await del(`/wiki/entries/${entryId}`)
       if (!resp.ok) throw new Error(`Löschen fehlgeschlagen (${resp.status})`)
       await loadEntries({
         q: entryQuery.trim(),

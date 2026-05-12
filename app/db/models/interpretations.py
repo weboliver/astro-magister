@@ -66,12 +66,16 @@ class UserInterpretation(Base):
     interp_hour = Column(Integer, nullable=True)
     interp_minute = Column(Integer, nullable=True)
 
-    # --- Ort der Interpretation (Aufenthaltsort zum Zeitpunkt / Wohnort) ---
+    # --- Geburtsort (gilt für alle context_types) ---
     location_country = Column(Text, nullable=True)
     location_region = Column(Text, nullable=True)
     location_city = Column(Text, nullable=True)
     location_longitude = Column(Float, nullable=True)
     location_latitude = Column(Float, nullable=True)
+
+    # --- Wohnort / Aufenthaltsort (nur relevant für context_type="transits") ---
+    transit_location_latitude = Column(Float, nullable=True)
+    transit_location_longitude = Column(Float, nullable=True)
 
     created = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -23,7 +23,7 @@ export default function AdminRelationsTab({ onEditEntry }){
   const [success, setSuccess] = useState('')
 
   async function fetchEntry(entryId){
-    const resp = await get(`/auth/wiki/entries/${entryId}`)
+    const resp = await get(`/wiki/entries/${entryId}`)
     if (!resp.ok) throw new Error(`Beitrag ${entryId} konnte nicht geladen werden (${resp.status})`)
     return resp.json()
   }
@@ -37,7 +37,7 @@ export default function AdminRelationsTab({ onEditEntry }){
         offset: String((page - 1) * SEARCH_PAGE_SIZE),
       })
       if (query?.trim()) params.set('q', query.trim())
-      const resp = await get(`/auth/wiki/entries?${params.toString()}`)
+      const resp = await get(`/wiki/entries?${params.toString()}`)
       if (!resp.ok) throw new Error(`Beiträge konnten nicht geladen werden (${resp.status})`)
       const data = await resp.json()
       setter(Array.isArray(data) ? data : [])
@@ -59,7 +59,7 @@ export default function AdminRelationsTab({ onEditEntry }){
     setError('')
     try{
       const params = new URLSearchParams({ entry_from_id: String(entry.entry_id) })
-      const resp = await get(`/auth/wiki/relations?${params.toString()}`)
+      const resp = await get(`/wiki/relations?${params.toString()}`)
       if (!resp.ok) throw new Error(`Relationen konnten nicht geladen werden (${resp.status})`)
       const relations = await resp.json()
       const relationList = Array.isArray(relations) ? relations : []
@@ -84,7 +84,7 @@ export default function AdminRelationsTab({ onEditEntry }){
     setError('')
     setSuccess('')
     try{
-      const resp = await post('/auth/wiki/relations', {
+      const resp = await post('/wiki/relations', {
         entry_from_id: selectedEntry.entry_id,
         entry_to_id: targetEntry.entry_id,
       })
@@ -101,7 +101,7 @@ export default function AdminRelationsTab({ onEditEntry }){
     setError('')
     setSuccess('')
     try{
-      const resp = await del(`/auth/wiki/relations/${relationId}`)
+      const resp = await del(`/wiki/relations/${relationId}`)
       if (!resp.ok) throw new Error(`Relation konnte nicht gelöscht werden (${resp.status})`)
       await loadRelations(selectedEntry)
       setSuccess('Relation gelöscht')

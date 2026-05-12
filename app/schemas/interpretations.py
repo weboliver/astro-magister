@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageCreate(BaseModel):
-    role: Literal["user", "assistant", "system"]
+    role: Literal["user", "query", "assistant"]
     content: str
     position: int
 
@@ -26,6 +26,8 @@ class InterpretationCreate(BaseModel):
     location_city: Optional[str] = None
     location_longitude: Optional[float] = None
     location_latitude: Optional[float] = None
+    transit_location_latitude: Optional[float] = None
+    transit_location_longitude: Optional[float] = None
     messages: List[MessageCreate] = []
 
 
@@ -48,19 +50,21 @@ class InterpretationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    user_persons_id: Optional[int]
-    context_type: Optional[str]
-    model: Optional[str]
-    interp_year: Optional[int]
-    interp_month: Optional[int]
-    interp_day: Optional[int]
-    interp_hour: Optional[int]
-    interp_minute: Optional[int]
-    location_country: Optional[str]
-    location_region: Optional[str]
-    location_city: Optional[str]
-    location_longitude: Optional[float]
-    location_latitude: Optional[float]
+    user_persons_id: Optional[int] = None
+    context_type: Optional[str] = None
+    model: Optional[str] = None
+    interp_year: Optional[int] = None
+    interp_month: Optional[int] = None
+    interp_day: Optional[int] = None
+    interp_hour: Optional[int] = None
+    interp_minute: Optional[int] = None
+    location_country: Optional[str] = None
+    location_region: Optional[str] = None
+    location_city: Optional[str] = None
+    location_longitude: Optional[float] = None
+    location_latitude: Optional[float] = None
+    transit_location_latitude: Optional[float] = None
+    transit_location_longitude: Optional[float] = None
     created: datetime
     messages: List[MessageOut] = []
 
@@ -69,13 +73,13 @@ class InterpretationListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    context_type: Optional[str]
+    context_type: Optional[str] = None
     created: datetime
-    interp_year: Optional[int]
-    interp_month: Optional[int]
-    interp_day: Optional[int]
-    location_city: Optional[str]
-    user_persons_id: Optional[int]
+    interp_year: Optional[int] = None
+    interp_month: Optional[int] = None
+    interp_day: Optional[int] = None
+    location_city: Optional[str] = None
+    user_persons_id: Optional[int] = None
     first_question: Optional[str] = None
 
 

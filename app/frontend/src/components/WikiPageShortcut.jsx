@@ -16,7 +16,7 @@ export default function WikiPageShortcut({ pageName, originPage = '', originLabe
 
       try{
         const params = new URLSearchParams({ page_name: normalizedPageName })
-        const resp = await get(`/auth/wiki/page-entries?${params.toString()}`)
+        const resp = await get(`/wiki/page-entries?${params.toString()}`)
         if (!resp.ok) throw new Error('Link nicht verfügbar')
         const data = await resp.json()
         if (active) setVisible(Array.isArray(data) && data.length > 0)

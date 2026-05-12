@@ -10,7 +10,11 @@ export function useInterpretations() {
     try {
       const params = new URLSearchParams({ limit: '20' })
       if (contextType) params.set('context_type', contextType)
-      if (userPersonsId != null) params.set('user_persons_id', String(userPersonsId))
+      if (userPersonsId != null) {
+        params.set('user_persons_id', String(userPersonsId))
+      } else {
+        params.set('own_profile_only', 'true')
+      }
       const resp = await get(`/interpretations?${params}`)
       if (!resp.ok) return []
       const data = await resp.json()
@@ -46,6 +50,20 @@ export function useInterpretations() {
   }, [])
 
   return { interpretations, loadingList, listInterpretations, loadInterpretation, deleteInterpretation }
+}
+
+/**
+ * Deletes an interpretation by id.
+ * The backend enforces that only the owner can delete (user_id check).
+ * Returns true on success, false on failure.
+ */
+export async function deleteInterpretation(id) {
+  try {
+    const resp = await del(`/interpretations/${id}`)
+    return resp.ok
+  } catch (_) {
+    return false
+  }
 }
 
 /**
