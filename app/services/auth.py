@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import secrets
 
-from passlib.context import CryptContext
 from jose import jwt
 from sqlalchemy import desc, func
 from sqlalchemy.exc import IntegrityError
@@ -10,8 +9,7 @@ from sqlalchemy.exc import IntegrityError
 import app.config as app_config
 from app.db.session import get_session
 from app.db.models.users import AuthAuditLog, RefreshToken, Role, User, UserPerson, UserProfile
-
-pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
+from app.services.password_utils import pwd_context, verify_password, hash_password
 
 ALGORITHM = "HS256"
 
@@ -150,6 +148,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=app_config.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Add unique token ID for blacklist tracking (AUTH-03)
+    if "jti" not in to_encode:
+        to_encode["jti"] = secrets.token_urlsafe(16)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, app_config.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -215,13 +216,15 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 def list_users(query: Optional[str] = None, limit: int = 100, offset: int = 0):
     session = get_session()
     try:
-        q = session.query(User)
+        # Use joinedload to fetch profiles in single query (fixes N+1)
+        from sqlalchemy.orm import joinedload
+        q = session.query(User).options(joinedload(User.profile))
         if query:
             q = q.filter(func.lower(User.username).like(f"%{query.lower()}%"))
         rows = q.order_by(User.username).limit(limit).offset(offset).all()
         result = []
         for row in rows:
-            prof = session.query(UserProfile).filter(UserProfile.user_id == row.id).first()
+            prof = row.profile  # Already loaded via joinedload
             result.append({
                 "id": row.id,
                 "username": row.username,

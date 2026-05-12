@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { post, postStream, postWithSignal } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import Flatpickr from 'react-flatpickr'
@@ -12,14 +11,10 @@ import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../
 import InterpretationHistoryDropdown from '../components/InterpretationHistoryDropdown'
 import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
+import { formatDateTimeValue } from '../utils/dateTime'
 
 const sharedAgePointsTransitCache = new Map()
 const AP_MARKER_ROTATION_OFFSET = -130
-
-function formatDateTimeValue(year, month, day, hour, minute, second) {
-  const pad = (value) => String(value).padStart(2, '0')
-  return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`
-}
 
 export default function AgePoints(){
   const [resp, setResp] = useState(null)
@@ -698,9 +693,7 @@ export default function AgePoints(){
                 <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{computeSummaryError}</div>
               ) : null}
               <div ref={summaryRef}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {computeSummaryError ? '' : (cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : ''))}
-                </ReactMarkdown>
+                <MarkdownRenderer>{computeSummaryError ? '' : (cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : ''))}</MarkdownRenderer>
               </div>
             </div>
           ) : null}

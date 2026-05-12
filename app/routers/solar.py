@@ -90,8 +90,8 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
                 )
                 ut = local_dt.astimezone(pytz_timezone('UTC'))
                 birth_hour = ut.hour + ut.minute / 60.0 + ut.second / 3600.0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to parse birth timezone, using UT: {e}")
 
     # 1. Sonnenstand zum Geburtszeitpunkt
     flags, natal_lon, natal_speed, error = calc_ut_with_speed(

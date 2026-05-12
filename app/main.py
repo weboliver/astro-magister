@@ -7,6 +7,8 @@ from time import perf_counter
 import asyncio
 import logging
 
+from app.db.middleware import DatabaseMiddleware
+
 try:
     from dotenv import load_dotenv
 except Exception:
@@ -103,6 +105,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Add database middleware for request-scoped sessions
+app.add_middleware(DatabaseMiddleware)
 performance_monitor = PerformanceMonitor()
 app.state.performance_monitor = performance_monitor
 LOGGER = _configure_logging()

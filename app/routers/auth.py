@@ -2,7 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt
+from jose import jwt, JWTError
 
 import app.config as app_config
 from app.schemas.auth import *
@@ -25,6 +25,7 @@ from app.services.auth_security import (
     validate_password_strength,
     verify_turnstile_token,
 )
+from app.services.jwt_blacklist import blacklist_token, is_token_blacklisted
 from app.services.fastapi_users import (
     TOKEN_AUDIENCE,
     authenticate_by_username,
@@ -211,7 +212,11 @@ def _get_user_from_token(token: str):
             algorithms=[app_config.ALGORITHM if hasattr(app_config,'ALGORITHM') else 'HS256'],
             audience=TOKEN_AUDIENCE[0],
         )
-    except Exception:
+    except JWTError:
+        return None
+    # AUTH-03: Check if token is blacklisted
+    token_jti = data.get('jti')
+    if token_jti and is_token_blacklisted(token_jti):
         return None
     uid = data.get('sub')
     if uid:
@@ -244,7 +249,23 @@ def require_admin_user(user=Depends(require_authenticated_user)):
     return user
 
 @router.post('/auth/logout')
-def logout(response: Response, user=Depends(require_authenticated_user)):
+def logout(request: Request, response: Response, user=Depends(require_authenticated_user)):
+    # AUTH-04: Invalidate access token immediately
+    auth_header = request.headers.get('authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        try:
+            data = jwt.decode(
+                token,
+                app_config.SECRET_KEY,
+                algorithms=[app_config.ALGORITHM if hasattr(app_config,'ALGORITHM') else 'HS256'],
+                options={"verify_aud": False},
+            )
+            token_jti = data.get('jti')
+            if token_jti:
+                blacklist_token(token_jti, expires_in_seconds=3600)
+        except JWTError:
+            pass
     auth_service.revoke_user_refresh_tokens(user['id'])
     _clear_auth_cookies(response)
     return {'status':'ok'}

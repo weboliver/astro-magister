@@ -7,18 +7,17 @@ from fastapi_users import BaseUserManager, FastAPIUsers, IntegerIDMixin, excepti
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport, JWTStrategy
 from fastapi_users.db import BaseUserDatabase
 from fastapi_users.password import PasswordHelperProtocol
-from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 import app.config as app_config
 from app.db.models.users import User, UserProfile
 from app.db.session import get_session
+from app.services.password_utils import pwd_context, verify_password, hash_password
 
 
 ALGORITHM = getattr(app_config, 'ALGORITHM', 'HS256')
 TOKEN_AUDIENCE = ['astronex:auth']
-pwd_context = CryptContext(schemes=['pbkdf2_sha256', 'bcrypt'], deprecated='auto')
 
 
 class PasslibPasswordHelper(PasswordHelperProtocol):
