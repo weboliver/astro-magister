@@ -1,17 +1,22 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import logging
 import secrets
 
 from jose import jwt
 from sqlalchemy import desc, func
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 import app.config as app_config
 from app.db.session import get_session
 from app.db.models.users import AuthAuditLog, RefreshToken, Role, User, UserPerson, UserProfile
 from app.services.password_utils import pwd_context, verify_password, hash_password
 
+logger = logging.getLogger(__name__)
+
 ALGORITHM = "HS256"
+TOKEN_AUDIENCE = ['astronex:auth']
 
 PERSON_FIELDS = [
     'role_id',
@@ -610,3 +615,63 @@ def delete_person(user_id: int, person_id: int) -> bool:
     session.close()
     success = rows > 0
     return success
+
+
+def user_to_dict(user: User) -> dict:
+    return {
+        'id': user.id,
+        'username': user.username,
+        'isadmin': bool(user.is_superuser),
+        'is_poweruser': bool(user.is_poweruser),
+    }
+
+
+async def authenticate_by_username(username: str, password: str) -> Optional[User]:
+    session = get_session()
+    try:
+        user = session.query(User).filter(User.username == username.strip()).first()
+        if user is None:
+            return None
+        verified, _ = pwd_context.verify_and_update(password, user.hashed_password)
+        if not verified:
+            return None
+        return user
+    finally:
+        session.close()
+
+
+async def create_user_with_username(username: str, password: str, is_superuser: bool = False) -> User:
+    session = get_session()
+    try:
+        existing = session.query(User).filter(User.username == username.strip()).first()
+        if existing is not None:
+            from fastapi_users import exceptions as fu_exc
+            raise fu_exc.UserAlreadyExists()
+        hashed = pwd_context.hash(password)
+        user = User(username=username.strip(), password_hash=hashed)
+        session.add(user)
+        session.flush()
+        profile = UserProfile(user_id=user.id, isadmin=bool(is_superuser))
+        session.add(profile)
+        session.commit()
+        session.refresh(user)
+        return user
+    except IntegrityError:
+        session.rollback()
+        from fastapi_users import exceptions as fu_exc
+        raise fu_exc.UserAlreadyExists()
+    finally:
+        session.close()
+
+
+async def get_user_by_id_async(user_id: int) -> Optional[User]:
+    session = get_session()
+    try:
+        return session.query(User).options(joinedload(User.profile)).filter(User.id == user_id).first()
+    finally:
+        session.close()
+
+
+async def issue_access_token(user: User) -> str:
+    from app.services.fastapi_users import get_jwt_strategy
+    return await get_jwt_strategy().write_token(user)

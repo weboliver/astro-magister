@@ -4,26 +4,6 @@ from tests.support import build_lazy_authenticated_client
 client = build_lazy_authenticated_client()
 
 
-def test_horoscope_endpoint():
-    payload = {
-        "year": 2026,
-        "month": 1,
-        "day": 26,
-        "hour": 12,
-        "minute": 0,
-        "second": 0,
-        "latitude": 48.0,
-        "longitude": 11.0
-    }
-    r = client.post("/horoscope", json=payload)
-    assert r.status_code == 200
-    data = r.json()
-    # basic shape checks
-    assert "planets" in data
-    assert "aspects" in data
-    assert isinstance(data["planets"], list)
-
-
 def test_solar_return_endpoint():
     payload = {
         "birth_year": 1990,

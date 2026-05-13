@@ -93,7 +93,7 @@ def _planet_entries(jd, lat, lon):
     out = []
     chart = Chart()
     try:
-        chart = _build_chart(jd, lat, lon)
+        chart.houses = list(hs) if hs else [None] * 12
     except Exception as e:
         logger.warning(f"Failed to calculate houses, using defaults: {e}")
         chart.houses = [None] * 12

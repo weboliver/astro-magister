@@ -26,7 +26,7 @@ from app.services.auth_security import (
     verify_turnstile_token,
 )
 from app.services.jwt_blacklist import blacklist_token, is_token_blacklisted
-from app.services.fastapi_users import (
+from app.services.auth import (
     TOKEN_AUDIENCE,
     authenticate_by_username,
     create_user_with_username,
