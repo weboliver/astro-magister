@@ -15,32 +15,12 @@ import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretation
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
 
+import { parseSseBlock } from '../utils/sseParser'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
+
 const sharedPlanetsCache = new Map()
 const STORAGE_KEY = 'astronex_planets_chart_payload'
-
-function parseSseBlock(block) {
-  let event = 'message'
-  const dataLines = []
-
-  for (const rawLine of block.split(/\r?\n/)) {
-    if (!rawLine) continue
-    if (rawLine.startsWith('event:')) {
-      event = rawLine.slice(6).trim()
-      continue
-    }
-    if (rawLine.startsWith('data:')) {
-      dataLines.push(rawLine.slice(5).trimStart())
-    }
-  }
-
-  if (!dataLines.length) return null
-
-  try {
-    return { event, data: JSON.parse(dataLines.join('\n')) }
-  } catch (error) {
-    return null
-  }
-}
 
 async function postPlanetsStream(path, payload) {
   const response = await postStream(path, payload)
@@ -572,7 +552,7 @@ export default function Planets(){
             {(showSummary && (cachedSummary || resp || loading)) ? (
               <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
                 {summaryError ? (
-                  <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+                  <ErrorMessage message={summaryError} />
                 ) : null}
                 <div ref={summaryRef}>
                   <MarkdownRenderer>{summaryText || (loading ? 'Analyse wird erstellt ...' : '')}</MarkdownRenderer>
@@ -627,7 +607,7 @@ export default function Planets(){
               onClick={fetchPlanets}
               disabled={loading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
             >
-              {loading ? 'Lade...' : (activeInterpretationId ? 'Auswertung vertiefen' : 'Planeten Positionen interpretieren')}
+              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Planeten Positionen interpretieren')}
             </button>
             {activeInterpretationId && (
               <button
@@ -655,8 +635,8 @@ export default function Planets(){
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
           <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
             <h4 style={{ marginTop: 0, marginBottom: 12 }}>Planeten Positionen</h4>
-            {imageLoading && <p>Horoskop wird gerendert…</p>}
-            {imageError && <p style={{ color: '#c00' }}>{imageError}</p>}
+            {imageLoading && <LoadingSpinner message="Horoskop wird gerendert…" />}
+            {imageError && <ErrorMessage message={imageError} />}
             {chartImage && !imageLoading && (
               <img src={chartImage} alt="Planeten Positionen" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
             )}

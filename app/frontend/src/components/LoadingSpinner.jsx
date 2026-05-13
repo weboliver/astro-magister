@@ -1,0 +1,28 @@
+import React from 'react'
+
+export function LoadingSpinner({ message = 'Lade...', size = '1.4em' }) {
+  return (
+    <span role="status" aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#4b5d71' }}>
+      <span style={{
+        display: 'inline-block',
+        width: size,
+        height: size,
+        border: '2px solid #d8cfc0',
+        borderTopColor: '#0f766e',
+        borderRadius: '50%',
+        animation: 'spin 0.7s linear infinite',
+        boxSizing: 'border-box',
+      }} />
+      {message}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </span>
+  )
+}
+
+export function LoadingText({ message = 'Wird geladen…' }) {
+  return (
+    <span role="status" aria-live="polite" style={{ color: '#4b5d71', fontStyle: 'italic' }}>
+      {message}
+    </span>
+  )
+}

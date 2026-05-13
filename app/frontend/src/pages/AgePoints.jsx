@@ -12,6 +12,9 @@ import InterpretationHistoryDropdown from '../components/InterpretationHistoryDr
 import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
+import { parseSseBlock } from '../utils/sseParser'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
 
 const sharedAgePointsTransitCache = new Map()
 const AP_MARKER_ROTATION_OFFSET = -130
@@ -335,30 +338,6 @@ export default function AgePoints(){
       return response
     }
 
-    function parseSseBlock(block) {
-      let event = 'message'
-      const dataLines = []
-
-      for (const rawLine of block.split(/\r?\n/)) {
-        if (!rawLine) continue
-        if (rawLine.startsWith('event:')) {
-          event = rawLine.slice(6).trim()
-          continue
-        }
-        if (rawLine.startsWith('data:')) {
-          dataLines.push(rawLine.slice(5).trimStart())
-        }
-      }
-
-      if (!dataLines.length) return null
-
-      try {
-        return { event, data: JSON.parse(dataLines.join('\n')) }
-      } catch (error) {
-        return null
-      }
-    }
-
     try {
       // Try stream endpoint first; if it does not exist or fails, fallback to normal POST
       try {
@@ -594,7 +573,7 @@ export default function AgePoints(){
               </select>
             )}
           </div>
-          {agePointsError && <p style={{ color: '#c00', margin: '0 0 8px 0' }}>{agePointsError}</p>}
+          {agePointsError && <ErrorMessage message={agePointsError} />}
           <div style={{marginTop:8, display: 'none'}}>
           <label>Datum & Uhrzeit</label>
           <Flatpickr
@@ -690,7 +669,7 @@ export default function AgePoints(){
           {(showComputeSummary && (cachedSummary || resp || loading)) ? (
             <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
               {computeSummaryError ? (
-                <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{computeSummaryError}</div>
+                <ErrorMessage message={computeSummaryError} />
               ) : null}
               <div ref={summaryRef}>
                 <MarkdownRenderer>{computeSummaryError ? '' : (cachedSummary || computeSummaryText || (loading ? 'Analyse wird erstellt ...' : ''))}</MarkdownRenderer>
@@ -745,7 +724,7 @@ export default function AgePoints(){
               onClick={fetchAgePoints}
               disabled={loading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
             >
-              {loading ? 'Lade...' : (activeInterpretationId ? 'Auswertung vertiefen' : 'Alterspunkt interpretieren')}
+              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Alterspunkt interpretieren')}
             </button>
             {activeInterpretationId && (
               <button
@@ -773,8 +752,8 @@ export default function AgePoints(){
           <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: isNarrow ? 'auto' : 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
             <h4 style={{ marginTop: 0, marginBottom: 12 }}>Alterspunkt Chart</h4>
             {agePointLabel && <p style={{ marginTop: 0, marginBottom: 8 }}><strong>Alterspunkt:</strong> {agePointLabel}</p>}
-            {chartLoading && <p>Alterspunkt-Chart wird gerendert…</p>}
-            {chartError && <p style={{ color: '#c00' }}>{chartError}</p>}
+            {chartLoading && <LoadingSpinner message="Alterspunkt-Chart wird gerendert…" />}
+            {chartError && <ErrorMessage message={chartError} />}
             {chartImage && !chartLoading && (
               <div style={{ position: 'relative', marginBottom: 12 }}>
                 <img src={chartImage} alt="Alterspunkt Chart" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: isNarrow ? 360 : 750, objectFit: 'contain' }} />

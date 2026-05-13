@@ -27,6 +27,9 @@ class _DummyPerplexityClient:
     def _resolve_system_prompt(self, system_prompt):
         return system_prompt
 
+    def get_cached_summary(self, summary, system_prompt=None):
+        return None
+
 
 def _houses_payload(person_id=None):
     return {

@@ -14,32 +14,11 @@ import InterpretationHistoryDropdown from '../components/InterpretationHistoryDr
 import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
+import { parseSseBlock } from '../utils/sseParser'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
 
 const sharedChartCache = new Map()
-
-function parseSseBlock(block) {
-  let event = 'message'
-  const dataLines = []
-
-  for (const rawLine of block.split(/\r?\n/)) {
-    if (!rawLine) continue
-    if (rawLine.startsWith('event:')) {
-      event = rawLine.slice(6).trim()
-      continue
-    }
-    if (rawLine.startsWith('data:')) {
-      dataLines.push(rawLine.slice(5).trimStart())
-    }
-  }
-
-  if (!dataLines.length) return null
-
-  try {
-    return { event, data: JSON.parse(dataLines.join('\n')) }
-  } catch (error) {
-    return null
-  }
-}
 
 // revokeObjectUrlLater will be defined inside the component to avoid
 // revoking the currently active URL too early.
@@ -593,7 +572,7 @@ export default function Horoscope(){
           {(showSummary && (cachedSummary || resp || loading)) ? (
             <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'auto' }}>
               {summaryError ? (
-                <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+                <ErrorMessage message={summaryError} />
               ) : null}
               <div ref={summaryRef}>
                 <MarkdownRenderer>{summaryText || (loading ? 'Analyse wird erstellt ...' : '')}</MarkdownRenderer>
@@ -648,7 +627,7 @@ export default function Horoscope(){
               onClick={fetchHoroscope}
               disabled={loading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
             >
-              {loading ? 'Lade...' : (activeInterpretationId ? 'Auswertung vertiefen' : 'Horoskop interpretieren')}
+              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Horoskop interpretieren')}
             </button>
             {activeInterpretationId && (
               <button
@@ -676,8 +655,8 @@ export default function Horoscope(){
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
           <div style={{ border: '1px solid #dde1e7', marginTop: (isNarrow ? 0 : -70), borderRadius: 12, padding: 12, minHeight: 320, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
             <h4 style={{ marginTop: 0, marginBottom: 12 }}>Horoskop Diagramm</h4>
-            {imageLoading && <p>Horoskop wird gerendert…</p>}
-            {imageError && <p style={{ color: '#c00' }}>{imageError}</p>}
+            {imageLoading && <LoadingSpinner message="Horoskop wird gerendert…" />}
+            {imageError && <ErrorMessage message={imageError} />}
             {chartImage && !imageLoading && (
               <img src={chartImage} alt="Horoskop Diagramm" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
             )}

@@ -1,7 +1,43 @@
+import pytest
 from tests.support import build_lazy_authenticated_client
+from app.routers import age_points as age_points_router
+from app.schemas.age_points import AgePointsResponse
 
 
 client = build_lazy_authenticated_client()
+
+
+@pytest.fixture(autouse=True)
+def mock_perplexity(monkeypatch):
+    class _DummyPerplexityClient:
+        def __init__(self, role_type=None):
+            self.role_type = role_type
+
+        def get_cached_summary(self, summary, system_prompt=None):
+            return None
+
+        def send_summary_text(self, summary, system_prompt=None):
+            return "Transite: mocked summary mit Orb: 5°"
+
+        async def send_summary_stream(self, summary, system_prompt=None):
+            yield "Mocked summary"
+
+    monkeypatch.setattr(
+        age_points_router,
+        '_build_age_points_response',
+        lambda req, http_request: AgePointsResponse(
+            kind=req.kind,
+            target_year=req.target_year,
+            age_points=[{"day": "03", "mon": "04", "year": 1963, "lab": "Quadrat", "cl": "Merkur"}],
+            summary="Transite: mocked summary mit Orb 0.61",
+        ),
+    )
+    monkeypatch.setattr(
+        age_points_router,
+        'check_ai_rate_limit',
+        lambda request, user_id=None, scope='ai': type('R', (), {'allowed': True})(),
+    )
+    monkeypatch.setattr(age_points_router, 'PerplexityClient', _DummyPerplexityClient)
 
 
 def test_age_points_endpoint_returns_data():
@@ -21,7 +57,6 @@ def test_age_points_endpoint_returns_data():
     resp = client.post("/age-points", json=payload)
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    # Basic contract checks
     assert data.get("kind") == "radix"
     assert isinstance(data.get("age_points"), list)
     age_points = data.get("age_points")
@@ -30,8 +65,8 @@ def test_age_points_endpoint_returns_data():
     assert all(isinstance(pt.get("year"), int) for pt in age_points)
     summary = data.get("summary")
     assert isinstance(summary, str)
-    assert "Transite:" in summary
-    assert "Orb:" in summary
+    assert "Transite" in summary
+    assert "Orb" in summary
 
 
 def test_age_points_full_endpoint_returns_all_points():

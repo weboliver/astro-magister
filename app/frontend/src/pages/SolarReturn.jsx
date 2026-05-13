@@ -13,33 +13,12 @@ import InterpretationHistoryDropdown from '../components/InterpretationHistoryDr
 import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
+import { parseSseBlock } from '../utils/sseParser'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
 
 const sharedSolarReturnCache = new Map()
 const STORAGE_KEY = 'astronex_solar_return_payload'
-
-function parseSseBlock(block) {
-  let event = 'message'
-  const dataLines = []
-
-  for (const rawLine of block.split(/\r?\n/)) {
-    if (!rawLine) continue
-    if (rawLine.startsWith('event:')) {
-      event = rawLine.slice(6).trim()
-      continue
-    }
-    if (rawLine.startsWith('data:')) {
-      dataLines.push(rawLine.slice(5).trimStart())
-    }
-  }
-
-  if (!dataLines.length) return null
-
-  try {
-    return { event, data: JSON.parse(dataLines.join('\n')) }
-  } catch (error) {
-    return null
-  }
-}
 
 async function postSolarReturnStream(path, payload) {
   const response = await postStream(path, payload)
@@ -587,7 +566,7 @@ export default function SolarReturn(){
             {(showSummary && (cachedSummary || resp || loading)) ? (
               <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
                 {summaryError ? (
-                  <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+                  <ErrorMessage message={summaryError} />
                 ) : null}
                 <div ref={summaryRef}>
                   <MarkdownRenderer>{summaryText || (loading ? 'Analyse wird erstellt ...' : '')}</MarkdownRenderer>
@@ -642,7 +621,7 @@ export default function SolarReturn(){
                 onClick={fetchSolar}
                 disabled={loading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
               >
-                {loading ? 'Lade...' : (activeInterpretationId ? 'Auswertung vertiefen' : 'Solar Jahr interpretieren')}
+                {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Solar Jahr interpretieren')}
               </button>
               {activeInterpretationId && (
                 <button
@@ -682,7 +661,7 @@ export default function SolarReturn(){
             }}
           >
             <strong>Solar Jahr Diagramm</strong>
-            {graphicError && <p style={{ color: 'crimson', margin: 0 }}>{graphicError}</p>}
+            {graphicError && <ErrorMessage message={graphicError} />}
             {graphicSrc ? (
               <img
                 src={graphicSrc}

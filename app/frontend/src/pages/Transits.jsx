@@ -13,33 +13,12 @@ import InterpretationHistoryDropdown from '../components/InterpretationHistoryDr
 import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
+import { parseSseBlock } from '../utils/sseParser'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
 
 const sharedTransitsCache = new Map()
 const STORAGE_KEY = 'astronex_transits_payload'
-
-function parseSseBlock(block) {
-  let event = 'message'
-  const dataLines = []
-
-  for (const rawLine of block.split(/\r?\n/)) {
-    if (!rawLine) continue
-    if (rawLine.startsWith('event:')) {
-      event = rawLine.slice(6).trim()
-      continue
-    }
-    if (rawLine.startsWith('data:')) {
-      dataLines.push(rawLine.slice(5).trimStart())
-    }
-  }
-
-  if (!dataLines.length) return null
-
-  try {
-    return { event, data: JSON.parse(dataLines.join('\n')) }
-  } catch (error) {
-    return null
-  }
-}
 
 async function postTransitsStream(path, payload) {
   const response = await postStream(path, payload)
@@ -705,7 +684,7 @@ export default function Transits(){
           {(showSummary && (cachedSummary || resp || loading)) ? (
             <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
               {summaryError ? (
-                <div style={{ color: '#b42318', whiteSpace: 'pre-wrap' }}>{summaryError}</div>
+                <ErrorMessage message={summaryError} />
               ) : null}
               <div ref={summaryRef}>
                 <MarkdownRenderer>{summaryText || (loading ? 'Analyse wird erstellt ...' : '')}</MarkdownRenderer>
@@ -761,7 +740,7 @@ export default function Transits(){
               onClick={fetchTransits}
               disabled={loading || imageLoading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
             >
-              {loading ? 'Lade...' : (activeInterpretationId ? 'Auswertung vertiefen' : 'Transite Interpretieren')}
+              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Transite Interpretieren')}
             </button>
             {activeInterpretationId && (
               <button
@@ -789,8 +768,8 @@ export default function Transits(){
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
           <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
             <h4 style={{ marginTop: 0, marginBottom: 12 }}>Transits Chart</h4>
-            {imageLoading && <p>Transit-Chart wird gerendert…</p>}
-            {imageError && <p style={{ color: '#c00' }}>{imageError}</p>}
+            {imageLoading && <LoadingSpinner message="Transit-Chart wird gerendert…" />}
+            {imageError && <ErrorMessage message={imageError} />}
             {chartImage && !imageLoading && (
               <img src={chartImage} alt="Transit Chart" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
             )}

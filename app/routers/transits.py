@@ -67,11 +67,15 @@ def _decimal_hour(dt: DateObject):
 
 def _to_utc_components(dt: DateObject):
     try:
-        return datetime(
-            dt.year,
-            dt.month,
-            dt.day,
-            dt.hour + dt.minute / 60.0 + dt.second / 3600.0,
+        local_dt = datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+        if dt.timezone:
+            local_dt = pytz_timezone(dt.timezone).localize(local_dt, is_dst=True)
+            local_dt = local_dt.astimezone(pytz_timezone('UTC'))
+        return (
+            local_dt.year,
+            local_dt.month,
+            local_dt.day,
+            local_dt.hour + local_dt.minute / 60.0 + local_dt.second / 3600.0,
         )
     except Exception as e:
         logger.warning(f"Failed to parse local datetime, using UTC: {e}")
@@ -89,7 +93,7 @@ def _planet_entries(jd, lat, lon):
     out = []
     chart = Chart()
     try:
-        chart = _build_chart(birth_jd, lat, lon)
+        chart = _build_chart(jd, lat, lon)
     except Exception as e:
         logger.warning(f"Failed to calculate houses, using defaults: {e}")
         chart.houses = [None] * 12
