@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:8000'
-const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost,127.0.0.1,raspissd,raspissd.local,astro-magister.de,www.astro-magister.de')
+const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost,127.0.0.1')
   .split(',')
   .map((host) => host.trim())
   .filter(Boolean)
