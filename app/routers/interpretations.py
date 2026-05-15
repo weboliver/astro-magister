@@ -12,7 +12,6 @@ from fastapi.responses import StreamingResponse
 from app.db.models.interpretations import UserInterpretation
 from app.db.session import get_session
 from app.routers.auth import _get_user_from_request, require_authenticated_user
-from app.services import auth as auth_service
 from app.schemas.interpretations import (
     FollowupMessageCreate,
     InterpretationCreate,
@@ -21,6 +20,8 @@ from app.schemas.interpretations import (
     InterpretationOut,
     MessageOut,
 )
+from app.services.auth import is_poweruser
+from app.services import auth as auth_service
 from app.services import interpretation_store as store
 from app.services.perplexity import PerplexityClient
 from app.services.auth_security import (
@@ -185,6 +186,12 @@ async def followup_message(
         interp = store.get_interpretation(db, user_id=user["id"], interpretation_id=interpretation_id)
         if interp is None:
             raise HTTPException(status_code=404, detail="Interpretation not found")
+
+        if not is_poweruser(user["id"]):
+            raise HTTPException(
+                status_code=403,
+                detail='Zusatzfragen sind nur für zahlende Mitglieder verfügbar. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic',
+            )
 
         # Rate-Limit vor dem Streamen prüfen
         rate_limit = check_ai_rate_limit(

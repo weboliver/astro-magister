@@ -8,20 +8,7 @@ client = build_lazy_authenticated_client()
 
 
 @pytest.fixture(autouse=True)
-def mock_perplexity(monkeypatch):
-    class _DummyPerplexityClient:
-        def __init__(self, role_type=None):
-            self.role_type = role_type
-
-        def get_cached_summary(self, summary, system_prompt=None):
-            return None
-
-        def send_summary_text(self, summary, system_prompt=None):
-            return "Transite: mocked summary mit Orb: 5°"
-
-        async def send_summary_stream(self, summary, system_prompt=None):
-            yield "Mocked summary"
-
+def mock_age_points_response(monkeypatch):
     monkeypatch.setattr(
         age_points_router,
         '_build_age_points_response',
@@ -33,11 +20,10 @@ def mock_perplexity(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        age_points_router,
-        'check_ai_rate_limit',
-        lambda request, user_id=None, scope='ai': type('R', (), {'allowed': True})(),
+        age_points_router.PerplexityClient,
+        'send_summary_text',
+        lambda self, summary, system_prompt=None: "Transite: mocked summary mit Orb: 5°",
     )
-    monkeypatch.setattr(age_points_router, 'PerplexityClient', _DummyPerplexityClient)
 
 
 def test_age_points_endpoint_returns_data():

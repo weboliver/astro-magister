@@ -656,32 +656,6 @@ class TestAgePoints:
             # Cc for house i begins in birth year + i*6
             assert pt["year"] == 1990 + i*6
 
-    @pytest.mark.skip(reason="calls real Perplexity API — no cache mock")
-    def test_age_points_target_year_filter(self):
-        """Integration test: request only age points for target_year 2028."""
-        response = client.post("/age-points", json={
-            "year": 1966,
-            "month": 3,
-            "day": 10,
-            "hour": 6,
-            "minute": 30,
-            "second": 0,
-            "timezone": "Europe/Berlin",
-            "latitude": 53.46,
-            "longitude": 9.98,
-            "kind": "radix",
-            "target_year": 2028
-        })
-        assert response.status_code == 200
-        data = response.json()
-        assert data["kind"] == "radix"
-        assert data.get("target_year") == 2028
-        assert "age_points" in data and isinstance(data["age_points"], list)
-        # all returned points must be in 2028
-        assert all(ap.get("year") == 2028 for ap in data["age_points"])
-        # ensure we got at least one age point in 2028
-        assert len(data["age_points"]) > 0
-
 
 class TestLocationEndpoints:
     """Tests für die Locations-API."""

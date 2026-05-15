@@ -292,7 +292,11 @@ export default function Settings(){
     const action = editingPersonId ? put : post
     const resp = await action(endpoint, payload)
     if (!resp.ok){
-      setPersonMsg('Fehler beim Speichern der Person')
+      if (resp.status === 403){
+        setPersonMsg('Personen anlegen ist Mitgliedern mit Spenderstatus vorbehalten. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic')
+      } else {
+        setPersonMsg('Fehler beim Speichern der Person')
+      }
       return
     }
     setPersonMsg(editingPersonId ? 'Person aktualisiert' : 'Person gespeichert')

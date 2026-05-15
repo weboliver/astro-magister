@@ -38,23 +38,25 @@ class PersonOut(PersonBase):
     id: int
 
 
-def _require_authenticated_user(request: Request):
+@router.get('/auth/persons', response_model=List[PersonOut])
+def list_persons(request: Request):
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')
-    return user
-
-
-@router.get('/auth/persons', response_model=List[PersonOut])
-def list_persons(request: Request):
-    user = _require_authenticated_user(request)
     persons = auth_service.list_persons(user['id'])
     return persons
 
 
 @router.post('/auth/persons', response_model=PersonOut, status_code=201)
 def create_person(payload: PersonIn, request: Request):
-    user = _require_authenticated_user(request)
+    user = _get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail='Unauthorized')
+    if not auth_service.is_poweruser(user['id']):
+        raise HTTPException(
+            status_code=403,
+            detail='Personen anlegen ist Mitgliedern mit Spenderstatus vorbehalten. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic',
+        )
     person_id = auth_service.create_person(user['id'], payload.model_dump())
     if not person_id:
         raise HTTPException(status_code=500, detail='Could not save person')
@@ -66,7 +68,9 @@ def create_person(payload: PersonIn, request: Request):
 
 @router.get('/auth/persons/{person_id}', response_model=PersonOut)
 def get_person(person_id: int, request: Request):
-    user = _require_authenticated_user(request)
+    user = _get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail='Unauthorized')
     person = auth_service.get_person(user['id'], person_id)
     if not person:
         raise HTTPException(status_code=404, detail='Person not found')
@@ -75,7 +79,9 @@ def get_person(person_id: int, request: Request):
 
 @router.put('/auth/persons/{person_id}', response_model=PersonOut)
 def update_person(person_id: int, payload: PersonIn, request: Request):
-    user = _require_authenticated_user(request)
+    user = _get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail='Unauthorized')
     success = auth_service.update_person(user['id'], person_id, payload.model_dump())
     if not success:
         raise HTTPException(status_code=404, detail='Person not found')
@@ -87,7 +93,9 @@ def update_person(person_id: int, payload: PersonIn, request: Request):
 
 @router.delete('/auth/persons/{person_id}')
 def delete_person(person_id: int, request: Request):
-    user = _require_authenticated_user(request)
+    user = _get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail='Unauthorized')
     deleted = auth_service.delete_person(user['id'], person_id)
     if not deleted:
         raise HTTPException(status_code=404, detail='Person not found')

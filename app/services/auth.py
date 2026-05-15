@@ -218,6 +218,15 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
     return {"id": row.id, "username": row.username}
 
 
+def is_poweruser(user_id: int) -> bool:
+    session = get_session()
+    try:
+        prof = session.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+        return bool(getattr(prof, 'is_poweruser', False))
+    finally:
+        session.close()
+
+
 def list_users(query: Optional[str] = None, limit: int = 100, offset: int = 0):
     session = get_session()
     try:

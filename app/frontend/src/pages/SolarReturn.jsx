@@ -16,6 +16,7 @@ import { formatDateTimeValue } from '../utils/dateTime'
 import { parseSseBlock } from '../utils/sseParser'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { PoweruserNoticeLink } from '../components/PoweruserNotice'
 
 const sharedSolarReturnCache = new Map()
 const STORAGE_KEY = 'astronex_solar_return_payload'
@@ -599,30 +600,35 @@ export default function SolarReturn(){
                 />
               </div>
             ))}
-            {activeInterpretationId && followups.length < 10 && (
-              <div style={{ marginTop: 12 }}>
-                <label><b>Zusatzfrage {followups.length + 1}</b> <span style={{ color: '#c00' }}>*</span></label>
-                <textarea
-                  value={currentFollowup}
-                  onChange={(e) => setCurrentFollowup(e.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
-                  maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
-                  rows={3}
-                  placeholder="Ihre Frage zur Vertiefung der Auswertung"
-                  style={{ width: '100%', resize: 'vertical' }}
-                />
-                <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{currentFollowup.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
-              </div>
-            )}
-            {activeInterpretationId && followups.length >= 10 && (
-              <div style={{ marginTop: 12, color: '#888', fontSize: 13 }}>Maximale Anzahl von 10 Zusatzfragen erreicht.</div>
-            )}
-            <div style={{marginTop:8, display:'flex', flexWrap:'wrap', gap:8, alignItems:'center'}}>
-              <button
-                onClick={fetchSolar}
-                disabled={loading || (activeInterpretationId ? (!currentFollowup.trim() || followups.length >= 10) : false)}
-              >
-                {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Solar Jahr interpretieren')}
-              </button>
+            {!profile?.is_poweruser && activeInterpretationId && followups.length >= 1 && <PoweruserNoticeLink />}
+          {activeInterpretationId && (
+            <div style={{ marginTop: 12 }}>
+              <label><b>Zusatzfrage {followups.length + 1}</b> {profile?.is_poweruser ? <span style={{ color: '#c00' }}>*</span> : null}</label>
+              <textarea
+                value={currentFollowup}
+                onChange={profile?.is_poweruser ? (e) => setCurrentFollowup(e.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH)) : undefined}
+                maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
+                rows={3}
+                placeholder="Ihre Frage zur Vertiefung der Auswertung"
+                style={{ width: '100%', resize: 'vertical' }}
+                disabled={!profile?.is_poweruser || loading || (activeInterpretationId ? followups.length >= 10 : false)}
+              />
+              {!profile?.is_poweruser && (
+                <div style={{ marginTop: 4, color: '#c00', fontSize: 12 }}>Zusatzfragen sind nur für zahlende Mitglieder verfügbar. <a href="https://buymeacoffee.com/shinengakic" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>.</div>
+              )}
+              {profile?.is_poweruser && <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{currentFollowup.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>}
+            </div>
+          )}
+          {profile?.is_poweruser && activeInterpretationId && followups.length >= 10 && (
+            <div style={{ marginTop: 12, color: '#888', fontSize: 13 }}>Maximale Anzahl von 10 Zusatzfragen erreicht.</div>
+          )}
+          <div style={{marginTop:8, display:'flex', flexWrap:'wrap', gap:8, alignItems:'center'}}>
+            <button
+              onClick={fetchSolar}
+              disabled={loading || (activeInterpretationId ? (!profile?.is_poweruser || !currentFollowup.trim() || followups.length >= 10) : false)}
+            >
+              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Solar Jahr interpretieren')}
+            </button>
               {activeInterpretationId && (
                 <button
                   onClick={async () => {

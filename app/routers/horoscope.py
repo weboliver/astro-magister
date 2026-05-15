@@ -16,6 +16,7 @@ import asyncio
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
 from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
+from app.services.auth import is_poweruser
 from app.db.session import get_session
 from app.services import interpretation_store as _istore
 from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
@@ -295,6 +296,11 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
         if response_data['summary_prompt']:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_horoscope(request, payload)
+            if user and not is_poweruser(user['id']):
+                raise HTTPException(
+                    status_code=403,
+                    detail='KI-Interpretation ist Mitgliedern mit Spenderstatus vorbehalten. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic',
+                )
             perplexityClient = PerplexityClient(role_type=role_name)
             cached_summary = perplexityClient.get_cached_summary(
                 summary=response_data['summary_prompt'],
