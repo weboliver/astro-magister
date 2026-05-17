@@ -1,0 +1,31 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { marked } from 'marked'
+
+export async function getStaticPaths() {
+  const res = await fetch('http://api:8000/wiki/entries?limit=100&wiki_active_only=true')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  const entries = await res.json()
+
+  const hiddenTitles = new Set(['Datenschutz', 'Impressum', 'Kontakt'])
+  return entries
+    .filter(e => e.ispublic && e.slug && !hiddenTitles.has(e.entry_name))
+    .map(entry => ({
+      params: { slug: entry.slug },
+      props: { entry },
+    }))
+}
+
+const { entry } = Astro.props
+const rawContent = (entry.entry_content || '').replace(/^# .+\n+/, '').trim()
+const contentHtml = marked.parse(rawContent)
+---
+<Layout title={entry.entry_name} description={entry.entry_short || ''}>
+  <div style="margin-bottom:12px">
+    <a href="/astro-wiki/" style="color:var(--admin-accent);font-weight:600">← Wiki Übersicht</a>
+  </div>
+  <article>
+    <h1 style="margin-bottom:20px">{entry.entry_name}</h1>
+    <div style="line-height:1.7" set:html={contentHtml} />
+  </article>
+</Layout>

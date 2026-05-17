@@ -1,3 +1,13 @@
+/**
+ * SolarReturn - Page for calculating and interpreting the solar return chart for a target year.
+ * @component
+ * @returns {JSX.Element} Rendered solar return page
+ * @hook useState - Manages birth data, location, target year, date/time, graphic, summary, followups, hydration
+ * @hook useEffect - Handles responsive layout, loads user data, auto-fetches graphic, manages selections, cleanup
+ * @hook useCallback - Displays graphic, computes cache key, persists payload to sessionStorage, handles logout cleanup
+ * @hook useMemo - Computes available target years and current payload
+ * @hook useRef - Tracks followup base, summary ref, chart cache, abort controller
+ */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { useAuth } from '../contexts/AuthContext'

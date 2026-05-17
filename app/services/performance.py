@@ -8,6 +8,8 @@ from typing import Dict, List
 
 @dataclass
 class RouteStats:
+    """Statistics for a single route."""
+
     path: str
     count: int
     total_seconds: float
@@ -16,15 +18,24 @@ class RouteStats:
 
     @property
     def avg_seconds(self) -> float:
+        """Calculate average duration for this route."""
         return self.total_seconds / self.count if self.count else 0.0
 
 
 class PerformanceMonitor:
+    """Thread-safe performance tracking for API routes."""
+
     def __init__(self) -> None:
         self._lock = Lock()
         self._stats: Dict[str, RouteStats] = {}
 
     def record(self, path: str, duration: float) -> None:
+        """Record a request duration for a given path.
+
+        Args:
+            path: Route path string.
+            duration: Request duration in seconds.
+        """
         key = path or "<unknown>"
         with self._lock:
             stat = self._stats.get(key)
@@ -37,6 +48,11 @@ class PerformanceMonitor:
             stat.min_seconds = min(stat.min_seconds, duration)
 
     def snapshot(self) -> Dict[str, object]:
+        """Get a snapshot of all recorded statistics.
+
+        Returns:
+            Dictionary with collected_at timestamp and sorted route statistics.
+        """
         with self._lock:
             data: List[Dict[str, object]] = []
             for stat in self._stats.values():

@@ -112,6 +112,15 @@ Base.metadata.create_all(bind=engine)
 print("[init-postgres] schema ready")
 PY
 
+echo "[init-postgres] running Alembic migrations ..."
+"$PYTHON_BIN" - <<'PY'
+from alembic.config import Config
+from alembic import command
+cfg = Config('/workspace/alembic.ini')
+command.upgrade(cfg, 'head')
+print("[init-postgres] alembic ready")
+PY
+
 if [[ "$SEED_USERS" == "1" ]]; then
   if [[ -f "$USERS_DB_PATH" ]] && should_run_migration_for_table "users"; then
     echo "[init-postgres] migrating users/profile/persons/tokens ..."

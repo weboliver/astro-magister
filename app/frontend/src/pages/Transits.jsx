@@ -1,3 +1,13 @@
+/**
+ * Transits - Page for calculating and interpreting astrological transits (current planetary positions vs birth chart).
+ * @component
+ * @returns {JSX.Element} Rendered transits page
+ * @hook useState - Manages birth data, transit data, location, planet filter, chart, summary, followups, hydration
+ * @hook useEffect - Handles responsive layout, loads user data, auto-fetches chart, manages selections, cleanup
+ * @hook useCallback - Revokes object URLs, computes graphic size, cache key, fetches transit graphic, persists payload, handles logout cleanup
+ * @hook useMemo - Normalizes planet filter, computes transit payload and cache key
+ * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, revocation timeout, abort controller, refs
+ */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { postStream, postWithSignal } from '../services/api'

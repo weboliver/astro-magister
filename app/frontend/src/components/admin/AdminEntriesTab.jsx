@@ -24,6 +24,7 @@ const markdownComponents = {
 
 const emptyEntryForm = {
   entry_name: '',
+  slug: '',
   entry_short: '',
   entry_content: '',
   generate_text: '',
@@ -36,6 +37,13 @@ const emptyEntryForm = {
   entry_published: '',
 }
 
+/**
+ * AdminEntriesTab - Admin panel tab for managing wiki entries with CRUD operations and markdown preview
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} [props.entryEditRequest] - Optional pre-populated entry data for editing
+ * @returns {JSX.Element} Rendered entry management interface with search, create, edit, and delete
+ */
 export default function AdminEntriesTab({ entryEditRequest }){
   const [sections, setSections] = useState([])
   const [categories, setCategories] = useState([])
@@ -50,6 +58,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
   const [hasLoadedSearch, setHasLoadedSearch] = useState(false)
   const [isContentExpanded, setIsContentExpanded] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [slugRefreshCount, setSlugRefreshCount] = useState(0)
   const ITEMS_PER_PAGE = 10
 
   async function loadSections(){
@@ -106,6 +115,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
     setSelectedEntry({
       entry_id: entry.entry_id,
       entry_name: entry.entry_name || '',
+      slug: entry.slug || '',
       entry_short: entry.entry_short || '',
       entry_content: entry.entry_content || '',
       generate_text: entry.generate_text || '',
@@ -284,6 +294,31 @@ export default function AdminEntriesTab({ entryEditRequest }){
           >
             {entryLoading ? 'Lade...' : 'Aktualisieren'}
           </button>
+          <button
+            type="button"
+            className="admin-secondary-button"
+            onClick={async () => {
+              setEntryLoading(true)
+              setEntryError('')
+              setEntrySuccess('')
+              try {
+                const resp = await post('/wiki/entries/refresh-slugs', {})
+                if (!resp.ok) throw new Error(`Slugs aktualisieren fehlgeschlagen (${resp.status})`)
+                const data = await resp.json()
+                setEntrySuccess(`Slugs aktualisiert: ${data.updated} Beiträge`)
+                setSlugRefreshCount((c) => c + 1)
+                await loadEntries({ q: entryQuery.trim(), section_id: entrySectionFilter, category_id: entryCategoryFilter })
+              } catch (err) {
+                setEntryError(err?.message || 'Slugs konnten nicht aktualisiert werden')
+              } finally {
+                setEntryLoading(false)
+              }
+            }}
+            disabled={entryLoading}
+            title="Alle Beitrags-Slugs basierend auf entry_name regenerieren"
+          >
+            Slugs aktualisieren
+          </button>
         </div>
       </div>
 
@@ -350,6 +385,13 @@ export default function AdminEntriesTab({ entryEditRequest }){
                   <p style={{ margin: '0 0 4px 0', color: '#4b5d71' }}>
                     Kategorie: {category?.category_name || 'Unbekannt'}
                   </p>
+                  {entry.slug ? (
+                    <p style={{ margin: '0 0 4px 0', color: '#2d5a3d', fontSize: 12 }}>
+                      Slug: <code style={{ background: '#eef7f0', padding: '1px 4px', borderRadius: 3 }}>{entry.slug}</code>
+                    </p>
+                  ) : (
+                    <p style={{ margin: '0 0 4px 0', color: '#c00', fontSize: 12 }}>Kein Slug</p>
+                  )}
                   <p style={{ margin: '0 0 12px 0', color: '#4b5d71' }}>
                     Nummer: {entry.entry_number ?? 0}
                   </p>
@@ -414,6 +456,15 @@ export default function AdminEntriesTab({ entryEditRequest }){
                   <option key={`entry-form-category-${category.category_id}`} value={category.category_id}>{category.category_name}</option>
                 ))}
               </select>
+            </label>
+            <label className="admin-field">
+              <span>Slug</span>
+              <input
+                value={selectedEntry?.slug || ''}
+                readOnly
+                style={{ background: '#f0f4f8', color: '#2d5a3d', fontFamily: 'monospace', fontSize: 12 }}
+                title="Slug wird automatisch aus Name + ID generiert"
+              />
             </label>
             <label className="admin-field">
               <span>Kurztext</span>

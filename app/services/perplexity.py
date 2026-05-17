@@ -34,18 +34,43 @@ _THINK_CLOSE_TAG = "</think>"
 
 
 def _strip_think_blocks(text: str) -> str:
+    """Remove Perplexity thinking blocks from response text.
+
+    Args:
+        text: Response text potentially containing think blocks.
+
+    Returns:
+        Text with think blocks removed.
+    """
     if not text:
         return text
-    return re.sub(r"<think>.*?(</think>|$)", "", text, flags=re.IGNORECASE | re.DOTALL)
+    return re.sub(r"<think>.*?(|$)", "", text, flags=re.IGNORECASE | re.DOTALL)
 
 
 def _normalize_prompt_echo_text(text: str) -> str:
+    """Normalize text for prompt echo detection.
+
+    Args:
+        text: Text to normalize.
+
+    Returns:
+        Lowercased, whitespace-normalized text.
+    """
     if not text:
         return ""
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
 def _looks_like_prompt_echo(prompt: str, response_text: str) -> bool:
+    """Check if response appears to echo the prompt (API glitch).
+
+    Args:
+        prompt: Original prompt sent to API.
+        response_text: Response text from API.
+
+    Returns:
+        True if response appears to be prompt echo.
+    """
     normalized_prompt = _normalize_prompt_echo_text(prompt)
     normalized_response = _normalize_prompt_echo_text(response_text)
 
@@ -72,6 +97,15 @@ def _looks_like_prompt_echo(prompt: str, response_text: str) -> bool:
 
 
 def append_additional_question(summary: Optional[str], additional_question: Optional[str]) -> Optional[str]:
+    """Append a user's additional question to the summary context.
+
+    Args:
+        summary: Previous summary text.
+        additional_question: Additional question to append.
+
+    Returns:
+        Combined text with additional question, or None if summary is None.
+    """
     if summary is None:
         return None
 
@@ -297,6 +331,15 @@ class _FallbackCacheBackend(_CacheBackend):
 
 
 def _suffix_prefix_overlap(text: str, marker: str) -> int:
+    """Calculate suffix/prefix overlap between text and marker.
+
+    Args:
+        text: Text to check.
+        marker: Marker string.
+
+    Returns:
+        Maximum overlap length.
+    """
     max_overlap = min(len(text), len(marker) - 1)
     for size in range(max_overlap, 0, -1):
         if text.endswith(marker[:size]):
@@ -722,6 +765,11 @@ _REDIS_URL = (app_config.get_env_setting("REDIS_URL") or "").strip()
 
 
 def _build_cache_backend() -> _CacheBackend:
+    """Build and configure the cache backend based on settings.
+
+    Returns:
+        Configured _CacheBackend instance (local or Redis).
+    """
     fallback = _LocalCacheBackend(max_entries=_CACHE_MAX, ttl_seconds=_CACHE_TTL)
     if _CACHE_BACKEND != "redis":
         logger.info("Perplexity verwendet lokalen Cache-Backend: %s", _CACHE_BACKEND)
@@ -755,6 +803,16 @@ def get_cache_overview(
     include_values: bool = True,
     value_max_length: int = 2000,
 ) -> Dict[str, Any]:
+    """Get overview of cache contents.
+
+    Args:
+        limit: Maximum number of entries to return.
+        include_values: Whether to include entry values.
+        value_max_length: Maximum length of value to include.
+
+    Returns:
+        Dictionary with cache overview and entries.
+    """
     try:
         raw_entries = _CACHE.inspect_entries(limit)
     except Exception:
@@ -775,6 +833,14 @@ def get_cache_overview(
 
 
 def delete_cache_entry(key: str) -> Dict[str, Any]:
+    """Delete a single cache entry.
+
+    Args:
+        key: Cache key to delete.
+
+    Returns:
+        Dictionary with deletion result.
+    """
     deleted = _CACHE.delete(key)
     return {
         "scope": "single",
@@ -784,6 +850,11 @@ def delete_cache_entry(key: str) -> Dict[str, Any]:
 
 
 def clear_cache() -> Dict[str, Any]:
+    """Clear all cache entries.
+
+    Returns:
+        Dictionary with clear result.
+    """
     deleted = _CACHE.clear()
     return {
         "scope": "all",
@@ -792,6 +863,16 @@ def clear_cache() -> Dict[str, Any]:
 
 
 def _serialize_cache_entry(entry: Dict[str, Any], include_values: bool, value_max_length: int) -> Dict[str, Any]:
+    """Serialize a cache entry for API response.
+
+    Args:
+        entry: Raw cache entry.
+        include_values: Whether to include value content.
+        value_max_length: Maximum length of value to include.
+
+    Returns:
+        Serialized entry dictionary.
+    """
     value = entry.get("value")
     normalized = {
         "key": entry.get("key"),
@@ -806,6 +887,16 @@ def _serialize_cache_entry(entry: Dict[str, Any], include_values: bool, value_ma
 
 
 def _make_cache_key(summary: str, system_prompt: Optional[str], model: str) -> str:
+    """Create a cache key from summary, system prompt, and model.
+
+    Args:
+        summary: Summary text.
+        system_prompt: Optional system prompt.
+        model: Model identifier.
+
+    Returns:
+        SHA256 hex digest cache key.
+    """
     hasher = hashlib.sha256()
     hasher.update(summary.encode("utf-8"))
     if system_prompt:
@@ -817,6 +908,14 @@ def _make_cache_key(summary: str, system_prompt: Optional[str], model: str) -> s
 
 
 def _cache_get(key: str) -> Optional[str]:
+    """Get cached response by key.
+
+    Args:
+        key: Cache key.
+
+    Returns:
+        Cached text or None if not found.
+    """
     try:
         value = _CACHE.get(key)
         if value is None:
@@ -831,6 +930,12 @@ def _cache_get(key: str) -> Optional[str]:
 
 
 def _cache_set(key: str, text: str) -> None:
+    """Store text in cache with key.
+
+    Args:
+        key: Cache key.
+        text: Text to cache.
+    """
     try:
         _CACHE.set(key, text)
     except Exception:
@@ -839,6 +944,11 @@ def _cache_set(key: str, text: str) -> None:
 
 
 def _cache_delete(key: str) -> None:
+    """Delete cached entry by key.
+
+    Args:
+        key: Cache key to delete.
+    """
     try:
         _CACHE.delete(key)
     except Exception:

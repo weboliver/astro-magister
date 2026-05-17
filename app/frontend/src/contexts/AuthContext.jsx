@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { clearStoredSession, get, refreshSessionForActivity } from '../services/api'
 
+/**
+ * AuthContext.jsx - Authentication context provider
+ * @module AuthContext
+ * @description React context for managing user authentication state, profile, and session
+ */
+
+/**
+ * Authentication context - provides user profile and auth methods to consuming components
+ * @type {React.Context}
+ */
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }){

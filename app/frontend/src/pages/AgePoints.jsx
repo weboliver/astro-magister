@@ -1,3 +1,13 @@
+/**
+ * AgePoints - Page for calculating and interpreting astrological age points (temporal points in life).
+ * @component
+ * @returns {JSX.Element} Rendered age points page
+ * @hook useState - Manages response, loading, date/time, location, age point options, chart, summary, followups
+ * @hook useEffect - Loads user data, fetches age point options, handles subject changes, chart fetching
+ * @hook useMemo - Computes active subject, key, request payload
+ * @hook useCallback - Formats labels, computes default index, displays chart blob, computes graphic size
+ * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller
+ */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { post, postStream, postWithSignal } from '../services/api'

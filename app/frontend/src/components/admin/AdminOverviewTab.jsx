@@ -1,12 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { get } from '../../services/api'
+import { get, post } from '../../services/api'
 import { formatTimestamp, formatTtl } from './cacheUtils'
 
+/**
+ * AdminOverviewTab - Admin panel tab showing system overview, cache status, and wiki build controls
+ * @component
+ * @returns {JSX.Element} Rendered overview dashboard with cache info and build actions
+ */
 export default function AdminOverviewTab(){
   const [cacheData, setCacheData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lastLoadedAt, setLastLoadedAt] = useState(null)
+  const [buildState, setBuildState] = useState('idle')
+  const [buildMessage, setBuildMessage] = useState('')
 
   async function loadCache(){
     setLoading(true)
@@ -31,6 +38,23 @@ export default function AdminOverviewTab(){
       setError(err?.message || 'Cache konnte nicht geladen werden')
     }finally{
       setLoading(false)
+    }
+  }
+
+  async function buildWiki(){
+    setBuildState('building')
+    setBuildMessage('')
+    try{
+      const response = await post('/wiki/build')
+      if (!response.ok){
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.detail || `Build failed (${response.status})`)
+      }
+      setBuildState('ok')
+      setBuildMessage('Build erfolgreich — /astro-wiki/ ist aktuell.')
+    }catch(err){
+      setBuildState('error')
+      setBuildMessage(err?.message || 'Build fehlgeschlagen')
     }
   }
 
@@ -95,6 +119,24 @@ export default function AdminOverviewTab(){
           <h3>Quellen</h3>
           <p>{entryStats.sources.length ? entryStats.sources.join(', ') : 'Noch keine Einträge'}</p>
           <p>Letzte Aktualisierung: {formatTimestamp(lastLoadedAt)}</p>
+        </article>
+      </div>
+
+      <div className="admin-summary-grid" style={{marginTop: 24}}>
+        <article className="admin-summary-card">
+          <h3>Wiki Build</h3>
+          <p>Baut die statischen Astro-Seiten unter /astro-wiki/ — holt Daten vom API zur Build-Zeit.</p>
+          <button
+            type="button"
+            className="admin-primary-button"
+            style={{marginTop: 12}}
+            onClick={buildWiki}
+            disabled={buildState === 'building'}
+          >
+            {buildState === 'building' ? 'Baue...' : 'Build starten'}
+          </button>
+          {buildState === 'ok' && <p style={{color: '#0f766e', marginTop: 8}}>{buildMessage}</p>}
+          {buildState === 'error' && <p style={{color: '#dc2626', marginTop: 8}}>{buildMessage}</p>}
         </article>
       </div>
     </section>

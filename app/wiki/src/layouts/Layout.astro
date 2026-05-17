@@ -1,0 +1,44 @@
+---
+import '../styles/global.css'
+interface Props {
+  title: string
+  description?: string
+}
+const { title, description = 'Astro-Magister Wiki — Astrologisches Nachschlagewerk' } = Astro.props
+---
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow" />
+    <title>{title} | Astro-Magister Wiki</title>
+    <link rel="canonical" href={`https://www.astro-magister.de/${Astro.url.pathname}`} />
+  </head>
+  <body>
+    <div>
+      <div class="app-nav-wrap">
+        <nav class="app-nav" style="min-width: 200px">
+          <div class="app-nav-desktop">
+            <div class="app-nav-group">
+              <a class="app-nav-link" href="/">Startseite</a>
+            </div>
+          </div>
+        </nav>
+      </div>
+      <div class="app-content-stage">
+        <div class="app-page-shell">
+          <section class="app-page-panel">
+            <slot />
+          </section>
+          <div class="app-footer-links">
+            <a class="app-footer-link" href="/astro-wiki/impressum/">Impressum</a>
+            <a class="app-footer-link" href="/astro-wiki/datenschutz/">Datenschutz</a>
+            <a class="app-footer-link" href="/astro-wiki/kontakt/">Kontakt</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

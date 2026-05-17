@@ -40,10 +40,30 @@ logger = logging.getLogger(__name__)
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: Event type string.
+        data: Data dictionary to serialize as JSON.
+
+    Returns:
+        Formatted SSE string.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _require_user(request: Request) -> dict:
+    """Require authenticated user from request.
+
+    Args:
+        request: FastAPI Request.
+
+    Returns:
+        User dict.
+
+    Raises:
+        HTTPException: If not authenticated.
+    """
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -51,6 +71,14 @@ def _require_user(request: Request) -> dict:
 
 
 def _to_list_item(interp: UserInterpretation) -> InterpretationListItem:
+    """Convert UserInterpretation to list item for API response.
+
+    Args:
+        interp: UserInterpretation database model.
+
+    Returns:
+        InterpretationListItem for list display.
+    """
     first_question: Optional[str] = None
     if interp.messages:
         first_question = store.get_first_user_question(interp.messages)
@@ -73,6 +101,18 @@ def _to_list_item(interp: UserInterpretation) -> InterpretationListItem:
 
 @router.post("", response_model=InterpretationCreatedOut, status_code=201)
 def create_interpretation(payload: InterpretationCreate, request: Request):
+    """Create a new interpretation session.
+
+    Args:
+        payload: InterpretationCreate with context type and birth data.
+        request: FastAPI Request.
+
+    Returns:
+        InterpretationCreatedOut with new interpretation ID.
+
+    Raises:
+        HTTPException: If unauthorized or person not found.
+    """
     user = _require_user(request)
     if payload.user_persons_id is not None:
         person = auth_service.get_person(user["id"], payload.user_persons_id)
@@ -86,10 +126,6 @@ def create_interpretation(payload: InterpretationCreate, request: Request):
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# GET /interpretations  – eigene Sessions auflisten
-# ---------------------------------------------------------------------------
-
 @router.get("", response_model=List[InterpretationListItem])
 def list_interpretations(
     request: Request,
@@ -99,6 +135,19 @@ def list_interpretations(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    """List user's interpretation sessions with optional filters.
+
+    Args:
+        request: FastAPI Request.
+        context_type: Optional filter by context type.
+        user_persons_id: Optional filter by person ID.
+        own_profile_only: Only show own profile interpretations.
+        limit: Max results to return.
+        offset: Pagination offset.
+
+    Returns:
+        List of InterpretationListItem objects.
+    """
     user = _require_user(request)
     db = get_session()
     try:
@@ -122,6 +171,18 @@ def list_interpretations(
 
 @router.get("/{interpretation_id}", response_model=InterpretationOut)
 def get_interpretation(interpretation_id: int, request: Request):
+    """Get interpretation session with all messages.
+
+    Args:
+        interpretation_id: ID of interpretation to retrieve.
+        request: FastAPI Request.
+
+    Returns:
+        InterpretationOut with full session and message history.
+
+    Raises:
+        HTTPException: If not found or unauthorized.
+    """
     user = _require_user(request)
     db = get_session()
     try:
@@ -153,12 +214,17 @@ def get_interpretation(interpretation_id: int, request: Request):
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# DELETE /interpretations/{id}
-# ---------------------------------------------------------------------------
-
 @router.delete("/{interpretation_id}", status_code=204)
 def delete_interpretation(interpretation_id: int, request: Request):
+    """Delete an interpretation session.
+
+    Args:
+        interpretation_id: ID of interpretation to delete.
+        request: FastAPI Request.
+
+    Raises:
+        HTTPException: If not found or unauthorized.
+    """
     user = _require_user(request)
     db = get_session()
     try:
@@ -179,6 +245,20 @@ async def followup_message(
     payload: FollowupMessageCreate,
     request: Request,
 ):
+    """Stream a follow-up question to an existing interpretation session.
+
+    Args:
+        interpretation_id: ID of the interpretation session.
+        payload: FollowupMessageCreate with the follow-up question content.
+        request: FastAPI Request.
+
+    Returns:
+        StreamingResponse with SSE events containing the AI response.
+
+    Raises:
+        HTTPException: If interpretation not found, unauthorized, not a power user,
+            or rate limited.
+    """
     user = _require_user(request)
     db = get_session()
 

@@ -9,6 +9,11 @@ const emptySectionForm = {
   wiki_active: true,
 }
 
+/**
+ * AdminSectionsTab - Admin panel tab for managing wiki sections (Bereiche)
+ * @component
+ * @returns {JSX.Element} Rendered section management interface with create, edit, delete, and search functionality
+ */
 export default function AdminSectionsTab(){
   const [sections, setSections] = useState([])
   const [sectionQuery, setSectionQuery] = useState('')

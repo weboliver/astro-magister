@@ -41,6 +41,15 @@ HOROSCOPE_SYSTEM_PROMPT = (
 
 
 def _resolve_role_name_for_horoscope(request: Request, payload: DateTimeRequest) -> str:
+    """Resolve the role name for horoscope generation based on user and payload.
+
+    Args:
+        request: FastAPI Request with user context.
+        payload: DateTimeRequest with birth data and optional person_id.
+
+    Returns:
+        Role name string (e.g. "Laie" for anonymous, or subject role for authenticated).
+    """
     user = _get_user_from_request(request)
     if not user:
         return "Laie"
@@ -48,14 +57,47 @@ def _resolve_role_name_for_horoscope(request: Request, payload: DateTimeRequest)
 
 
 def _normalize_diff(target: float, current: float) -> float:
+    """Normalize the difference between two angles to range [-180, 180].
+
+    Args:
+        target: Target longitude in degrees.
+        current: Current longitude in degrees.
+
+    Returns:
+        Normalized difference in degrees in range [-180, 180].
+    """
     return (target - current + 540.0) % 360.0 - 180.0
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: Event type string (e.g. "meta", "done", "summary_delta").
+        data: Data dictionary to serialize as JSON.
+
+    Returns:
+        Formatted SSE string with event name and JSON data.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
+    """Build the response data for horoscope calculation.
+
+    Computes planetary positions, aspects, houses, and generates the summary
+    prompt for AI interpretation based on birth data and location.
+
+    Args:
+        request: DateTimeRequest with year, month, day, hour, minute, second,
+            latitude, longitude, and optional timezone and person_id.
+
+    Returns:
+        Dictionary containing target_year, return_year, return_month, return_day,
+        return_hour, julian_day, natal_sun_longitude, solar_return_longitude,
+        longitude_difference, iterations, planets (list), houses (list),
+        aspects (list), and summary_prompt (str).
+    """
     # Ensure Swiss Ephemeris search path is initialized (covers import-order races)
     try:
         app_config.init_swisseph_path()
@@ -290,6 +332,20 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
 
 @router.post("/horoscope")
 def get_horoscope(payload: DateTimeRequest, request: Request):
+    """Generate a complete horoscope interpretation for the given birth data.
+
+    Args:
+        payload: DateTimeRequest with birth date, time, and location.
+        request: FastAPI Request with user authentication context.
+
+    Returns:
+        JSONResponse with SolarReturnResponse containing planets, houses,
+        aspects, and summary (AI interpretation text).
+
+    Raises:
+        HTTPException: If not authenticated, not a power user (for AI interpretation),
+            rate limited, or calculation fails.
+    """
     try:
         response_data = _build_horoscope_response_data(payload)
         summary = response_data['summary_prompt'] or ''
@@ -357,6 +413,21 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
 
 @router.post("/horoscope/stream")
 async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
+    """Stream a horoscope interpretation using Server-Sent Events.
+
+    Computes the horoscope and streams the AI interpretation incrementally.
+
+    Args:
+        payload: DateTimeRequest with birth date, time, and location.
+        request: FastAPI Request with user authentication context.
+
+    Returns:
+        StreamingResponse with SSE events: "meta", "done", "summary_delta",
+        "saved", and "error".
+
+    Raises:
+        HTTPException: If not authenticated, rate limited, or calculation fails.
+    """
     cached_summary = None
     perplexity_client = None
     try:

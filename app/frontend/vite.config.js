@@ -8,13 +8,10 @@ const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost,127.0.0.1')
   .filter(Boolean)
 
 const apiProxy = {
-  // Only proxy API requests to the FastAPI backend during development and preview.
-  // Keep the root (/) for Vite to serve the React app.
   '/horoscope': { target: proxyTarget, changeOrigin: true, secure: false },
   '/transits': { target: proxyTarget, changeOrigin: true, secure: false },
   '/houses': { target: proxyTarget, changeOrigin: true, secure: false },
   '/auth': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/wiki': { target: proxyTarget, changeOrigin: true, secure: false },
   '/locations': { target: proxyTarget, changeOrigin: true, secure: false },
   '/getPosition': { target: proxyTarget, changeOrigin: true, secure: false },
   '/planets': { target: proxyTarget, changeOrigin: true, secure: false },
@@ -22,7 +19,8 @@ const apiProxy = {
   '/age-points': { target: proxyTarget, changeOrigin: true, secure: false },
   '/interpretations': { target: proxyTarget, changeOrigin: true, secure: false },
   '/persons': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/timezone': { target: proxyTarget, changeOrigin: true, secure: false }
+  '/timezone': { target: proxyTarget, changeOrigin: true, secure: false },
+  '/wiki': { target: proxyTarget, changeOrigin: true, secure: false },
 }
 
 export default defineConfig({

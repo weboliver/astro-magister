@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 def _get_int_setting(name: str, default: int, test_default: Optional[int] = None) -> int:
+    """Get an integer setting from environment variables.
+
+    Args:
+        name: Environment variable name.
+        default: Default value if not set.
+        test_default: Optional test default value.
+
+    Returns:
+        Integer setting value.
+    """
     raw_value = app_config.get_env_setting(name)
     if raw_value:
         return int(raw_value)
@@ -40,6 +50,14 @@ REDIS_URL = (app_config.get_env_setting('REDIS_URL') or '').strip()
 
 
 def _is_placeholder_secret(value: str) -> bool:
+    """Check if a secret value is a placeholder/invalid.
+
+    Args:
+        value: Secret string to check.
+
+    Returns:
+        True if placeholder, False otherwise.
+    """
     normalized = (value or '').strip().lower()
     return not normalized or normalized.startswith('replace-with-your-turnstile') or normalized in {'changeme', 'your-turnstile-secret-key'}
 
@@ -136,6 +154,11 @@ _local_store = _LocalStore()
 
 
 def _get_store():
+    """Get the configured rate limit store (Redis or local fallback).
+
+    Returns:
+        _RedisStore or _LocalStore instance.
+    """
     global _store
     try:
         return _store
@@ -153,6 +176,14 @@ def _get_store():
 
 
 def get_client_ip(request) -> str:
+    """Extract client IP address from request.
+
+    Args:
+        request: FastAPI Request object.
+
+    Returns:
+        Client IP address string.
+    """
     forwarded_for = request.headers.get('x-forwarded-for', '').split(',')[0].strip()
     if forwarded_for:
         return forwarded_for
@@ -161,10 +192,29 @@ def get_client_ip(request) -> str:
 
 
 def normalize_username(username: Optional[str]) -> str:
+    """Normalize username for consistent storage/lookup.
+
+    Args:
+        username: Raw username string.
+
+    Returns:
+        Lowercase, stripped username.
+    """
     return (username or '').strip().lower()
 
 
 def check_rate_limit(scope: str, identifier: str, limit: int, window_seconds: int) -> RateLimitResult:
+    """Check if an action is within rate limit.
+
+    Args:
+        scope: Rate limit scope (e.g., 'login', 'register').
+        identifier: Unique identifier (e.g., IP or user ID).
+        limit: Maximum number of attempts allowed.
+        window_seconds: Time window in seconds.
+
+    Returns:
+        RateLimitResult with allowed status and details.
+    """
     key = f'auth:rate:{scope}:{identifier}'
     count, retry_after_seconds = _get_store().incr(key, window_seconds)
     allowed = count <= limit
@@ -179,18 +229,43 @@ def check_rate_limit(scope: str, identifier: str, limit: int, window_seconds: in
 
 
 def build_rate_limit_identifier(request, user_id: Optional[int] = None) -> str:
+    """Build rate limit identifier from request and optional user ID.
+
+    Args:
+        request: FastAPI Request object.
+        user_id: Optional user ID.
+
+    Returns:
+        Rate limit identifier string (e.g., 'user:123' or 'ip:1.2.3.4').
+    """
     if user_id is not None:
         return f'user:{user_id}'
     return f'ip:{get_client_ip(request)}'
 
 
 def _seconds_until_next_utc_midnight(now: Optional[datetime] = None) -> int:
+    """Calculate seconds until next UTC midnight.
+
+    Args:
+        now: Optional datetime (defaults to now).
+
+    Returns:
+        Seconds until next UTC midnight.
+    """
     current_time = now or datetime.now(timezone.utc)
     next_midnight = datetime.combine(current_time.date() + timedelta(days=1), datetime_time.min, tzinfo=timezone.utc)
     return max(1, int((next_midnight - current_time).total_seconds()))
 
 
 def _get_ai_limit_flags(user_id: Optional[int]) -> tuple[bool, bool]:
+    """Get AI rate limit flags for a user.
+
+    Args:
+        user_id: Optional user ID.
+
+    Returns:
+        Tuple of (is_admin, is_poweruser).
+    """
     if user_id is None:
         return False, False
 
@@ -206,6 +281,16 @@ def _get_ai_limit_flags(user_id: Optional[int]) -> tuple[bool, bool]:
 
 
 def check_ai_rate_limit(request, user_id: Optional[int] = None, scope: str = 'ai') -> RateLimitResult:
+    """Check AI interpretation rate limit for a user.
+
+    Args:
+        request: FastAPI Request object.
+        user_id: Optional user ID.
+        scope: Rate limit scope (default 'ai').
+
+    Returns:
+        RateLimitResult with allowed status and daily limit info.
+    """
     is_admin, is_poweruser = _get_ai_limit_flags(user_id)
     if is_admin:
         return RateLimitResult(
@@ -229,6 +314,14 @@ def check_ai_rate_limit(request, user_id: Optional[int] = None, scope: str = 'ai
 
 
 def build_ai_rate_limit_error_detail(rate_limit: RateLimitResult) -> str:
+    """Build error message for AI rate limit exceeded.
+
+    Args:
+        rate_limit: RateLimitResult from rate limit check.
+
+    Returns:
+        Localized error message in German.
+    """
     daily_limit = rate_limit.limit or (AI_DAILY_LIMIT_POWERUSER if rate_limit.is_poweruser else AI_DAILY_LIMIT_DEFAULT)
     detail = f'Das Kontingent von {daily_limit} Abfragen am Tag ist verbraucht, kommen Sie bitte morgen wieder'
     if not rate_limit.is_poweruser and not rate_limit.is_admin:
@@ -237,6 +330,14 @@ def build_ai_rate_limit_error_detail(rate_limit: RateLimitResult) -> str:
 
 
 def get_login_lock(username: str) -> int:
+    """Get remaining lockout time for a username.
+
+    Args:
+        username: Username to check.
+
+    Returns:
+        Seconds remaining in lockout, or 0 if not locked.
+    """
     normalized = normalize_username(username)
     if not normalized:
         return 0
@@ -245,6 +346,14 @@ def get_login_lock(username: str) -> int:
 
 
 def record_failed_login(username: str) -> int:
+    """Record a failed login attempt and potentially lock the account.
+
+    Args:
+        username: Username that failed to login.
+
+    Returns:
+        Lockout duration in seconds if locked, 0 otherwise.
+    """
     normalized = normalize_username(username)
     if not normalized:
         return 0
@@ -258,6 +367,11 @@ def record_failed_login(username: str) -> int:
 
 
 def clear_failed_logins(username: str) -> None:
+    """Clear failed login attempts and lockout for a username.
+
+    Args:
+        username: Username to clear.
+    """
     normalized = normalize_username(username)
     if not normalized:
         return
@@ -266,6 +380,14 @@ def clear_failed_logins(username: str) -> None:
 
 
 def validate_password_strength(password: str) -> Optional[str]:
+    """Validate password meets minimum strength requirements.
+
+    Args:
+        password: Password to validate.
+
+    Returns:
+        Error message if invalid, None if valid.
+    """
     if len(password or '') < 8:
         return 'Passwort muss mindestens 8 Zeichen lang sein'
     if not re.search(r'[A-Z]', password):
@@ -278,6 +400,15 @@ def validate_password_strength(password: str) -> Optional[str]:
 
 
 async def verify_turnstile_token(token: Optional[str], remote_ip: str) -> bool:
+    """Verify Cloudflare Turnstile token.
+
+    Args:
+        token: Turnstile token from client.
+        remote_ip: Client IP address.
+
+    Returns:
+        True if token is valid, False otherwise.
+    """
     if _is_placeholder_secret(TURNSTILE_SECRET_KEY):
         logger.warning("Turnstile validation bypass attempted - placeholder secret in use")
         return False
@@ -312,6 +443,17 @@ def log_auth_event(
     user_agent: Optional[str] = None,
     detail: Optional[str] = None,
 ) -> None:
+    """Log an authentication event to the audit log.
+
+    Args:
+        event_type: Type of event (e.g., 'login', 'logout', 'register').
+        success: Whether the event was successful.
+        username: Optional username involved.
+        user_id: Optional user ID.
+        ip_address: Optional IP address.
+        user_agent: Optional user agent string.
+        detail: Optional detail message.
+    """
     session = get_session()
     try:
         row = AuthAuditLog(

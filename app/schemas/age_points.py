@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class AgePointsRequest(BaseModel):
+    """Age points calculation request."""
+
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person")
     interpretation_id: Optional[int] = Field(None, description="ID einer bestehenden Interpretations-Session; wenn gesetzt wird die Frage daran angehängt")
     additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
@@ -21,14 +23,20 @@ class AgePointsRequest(BaseModel):
     target_month: Optional[int] = Field(None, ge=1, le=12, description="If set with target_year/day, return only this exact age point month")
     target_day: Optional[int] = Field(None, ge=1, le=31, description="If set with target_year/month, return only this exact age point day")
 
+
 class AgePoint(BaseModel):
+    """Single age point entry."""
+
     day: str
     mon: str
     year: int
     lab: str
     cl: str
 
+
 class AgePointsResponse(BaseModel):
+    """Age points calculation response."""
+
     kind: str
     target_year: Optional[int] = None
     age_points: List[AgePoint]
@@ -36,6 +44,8 @@ class AgePointsResponse(BaseModel):
 
 
 class AgePointMarkerRequest(BaseModel):
+    """Age point marker request for chart rendering."""
+
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person")
     year: int = Field(..., ge=1, le=3000)
     month: int = Field(..., ge=1, le=12)
@@ -56,6 +66,8 @@ class AgePointMarkerRequest(BaseModel):
 
 
 class AgePointMarkerResponse(BaseModel):
+    """Age point marker position for chart drawing."""
+
     pe_degree: float
     draw_degree: float
     x_percent: float

@@ -1,6 +1,14 @@
 import React from 'react'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 
+/**
+ * PersonSelector - Dropdown component for selecting a person from saved profiles
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} [props.label='Person wählen'] - Label text for the select field
+ * @param {string} [props.helperText=''] - Optional helper text to display below the select
+ * @returns {JSX.Element} Rendered person selector dropdown
+ */
 export default function PersonSelector({ label = 'Person wählen', helperText = '' }){
   const { persons, selectedPersonId, selectPersonId, loading } = usePersonSelection()
 

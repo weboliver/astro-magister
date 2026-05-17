@@ -118,3 +118,6 @@ app/frontend/.vite/
 .astronex
 docker/certs/
 \_pysw.so
+
+# Database backups
+backups/

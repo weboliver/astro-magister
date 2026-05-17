@@ -2,16 +2,17 @@ import React, { useEffect } from 'react'
 import { useInterpretations } from '../hooks/useInterpretations'
 
 /**
- * Collapsible list of past AI interpretation sessions.
- *
- * Props:
- *   contextType   – e.g. "planets" | "houses" | …
- *   userPersonsId – person filter (null = own profile)
- *   activeId      – currently active interpretation_id (highlights entry)
- *   onSelect(id)  – called when user clicks "Fortsetzen"
- *   onDelete(id)  – called after successful deletion
- *   open          – controlled open state
- *   onToggle()    – called when user clicks the toggle button
+ * InterpretationHistory - Collapsible list of past AI interpretation sessions with select and delete functionality
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.contextType - Context type for filtering (e.g. "planets" | "houses")
+ * @param {number|null} props.userPersonsId - Person filter (null = own profile)
+ * @param {number} [props.activeId] - Currently active interpretation ID to highlight
+ * @param {Function} [props.onSelect] - Callback called when user clicks "Fortsetzen"
+ * @param {Function} [props.onDelete] - Callback called after successful deletion
+ * @param {boolean} props.open - Controlled open state
+ * @param {Function} props.onToggle - Callback called when user clicks the toggle button
+ * @returns {JSX.Element} Rendered collapsible history list
  */
 export default function InterpretationHistory({
   contextType,

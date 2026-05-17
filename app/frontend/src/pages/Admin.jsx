@@ -1,3 +1,13 @@
+/**
+ * Admin - Multi-tab admin dashboard for managing users, sections, categories, entries, relations, pages, audit logs, and Redis cache/overview.
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} [props.initialActiveTab='users'] - Initial active tab ID
+ * @param {Object} [props.initialEntryEditRequest=null] - Initial request to edit an entry
+ * @returns {JSX.Element} Rendered admin page component
+ * @hook useState - Manages active tab, entry edit request
+ * @hook useEffect - Initializes active tab from props
+ */
 import React, { useEffect, useState } from 'react'
 import AdminAuditLogTab from '../components/admin/AdminAuditLogTab'
 import AdminCacheTab from '../components/admin/AdminCacheTab'

@@ -1,3 +1,13 @@
+/**
+ * Planets - Page for calculating and interpreting planetary positions in the birth chart.
+ * @component
+ * @returns {JSX.Element} Rendered planets page
+ * @hook useState - Manages response, loading, date/time, location, chart, summary, followups, hydration
+ * @hook useEffect - Handles responsive layout, loads user data, auto-fetches chart, manages selections, cleanup
+ * @hook useCallback - Displays chart blob, computes graphic size and cache key, persists payload to sessionStorage
+ * @hook useMemo - Computes current payload for API requests
+ * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller
+ */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { postStream, postWithSignal } from '../services/api'

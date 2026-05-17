@@ -5,17 +5,31 @@ const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api
 
 let scriptPromise = null
 
+/**
+ * Builds an error message for Turnstile CAPTCHA failures
+ * @param {string} errorCode - The error code from Turnstile
+ * @returns {string} Formatted error message with host information
+ */
 function buildTurnstileErrorMessage(errorCode){
   const host = typeof window !== 'undefined' ? window.location.host : 'unknown-host'
   if (!errorCode) return `Captcha-Pruefung fehlgeschlagen (Host: ${host})`
   return `Captcha-Pruefung fehlgeschlagen (${errorCode}, Host: ${host})`
 }
 
+/**
+ * Checks if the given site key is a placeholder value (not a real key)
+ * @param {string} value - The Turnstile site key to check
+ * @returns {boolean} True if the key is a placeholder or empty
+ */
 function isPlaceholderSiteKey(value){
   const normalized = String(value || '').trim().toLowerCase()
   return !normalized || normalized.startsWith('replace-with-your-turnstile') || normalized === 'your-turnstile-site-key'
 }
 
+/**
+ * Loads the Cloudflare Turnstile script dynamically
+ * @returns {Promise<object|null>} Promise resolving to the Turnstile API or null if unavailable
+ */
 function loadTurnstileScript(){
   if (typeof window === 'undefined') return Promise.resolve(null)
   if (window.turnstile) return Promise.resolve(window.turnstile)
@@ -41,6 +55,14 @@ function loadTurnstileScript(){
   return scriptPromise
 }
 
+/**
+ * InvisibleTurnstile - Cloudflare Turnstile CAPTCHA component for bot detection
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.action - Action name for the CAPTCHA challenge
+ * @param {Function} props.onTokenChange - Callback when token changes (receives token or empty string)
+ * @returns {JSX.Element|null} Rendered invisible CAPTCHA container, or null if not enabled
+ */
 const InvisibleTurnstile = forwardRef(function InvisibleTurnstile({ action, onTokenChange }, ref){
   const containerRef = useRef(null)
   const widgetIdRef = useRef(null)

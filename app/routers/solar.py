@@ -37,6 +37,15 @@ SOLAR_RETURN_SYSTEM_PROMPT = "solar_return"
 
 
 def _resolve_role_name_for_solar_return(request: Request, payload: SolarReturnRequest) -> str:
+    """Resolve role name for solar return interpretation.
+
+    Args:
+        request: FastAPI request.
+        payload: SolarReturnRequest with optional person_id.
+
+    Returns:
+        Role name string.
+    """
     user = _get_user_from_request(request)
     if not user:
         return "Laie"
@@ -44,16 +53,44 @@ def _resolve_role_name_for_solar_return(request: Request, payload: SolarReturnRe
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: Event type string.
+        data: Data dictionary to serialize as JSON.
+
+    Returns:
+        Formatted SSE string.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _normalize_diff(target: float, current: float) -> float:
+    """Normalize longitude difference to [-180, 180] range.
+
+    Args:
+        target: Target longitude.
+        current: Current longitude.
+
+    Returns:
+        Normalized difference in degrees.
+    """
     # Bring longitude difference into [-180, 180] to avoid wrap issues
     return (target - current + 540.0) % 360.0 - 180.0
 
 
 def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResponse:
-    """Compute exakten Solar-Return-Zeitpunkt (UTC) und liefere alle Planeten & Häuser für diesen Moment."""
+    """Compute exact solar return time (UTC) and return all planets and houses for that moment.
+
+    Args:
+        request: SolarReturnRequest with birth data and target year.
+
+    Returns:
+        SolarReturnResponse with solar return positions and AI summary.
+
+    Raises:
+        HTTPException: If target_year precedes birth_year or calculation fails.
+    """
     target_year = request.target_year or (request.birth_year + 1)
     if target_year < request.birth_year:
         raise HTTPException(status_code=400, detail="target_year must not precede birth_year")
@@ -369,11 +406,40 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
 
 @router.post("/solar-return", response_model=SolarReturnResponse)
 def get_solar_return(request: SolarReturnRequest):
+    """Calculate the solar return for a birth chart in a given target year.
+
+    Finds the exact moment when the Sun returns to its natal position and
+    computes planet positions, houses, and aspects for that moment.
+
+    Args:
+        request: SolarReturnRequest with birth data and target year.
+
+    Returns:
+        SolarReturnResponse with solar return positions, houses, aspects, and AI summary.
+
+    Raises:
+        HTTPException: If target_year precedes birth_year or calculation fails.
+    """
     return _build_solar_return_response(request)
 
 
 @router.post("/solar-return/stream")
 async def get_solar_return_stream(payload: SolarReturnRequest, request: Request):
+    """Stream solar return calculation with real-time AI summary generation.
+
+    Calculates the solar return and streams the AI interpretation incrementally.
+
+    Args:
+        payload: SolarReturnRequest with birth data and target year.
+        request: FastAPI Request with user authentication context.
+
+    Returns:
+        StreamingResponse with SSE events: "meta", "done", "summary_delta",
+        "saved", and "error".
+
+    Raises:
+        HTTPException: If not authenticated, rate limited, or calculation fails.
+    """
     cached_summary = None
     perplexity_client = None
     try:
@@ -525,6 +591,17 @@ def get_solar_return_graphic(
     width: int = Query(600, gt=0),
     height: int = Query(600, gt=0),
 ):
+    """Render the solar return chart as a PNG graphic.
+
+    Args:
+        payload: SolarReturnRequest with birth data and target year.
+        request: FastAPI Request.
+        width: Image width in pixels (must be > 0).
+        height: Image height in pixels (must be > 0).
+
+    Returns:
+        PNG image of the solar return chart.
+    """
     base = _build_solar_return_response(payload)
     chart = Chart()
     planets_sorted = sorted(base.planets, key=lambda p: p.planet_id)

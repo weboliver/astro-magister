@@ -34,6 +34,15 @@ PLANETS_SYSTEM_PROMPT = (
 
 
 def _resolve_role_name_for_planets(request: Request, payload: DateTimeRequest) -> str:
+    """Resolve role name for planet interpretation based on user and person.
+
+    Args:
+        request: FastAPI request object.
+        payload: DateTimeRequest with optional person_id.
+
+    Returns:
+        Role name string (e.g., "Laie", "Fortgeschritten", "Experte").
+    """
     user = _get_user_from_request(request)
     if not user:
         return "Laie"
@@ -41,6 +50,15 @@ def _resolve_role_name_for_planets(request: Request, payload: DateTimeRequest) -
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: Event type string (e.g. "meta", "done", "summary_delta").
+        data: Data dictionary to serialize as JSON.
+
+    Returns:
+        Formatted SSE string with event name and JSON data.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 # Map API planet indices to Swiss Ephemeris IDs
@@ -51,7 +69,17 @@ _EPHEMERIS_ID = {0:0,1:1,2:2,3:3,4:4,5:5,6:6,7:7,8:8,9:9,10:10,11:13,12:15}
 @router.post("/calc", response_model=CalcResponse)
 def get_calc(
     request: DateTimeRequest,
-    planet_id: int = Query(..., ge=0, le=12, description="Planet ID (0=Sun, 1=Moon, 2=Mercury, etc.)"),):
+    planet_id: int = Query(..., ge=0, le=12, description="Planet ID (0=Sun, 1=Moon, 2=Mercury, etc.)"),
+):
+    """Calculate single planet position for birth data.
+
+    Args:
+        request: DateTimeRequest with birth date, time, latitude, longitude.
+        planet_id: Planet ID (0=Sun, 1=Moon, 2=Mercury, etc.).
+
+    Returns:
+        CalcResponse with planet position, sign, house, and AI summary.
+    """
     try:
         # compute decimal hour in UT: if `timezone` is provided use it
         decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
@@ -152,6 +180,14 @@ def get_calc(
 def get_planets(
     request: DateTimeRequest,
 ):
+    """Calculate all planet positions (0-12) for birth data.
+
+    Args:
+        request: DateTimeRequest with birth date, time, latitude, longitude.
+
+    Returns:
+        CalcResponse with all planet positions and AI summary.
+    """
     planet_names = {
         0: "Sun", 1: "Moon", 2: "Mercury", 3: "Venus", 4: "Mars",
         5: "Jupiter", 6: "Saturn", 7: "Uranus", 8: "Neptune",
@@ -262,6 +298,21 @@ def get_planets(
 
 @router.post("/planets/stream")
 async def get_planets_stream(payload: DateTimeRequest, request: Request):
+    """Stream all planet positions with AI interpretation via SSE.
+
+    Calculates planet positions and streams the AI interpretation incrementally.
+
+    Args:
+        payload: DateTimeRequest with birth date, time, and location.
+        request: FastAPI Request with user authentication context.
+
+    Returns:
+        StreamingResponse with SSE events: "meta", "done", "summary_delta",
+        "saved", and "error".
+
+    Raises:
+        HTTPException: If not authenticated, rate limited, or calculation fails.
+    """
     cached_summary = None
     perplexity_client = None
     try:
@@ -423,10 +474,17 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
 def get_position(request: Request, country: str = Query(..., description="Country code/table name"), city: str = Query(..., description="City name"), district: str = Query(..., description="Region/district code (AC)")):
     """Lookup a location in normalized location tables and return decimal latitude/longitude.
 
-    Parameters:
-    - country: DB table name / country code (e.g. 'DE')
-    - city: city name as stored in the DB
-    - district: region/district code (AC)
+    Args:
+        request: FastAPI Request.
+        country: DB table name / country code (e.g. 'DE').
+        city: city name as stored in the DB.
+        district: region/district code (AC).
+
+    Returns:
+        PositionResponse with latitude and longitude.
+
+    Raises:
+        HTTPException: If country, region, or city not found.
     """
 
     def resolve_country_code(session, country_name: str) -> str:

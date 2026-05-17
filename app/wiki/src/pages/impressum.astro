@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro'
+import { marked } from 'marked'
+
+async function fetchJSON(url) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+const entry = await fetchJSON('http://api:8000/wiki/entries?q=Impressum&limit=1')
+const content = entry[0]?.entry_content || ''
+const contentHtml = marked.parse(content.replace(/^# .+\n+/, '').trim())
+---
+<Layout title="Impressum">
+  <article>
+    <h1 style="margin-bottom:20px">Impressum</h1>
+    <div style="line-height:1.7" set:html={contentHtml} />
+  </article>
+</Layout>

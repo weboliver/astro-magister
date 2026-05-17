@@ -11,11 +11,46 @@ from app.services.perplexity import PerplexityClient
 logger = logging.getLogger(__name__)
 
 
+import re
+
+
+def _slugify(name: str, entry_id: int) -> str:
+    """Create a URL-safe slug from entry name and ID.
+
+    Args:
+        name: The entry name to slugify.
+        entry_id: The entry ID to append.
+
+    Returns:
+        Slug string (e.g., "my-entry-123").
+    """
+    base = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    return f"{base}-{entry_id}"
+
+
 def _model_to_dict(instance) -> dict:
-    return {column.name: getattr(instance, column.name) for column in instance.__table__.columns}
+    """Convert a SQLAlchemy model instance to a dictionary.
+
+    Args:
+        instance: SQLAlchemy model instance.
+
+    Returns:
+        Dict with column names as keys.
+    """
+    d = {column.name: getattr(instance, column.name) for column in instance.__table__.columns}
+    if 'slug' not in d and hasattr(instance, 'entry_name') and hasattr(instance, 'entry_id'):
+        d['slug'] = _slugify(instance.entry_name, instance.entry_id)
+    return d
 
 
 def _apply_changes(instance, data: dict, allowed_fields: list[str]):
+    """Apply changes from a dict to a model instance for allowed fields.
+
+    Args:
+        instance: SQLAlchemy model instance.
+        data: Dict with fields to update.
+        allowed_fields: List of field names that can be updated.
+    """
     for field in allowed_fields:
         if field in data:
             setattr(instance, field, data[field])
@@ -30,6 +65,16 @@ PAGE_CONTENT_FIELDS = ['page_id', 'entry_id']
 
 
 def _build_entry_generate_text(entry: Entry, category: Optional[Category], section: Optional[Section]) -> str:
+    """Build prompt text for AI content generation for an entry.
+
+    Args:
+        entry: Entry model instance.
+        category: Optional Category model.
+        section: Optional Section model.
+
+    Returns:
+        Prompt string for AI text generation.
+    """
     title = (entry.entry_name or '').strip()
     short_text = (entry.entry_short or '').strip()
     category_name = (category.category_name if category else '') or 'Unbekannt'
@@ -55,6 +100,15 @@ def _build_entry_generate_text(entry: Entry, category: Optional[Category], secti
 
 
 def list_sections(active_only: Optional[bool] = None, wiki_active_only: Optional[bool] = None) -> list[dict]:
+    """List wiki sections with optional filters.
+
+    Args:
+        active_only: Filter to active sections only.
+        wiki_active_only: Filter to wiki-active sections only.
+
+    Returns:
+        List of section dicts.
+    """
     session = get_session()
     try:
         query = session.query(Section)
@@ -69,6 +123,14 @@ def list_sections(active_only: Optional[bool] = None, wiki_active_only: Optional
 
 
 def get_section(section_id: int) -> Optional[dict]:
+    """Get a section by ID.
+
+    Args:
+        section_id: The section ID to retrieve.
+
+    Returns:
+        Section dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Section).filter(Section.section_id == section_id).first()
@@ -78,6 +140,17 @@ def get_section(section_id: int) -> Optional[dict]:
 
 
 def create_section(data: dict) -> dict:
+    """Create a new wiki section.
+
+    Args:
+        data: Dict with section fields.
+
+    Returns:
+        Created section dict.
+
+    Raises:
+        Exception: On database error.
+    """
     session = get_session()
     try:
         row = Section()
@@ -94,6 +167,15 @@ def create_section(data: dict) -> dict:
 
 
 def update_section(section_id: int, data: dict) -> Optional[dict]:
+    """Update a wiki section.
+
+    Args:
+        section_id: The section ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        Updated section dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Section).filter(Section.section_id == section_id).first()
@@ -112,6 +194,14 @@ def update_section(section_id: int, data: dict) -> Optional[dict]:
 
 
 def delete_section(section_id: int) -> bool:
+    """Delete a wiki section.
+
+    Args:
+        section_id: The section ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     try:
         rows = session.query(Section).filter(Section.section_id == section_id).delete()
@@ -122,6 +212,16 @@ def delete_section(section_id: int) -> bool:
 
 
 def list_categories(section_id: Optional[int] = None, parent_category_id: Optional[int] = None, active_only: Optional[bool] = None) -> list[dict]:
+    """List wiki categories with optional filters.
+
+    Args:
+        section_id: Filter by section ID.
+        parent_category_id: Filter by parent category ID.
+        active_only: Filter to active categories only.
+
+    Returns:
+        List of category dicts.
+    """
     session = get_session()
     try:
         query = session.query(Category)
@@ -138,6 +238,14 @@ def list_categories(section_id: Optional[int] = None, parent_category_id: Option
 
 
 def get_category(category_id: int) -> Optional[dict]:
+    """Get a category by ID.
+
+    Args:
+        category_id: The category ID to retrieve.
+
+    Returns:
+        Category dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Category).filter(Category.category_id == category_id).first()
@@ -147,6 +255,17 @@ def get_category(category_id: int) -> Optional[dict]:
 
 
 def create_category(data: dict) -> dict:
+    """Create a new wiki category.
+
+    Args:
+        data: Dict with category fields.
+
+    Returns:
+        Created category dict.
+
+    Raises:
+        Exception: On database error.
+    """
     session = get_session()
     try:
         row = Category()
@@ -163,6 +282,15 @@ def create_category(data: dict) -> dict:
 
 
 def update_category(category_id: int, data: dict) -> Optional[dict]:
+    """Update a wiki category.
+
+    Args:
+        category_id: The category ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        Updated category dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Category).filter(Category.category_id == category_id).first()
@@ -181,6 +309,14 @@ def update_category(category_id: int, data: dict) -> Optional[dict]:
 
 
 def delete_category(category_id: int) -> bool:
+    """Delete a wiki category.
+
+    Args:
+        category_id: The category ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     try:
         rows = session.query(Category).filter(Category.category_id == category_id).delete()
@@ -199,6 +335,20 @@ def list_entries(
     limit: Optional[int] = None,
     offset: int = 0,
 ) -> list[dict]:
+    """List wiki entries with optional filters.
+
+    Args:
+        category_id: Filter by category ID.
+        section_id: Filter by section ID.
+        q: Search query for entry name, short, or content.
+        active_only: Filter to active entries only.
+        wiki_active_only: Filter to wiki-active entries only.
+        limit: Maximum number of results.
+        offset: Number of results to skip.
+
+    Returns:
+        List of entry dicts.
+    """
     session = get_session()
     try:
         query = session.query(Entry)
@@ -235,6 +385,14 @@ def list_entries(
 
 
 def get_entry(entry_id: int) -> Optional[dict]:
+    """Get an entry by ID.
+
+    Args:
+        entry_id: The entry ID to retrieve.
+
+    Returns:
+        Entry dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Entry).filter(Entry.entry_id == entry_id).first()
@@ -243,11 +401,54 @@ def get_entry(entry_id: int) -> Optional[dict]:
         session.close()
 
 
+def _category_slugify(name: str) -> str:
+    """Create a URL-safe slug from a category name.
+
+    Args:
+        name: The category name to slugify.
+
+    Returns:
+        Slug string.
+    """
+    return re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+
+def get_entry_by_slug(slug: str) -> Optional[dict]:
+    """Get an entry by its slug.
+
+    Args:
+        slug: The entry slug to look up.
+
+    Returns:
+        Entry dict or None if not found.
+    """
+    session = get_session()
+    try:
+        row = session.query(Entry).filter(Entry.slug == slug).first()
+        return _model_to_dict(row) if row else None
+    finally:
+        session.close()
+
+
 def create_entry(data: dict) -> dict:
+    """Create a new wiki entry.
+
+    Args:
+        data: Dict with entry fields.
+
+    Returns:
+        Created entry dict.
+
+    Raises:
+        Exception: On database error.
+    """
     session = get_session()
     try:
         row = Entry()
         _apply_changes(row, data, ENTRY_FIELDS)
+        session.add(row)
+        session.flush()
+        row.slug = _slugify(row.entry_name, row.entry_id)
         session.add(row)
         session.commit()
         session.refresh(row)
@@ -260,12 +461,23 @@ def create_entry(data: dict) -> dict:
 
 
 def update_entry(entry_id: int, data: dict) -> Optional[dict]:
+    """Update a wiki entry.
+
+    Args:
+        entry_id: The entry ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        Updated entry dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Entry).filter(Entry.entry_id == entry_id).first()
         if not row:
             return None
         _apply_changes(row, data, ENTRY_FIELDS)
+        if 'entry_name' in data:
+            row.slug = _slugify(row.entry_name, row.entry_id)
         session.add(row)
         session.commit()
         session.refresh(row)
@@ -278,6 +490,14 @@ def update_entry(entry_id: int, data: dict) -> Optional[dict]:
 
 
 def generate_entry_generate_text(entry_id: int) -> Optional[dict]:
+    """Generate the AI prompt text for an entry.
+
+    Args:
+        entry_id: The entry ID to generate text for.
+
+    Returns:
+        Updated entry dict with generate_text field, or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Entry).filter(Entry.entry_id == entry_id).first()
@@ -302,6 +522,14 @@ def generate_entry_generate_text(entry_id: int) -> Optional[dict]:
 
 
 async def generate_entry_content(entry_id: int) -> Optional[dict]:
+    """Generate entry content using AI (async).
+
+    Args:
+        entry_id: The entry ID to generate content for.
+
+    Returns:
+        Updated entry dict with generated content, or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Entry).filter(Entry.entry_id == entry_id).first()
@@ -351,6 +579,14 @@ async def generate_entry_content(entry_id: int) -> Optional[dict]:
 
 
 def delete_entry(entry_id: int) -> bool:
+    """Delete a wiki entry.
+
+    Args:
+        entry_id: The entry ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     try:
         rows = session.query(Entry).filter(Entry.entry_id == entry_id).delete()
@@ -361,6 +597,15 @@ def delete_entry(entry_id: int) -> bool:
 
 
 def list_relations(entry_from_id: Optional[int] = None, entry_to_id: Optional[int] = None) -> list[dict]:
+    """List wiki relations with optional filters.
+
+    Args:
+        entry_from_id: Filter by source entry ID.
+        entry_to_id: Filter by target entry ID.
+
+    Returns:
+        List of relation dicts.
+    """
     session = get_session()
     try:
         query = session.query(Relation)
@@ -375,6 +620,14 @@ def list_relations(entry_from_id: Optional[int] = None, entry_to_id: Optional[in
 
 
 def get_relation(relation_id: int) -> Optional[dict]:
+    """Get a relation by ID.
+
+    Args:
+        relation_id: The relation ID to retrieve.
+
+    Returns:
+        Relation dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Relation).filter(Relation.relation_id == relation_id).first()
@@ -384,6 +637,17 @@ def get_relation(relation_id: int) -> Optional[dict]:
 
 
 def create_relation(data: dict) -> dict:
+    """Create a new wiki relation.
+
+    Args:
+        data: Dict with relation fields.
+
+    Returns:
+        Created relation dict.
+
+    Raises:
+        Exception: On database error.
+    """
     session = get_session()
     try:
         row = Relation()
@@ -400,6 +664,15 @@ def create_relation(data: dict) -> dict:
 
 
 def update_relation(relation_id: int, data: dict) -> Optional[dict]:
+    """Update a wiki relation.
+
+    Args:
+        relation_id: The relation ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        Updated relation dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Relation).filter(Relation.relation_id == relation_id).first()
@@ -418,6 +691,14 @@ def update_relation(relation_id: int, data: dict) -> Optional[dict]:
 
 
 def delete_relation(relation_id: int) -> bool:
+    """Delete a wiki relation.
+
+    Args:
+        relation_id: The relation ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     try:
         rows = session.query(Relation).filter(Relation.relation_id == relation_id).delete()
@@ -428,6 +709,11 @@ def delete_relation(relation_id: int) -> bool:
 
 
 def list_pages() -> list[dict]:
+    """List all wiki pages.
+
+    Returns:
+        List of page dicts ordered by name.
+    """
     session = get_session()
     try:
         rows = session.query(Page).order_by(Page.page_name).all()
@@ -437,6 +723,14 @@ def list_pages() -> list[dict]:
 
 
 def get_page(page_id: int) -> Optional[dict]:
+    """Get a page by ID.
+
+    Args:
+        page_id: The page ID to retrieve.
+
+    Returns:
+        Page dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Page).filter(Page.page_id == page_id).first()
@@ -446,6 +740,14 @@ def get_page(page_id: int) -> Optional[dict]:
 
 
 def list_page_entries(page_name: str) -> list[dict]:
+    """List entries for a specific page.
+
+    Args:
+        page_name: The page name to get entries for.
+
+    Returns:
+        List of entry dicts for the page.
+    """
     normalized_name = (page_name or '').strip().lower()
     if not normalized_name:
         return []
@@ -465,6 +767,14 @@ def list_page_entries(page_name: str) -> list[dict]:
         session.close()
 
 def list_public_page_entries(page_name: str) -> list[dict]:
+    """List public entries for a specific page.
+
+    Args:
+        page_name: The page name to get entries for.
+
+    Returns:
+        List of public entry dicts for the page.
+    """
     normalized_name = (page_name or '').strip().lower()
     if not normalized_name:
         return []
@@ -486,6 +796,17 @@ def list_public_page_entries(page_name: str) -> list[dict]:
 
 
 def create_page(data: dict) -> dict:
+    """Create a new wiki page.
+
+    Args:
+        data: Dict with page fields.
+
+    Returns:
+        Created page dict.
+
+    Raises:
+        Exception: On database error.
+    """
     session = get_session()
     try:
         row = Page()
@@ -502,6 +823,15 @@ def create_page(data: dict) -> dict:
 
 
 def update_page(page_id: int, data: dict) -> Optional[dict]:
+    """Update a wiki page.
+
+    Args:
+        page_id: The page ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        Updated page dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Page).filter(Page.page_id == page_id).first()
@@ -520,6 +850,14 @@ def update_page(page_id: int, data: dict) -> Optional[dict]:
 
 
 def delete_page(page_id: int) -> bool:
+    """Delete a wiki page.
+
+    Args:
+        page_id: The page ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     try:
         rows = session.query(Page).filter(Page.page_id == page_id).delete()
@@ -530,6 +868,15 @@ def delete_page(page_id: int) -> bool:
 
 
 def list_page_contents(page_id: Optional[int] = None, entry_id: Optional[int] = None) -> list[dict]:
+    """List page content entries with optional filters.
+
+    Args:
+        page_id: Filter by page ID.
+        entry_id: Filter by entry ID.
+
+    Returns:
+        List of page content dicts.
+    """
     session = get_session()
     try:
         query = session.query(PageContent)
@@ -544,6 +891,14 @@ def list_page_contents(page_id: Optional[int] = None, entry_id: Optional[int] = 
 
 
 def get_page_content(page_content_id: int) -> Optional[dict]:
+    """Get page content by ID.
+
+    Args:
+        page_content_id: The page content ID to retrieve.
+
+    Returns:
+        Page content dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(PageContent).filter(PageContent.page_content_id == page_content_id).first()
@@ -553,6 +908,17 @@ def get_page_content(page_content_id: int) -> Optional[dict]:
 
 
 def create_page_content(data: dict) -> dict:
+    """Create new page content.
+
+    Args:
+        data: Dict with page content fields.
+
+    Returns:
+        Created page content dict.
+
+    Raises:
+        Exception: On database error.
+    """
     session = get_session()
     try:
         row = PageContent()
@@ -569,6 +935,15 @@ def create_page_content(data: dict) -> dict:
 
 
 def update_page_content(page_content_id: int, data: dict) -> Optional[dict]:
+    """Update page content.
+
+    Args:
+        page_content_id: The page content ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        Updated page content dict or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(PageContent).filter(PageContent.page_content_id == page_content_id).first()
@@ -587,6 +962,14 @@ def update_page_content(page_content_id: int, data: dict) -> Optional[dict]:
 
 
 def delete_page_content(page_content_id: int) -> bool:
+    """Delete page content.
+
+    Args:
+        page_content_id: The page content ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     try:
         rows = session.query(PageContent).filter(PageContent.page_content_id == page_content_id).delete()

@@ -10,6 +10,11 @@ const emptyCategoryForm = {
   parent_category_id: '',
 }
 
+/**
+ * AdminCategoriesTab - Admin panel tab for managing wiki categories with section hierarchy
+ * @component
+ * @returns {JSX.Element} Rendered category management interface with parent-child relationships
+ */
 export default function AdminCategoriesTab(){
   const [sections, setSections] = useState([])
   const [categories, setCategories] = useState([])

@@ -1,3 +1,13 @@
+/**
+ * Horoscope - Birth chart page for calculating and interpreting the natal horoscope with planets, houses, and aspects.
+ * @component
+ * @returns {JSX.Element} Rendered horoscope page
+ * @hook useState - Manages response, loading, advanced toggle, date/time, location, chart image, summary, followups
+ * @hook useEffect - Handles responsive layout, loads user data, fetches chart automatically, manages selections
+ * @hook useCallback - Revokes object URLs, computes graphic size, cache key, handles logout cleanup
+ * @hook useMemo - Computes current payload for API requests
+ * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller, revocation timeout
+ */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { postStream, postWithSignal } from '../services/api'

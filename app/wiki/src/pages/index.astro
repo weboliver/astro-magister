@@ -1,0 +1,55 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+async function fetchJSON(url) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+const [sections, categories, entries] = await Promise.all([
+  fetchJSON('http://api:8000/wiki/sections'),
+  fetchJSON('http://api:8000/wiki/categories'),
+  fetchJSON('http://api:8000/wiki/entries?limit=100'),
+])
+
+const hiddenTitles = new Set(['Datenschutz', 'Impressum', 'Kontakt'])
+const astrologieSection = sections.find(s => s.section_name === 'Astrologie')
+const astrologieSectionId = astrologieSection?.section_id
+
+const astrologieCategories = categories.filter(c => c.section_id === astrologieSectionId)
+const astrologieCategoryIds = new Set(astrologieCategories.map(c => c.category_id))
+
+const astrologieEntries = entries.filter(e => {
+  if (!e.ispublic) return false
+  if (hiddenTitles.has(e.entry_name)) return false
+  return astrologieCategoryIds.has(e.category_id)
+})
+
+const categoryMap = new Map()
+for (const entry of astrologieEntries) {
+  const catName = astrologieCategories.find(c => c.category_id === entry.category_id)?.category_name || 'uncategorized'
+  if (!categoryMap.has(catName)) categoryMap.set(catName, [])
+  categoryMap.get(catName).push(entry)
+}
+
+const sortedCategories = [...categoryMap.keys()].sort()
+---
+<Layout title="Wiki Übersicht">
+  <h1>Astrologie</h1>
+  <p style="margin-bottom:24px">Finde Erklärungen zu astrologischen Begriffen, Planeten, Aspekten und mehr.</p>
+  {sortedCategories.map(cat => (
+    <div style="margin-bottom:28px">
+      <h2 style="color:var(--admin-accent)">{cat}</h2>
+      <ul>
+        {[...categoryMap.get(cat)].sort((a,b) => (a.entry_number||0) - (b.entry_number||0)).map(entry => (
+          <li style="margin-bottom:8px">
+            <a href={`/astro-wiki/${entry.slug}/`} style="color:#0f766e;font-weight:600">
+              {entry.entry_name}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ))}
+</Layout>

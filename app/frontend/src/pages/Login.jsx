@@ -1,3 +1,14 @@
+/**
+ * Login - User login page with username/password form, password visibility toggle, and Turnstile captcha.
+ * @component
+ * @param {Object} props - Component props
+ * @param {Function} props.onLogin - Callback fired on successful login
+ * @param {Function} [props.onShowRegister] - Callback to switch to registration view
+ * @returns {JSX.Element} Rendered login page
+ * @hook useState - Manages username, password, password visibility, messages, captcha token
+ * @hook useRef - References Turnstile widget for captcha execution
+ * @hook useAuth - Accesses refreshProfile function
+ */
 import React, { useRef, useState } from 'react'
 import InvisibleTurnstile from '../components/InvisibleTurnstile'
 import { useAuth } from '../contexts/AuthContext'

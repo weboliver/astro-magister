@@ -1,3 +1,9 @@
+/**
+ * App - Main application component for Astro-Magister
+ * @component
+ * @description Root component that handles routing, authentication state, layout, and mobile navigation.
+ *              Manages page routing, navbar visibility, and user session persistence across the application.
+ */
 import React, { useState, useEffect } from 'react'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -64,6 +70,26 @@ const FOOTER_LINKS = [
 ]
 */
 
+const PATH_TO_PAGE = {
+  '/': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/planets': 'planets',
+  '/horoscope': 'horoscope',
+  '/transits': 'transits',
+  '/houses': 'houses',
+  '/solar': 'solar',
+  '/agepoints': 'agepoints',
+  '/wiki': 'wiki',
+  '/settings': 'settings',
+  '/admin': 'admin',
+  '/login': 'login',
+  '/register': 'register',
+}
+
+function _pathToPage(pathname) {
+  return PATH_TO_PAGE[pathname] || PATH_TO_PAGE[pathname.replace(/\/$/, '')] || null
+}
+
 export default function App(){
   const initialHistoryState = typeof window !== 'undefined' && window.history.state?.marker === HISTORY_STATE_MARKER
     ? window.history.state
@@ -79,6 +105,17 @@ export default function App(){
 
   const currentPageMeta = PAGE_META[page] || PAGE_META.dashboard
   useSeoMeta(currentPageMeta.title, currentPageMeta.description)
+
+  useEffect(() => {
+    if (!initialHistoryState && typeof window !== 'undefined') {
+      const path = window.location.pathname
+      const pageName = _pathToPage(path)
+      if (pageName && pageName !== page) {
+        setPage(pageName)
+        syncHistory(pageName, {}, true)
+      }
+    }
+  }, [])
 
   function normalizePageState(nextState){
     return nextState && typeof nextState === 'object' ? nextState : {}

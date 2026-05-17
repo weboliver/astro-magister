@@ -1,3 +1,14 @@
+/**
+ * sseParser.js - Server-Sent Events parsing utilities
+ * @module sseParser
+ * @description Functions for parsing SSE stream blocks and creating SSE handlers
+ */
+
+/**
+ * Parses a single SSE block from a stream
+ * @param {string} block - Raw SSE block text
+ * @returns {{event: string, data: object}|null} Parsed event or null on error
+ */
 export function parseSseBlock(block) {
   let event = 'message'
   const dataLines = []

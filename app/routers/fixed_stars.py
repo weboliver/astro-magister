@@ -12,6 +12,18 @@ def get_fixstar(
     request: DateTimeRequest,
     star_name: str = Query(..., description="Fixed star name (e.g., 'Sirius')"),
 ):
+    """Calculate fixed star position using Swiss Ephemeris.
+
+    Args:
+        request: DateTimeRequest with year, month, day, hour, minute, second.
+        star_name: Fixed star name (e.g., 'Sirius', 'Polaris', 'Aldebaran').
+
+    Returns:
+        FixstarResponse with star position, coordinates, and speeds.
+
+    Raises:
+        HTTPException: On calculation error or star not found.
+    """
     try:
         decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
         jd = julday(request.year, request.month, request.day, decimal_hour)

@@ -2,7 +2,18 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { get } from '../services/api'
 import { useAuth } from './AuthContext'
 
+/**
+ * PersonSelectionContext.jsx - Person selection context provider
+ * @module PersonSelectionContext
+ * @description React context for managing selected person state and person list loading
+ */
+
 const LOCAL_STORAGE_KEY = 'astronex_selected_person_id'
+
+/**
+ * Person selection context - provides selected person and person list to consuming components
+ * @type {React.Context}
+ */
 const PersonSelectionContext = createContext(null)
 
 export function PersonSelectionProvider({ children }){

@@ -1,5 +1,14 @@
 import React from 'react'
 
+/**
+ * ErrorMessage - Displays a styled error message to the user
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.message - Error message to display
+ * @param {string} [props.variant='default'] - Visual variant of the error (currently unused)
+ * @param {Object} [props.style={}] - Additional inline styles to apply
+ * @returns {JSX.Element|null} Rendered error message, or null if message is empty
+ */
 export function ErrorMessage({ message, variant = 'default', style = {} }) {
   if (!message) return null
 
@@ -23,6 +32,14 @@ export function ErrorMessage({ message, variant = 'default', style = {} }) {
   )
 }
 
+/**
+ * InlineError - Displays an inline error message within text
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.message - Error message to display inline
+ * @param {Object} [props.style={}] - Additional inline styles to apply
+ * @returns {JSX.Element|null} Rendered inline error, or null if message is empty
+ */
 export function InlineError({ message, style = {} }) {
   if (!message) return null
   return (

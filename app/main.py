@@ -38,6 +38,7 @@ from app.routers.timezone import router as timezone_router
 from app.routers.persons import router as persons_router
 from app.routers.cache import router as cache_router
 from app.routers.wiki import router as wiki_router, public_router as wiki_public_router
+from app.routers.seo import router as seo_router
 from app.routers.interpretations import router as interpretations_router
 from app.services.performance import PerformanceMonitor
 from app.services.db_init import init_users_db
@@ -56,6 +57,9 @@ def _configure_logging() -> logging.Logger:
 
     for logger_name in ("app", "uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(logger_name).setLevel(level)
+
+    # Enable access logging to stdout for docker visibility
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
     return logging.getLogger("uvicorn.error")
 
@@ -130,10 +134,15 @@ if _is_placeholder_secret(turnstile_secret):
     LOGGER.warning("Turnstile: using placeholder secret - captcha disabled in dev mode")
 
 @app.middleware("http")
-async def track_performance(request: Request, call_next):
+async def log_requests(request: Request, call_next):
+    import sys
     start = perf_counter()
     response = await call_next(request)
     elapsed = perf_counter() - start
+    log_level = app_config.get_env_setting("LOG_LEVEL") or "INFO"
+    if log_level.upper() == "DEBUG":
+        sys.stdout.write(f"{request.method} {request.url.path} -> {response.status_code} {elapsed*1000:.1f}ms\n")
+        sys.stdout.flush()
     performance_monitor.record(request.url.path, elapsed)
     response.headers["X-Astronex-Process-Time"] = f"{elapsed:.6f}s"
     loop = asyncio.get_running_loop()
@@ -156,6 +165,7 @@ app.include_router(persons_router)
 app.include_router(cache_router)
 app.include_router(wiki_router)
 app.include_router(wiki_public_router)
+app.include_router(seo_router)
 app.include_router(interpretations_router)
 
 @app.get("/", tags=["root"])

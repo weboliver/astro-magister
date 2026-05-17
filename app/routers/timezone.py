@@ -8,7 +8,14 @@ router = APIRouter(dependencies=[Depends(require_authenticated_user)])
 @router.get('/tzfromcoords')
 async def tz_from_coords(lat: float = Query(...), lon: float = Query(...), timestamp: Optional[str] = Query(None)):
     """Return IANA timezone and UTC offset for given coordinates.
-    Optional `timestamp` can be an ISO datetime or unix seconds; if omitted current UTC time is used for offset.
+
+    Args:
+        lat: Latitude in degrees.
+        lon: Longitude in degrees.
+        timestamp: Optional ISO datetime or unix seconds for offset calculation.
+
+    Returns:
+        Dict with tz (IANA timezone name) and offset_seconds.
     """
     try:
         from timezonefinder import TimezoneFinder

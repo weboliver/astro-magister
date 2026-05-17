@@ -50,6 +50,14 @@ REFRESH_TOKEN_MAX_AGE_SECONDS = int(app_config.get_env_setting('REFRESH_TOKEN_EX
 
 
 def _cookie_settings(max_age: int) -> dict:
+    """Generate cookie settings dict for auth cookies.
+
+    Args:
+        max_age: Cookie max age in seconds.
+
+    Returns:
+        Dictionary with cookie settings (httponly, secure, samesite, max_age, path, domain).
+    """
     return {
         'httponly': True,
         'secure': COOKIE_SECURE,
@@ -61,20 +69,49 @@ def _cookie_settings(max_age: int) -> dict:
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Set authentication cookies on the response.
+
+    Args:
+        response: FastAPI Response object.
+        access_token: JWT access token string.
+        refresh_token: Refresh token string.
+    """
     response.set_cookie(ACCESS_COOKIE_NAME, access_token, **_cookie_settings(app_config.ACCESS_TOKEN_EXPIRE_MINUTES * 60))
     response.set_cookie(REFRESH_COOKIE_NAME, refresh_token, **_cookie_settings(REFRESH_TOKEN_MAX_AGE_SECONDS))
 
 
 def _clear_auth_cookies(response: Response) -> None:
+    """Clear authentication cookies from the response.
+
+    Args:
+        response: FastAPI Response object.
+    """
     response.delete_cookie(ACCESS_COOKIE_NAME, path='/', domain=COOKIE_DOMAIN)
     response.delete_cookie(REFRESH_COOKIE_NAME, path='/', domain=COOKIE_DOMAIN)
 
 
 def _rate_limit_exception(detail: str, retry_after_seconds: int) -> HTTPException:
+    """Create a rate limit HTTP exception.
+
+    Args:
+        detail: Error message detail.
+        retry_after_seconds: Seconds until rate limit resets.
+
+    Returns:
+        HTTPException with 429 status and Retry-After header.
+    """
     return HTTPException(status_code=429, detail=detail, headers={'Retry-After': str(retry_after_seconds)})
 
 
 def _lockout_exception(retry_after_seconds: int) -> HTTPException:
+    """Create an account lockout HTTP exception.
+
+    Args:
+        retry_after_seconds: Seconds until lockout expires.
+
+    Returns:
+        HTTPException with 423 status and Retry-After header.
+    """
     return HTTPException(
         status_code=423,
         detail='Zu viele Fehlversuche. Der Zugang ist für 1 Stunde gesperrt. Bitte später erneut versuchen.',
@@ -83,12 +120,26 @@ def _lockout_exception(retry_after_seconds: int) -> HTTPException:
 
 
 def _resolve_refresh_token(payload: RefreshIn | LogoutIn | None, request: Request) -> Optional[str]:
+    """Resolve refresh token from request body or cookies.
+
+    Args:
+        payload: Optional request body with refresh_token field.
+        request: FastAPI Request object.
+
+    Returns:
+        Refresh token string or None if not found.
+    """
     if payload and payload.refresh_token:
         return payload.refresh_token
     return request.cookies.get(REFRESH_COOKIE_NAME)
 
 
 def _unauthorized_exception() -> HTTPException:
+    """Create an unauthorized HTTP exception.
+
+    Returns:
+        HTTPException with 401 status and WWW-Authenticate header.
+    """
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail='Unauthorized',
@@ -97,6 +148,18 @@ def _unauthorized_exception() -> HTTPException:
 
 @router.post('/auth/register', status_code=201)
 async def register(payload: RegisterIn, request: Request):
+    """Register a new user account.
+
+    Args:
+        payload: RegisterIn with username, password, and captcha_token.
+        request: FastAPI Request for client IP and user agent.
+
+    Returns:
+        Dict with registered username.
+
+    Raises:
+        HTTPException: On rate limit, weak password, invalid captcha, or user exists.
+    """
     client_ip = get_client_ip(request)
     user_agent = request.headers.get('user-agent')
     rate_limit = check_rate_limit('register', client_ip, REGISTER_RATE_LIMIT_ATTEMPTS, REGISTER_RATE_LIMIT_WINDOW_SECONDS)
@@ -124,6 +187,19 @@ async def register(payload: RegisterIn, request: Request):
 
 @router.post('/auth/login', response_model=Token)
 async def login(payload: LoginIn, request: Request, response: Response):
+    """Login with username and password.
+
+    Args:
+        payload: LoginIn with username, password, and captcha_token.
+        request: FastAPI Request for client IP and user agent.
+        response: FastAPI Response to set auth cookies.
+
+    Returns:
+        Token dict with access_token, token_type, and refresh_token.
+
+    Raises:
+        HTTPException: On lockout, rate limit, captcha failure, or invalid credentials.
+    """
     client_ip = get_client_ip(request)
     user_agent = request.headers.get('user-agent')
     lock_seconds = get_login_lock(payload.username)
@@ -160,6 +236,19 @@ async def login(payload: LoginIn, request: Request, response: Response):
 
 @router.post('/auth/refresh', response_model=Token)
 async def refresh_token(request: Request, response: Response, payload: RefreshIn | None = None):
+    """Refresh access token using a valid refresh token.
+
+    Args:
+        request: FastAPI Request for client IP and user agent.
+        response: FastAPI Response to set new auth cookies.
+        payload: Optional RefreshIn with refresh_token in body.
+
+    Returns:
+        Token dict with new access_token, token_type, and refresh_token.
+
+    Raises:
+        HTTPException: On rate limit, invalid/expired refresh token, or user not found.
+    """
     client_ip = get_client_ip(request)
     user_agent = request.headers.get('user-agent')
     rate_limit = check_rate_limit('refresh', client_ip, REFRESH_RATE_LIMIT_ATTEMPTS, REFRESH_RATE_LIMIT_WINDOW_SECONDS)
@@ -185,6 +274,16 @@ async def refresh_token(request: Request, response: Response, payload: RefreshIn
 
 @router.post('/auth/logout-refresh')
 def logout_refresh(request: Request, response: Response, payload: LogoutIn | None = None):
+    """Logout by clearing refresh token (without blacklisting access token).
+
+    Args:
+        request: FastAPI Request to get refresh token from cookies.
+        response: FastAPI Response to clear auth cookies.
+        payload: Optional LogoutIn with refresh_token in body.
+
+    Returns:
+        Dict with status 'ok'.
+    """
     refresh_token_value = _resolve_refresh_token(payload, request)
     if refresh_token_value:
         auth_service.revoke_refresh_token(refresh_token_value)
@@ -193,6 +292,14 @@ def logout_refresh(request: Request, response: Response, payload: LogoutIn | Non
 
 
 def _get_user_from_request(request: Request):
+    """Extract user from request Authorization header or cookies.
+
+    Args:
+        request: FastAPI Request with Authorization header or access cookie.
+
+    Returns:
+        User dict if valid token found, None otherwise.
+    """
     auth = request.headers.get('authorization') or request.headers.get('Authorization')
     if auth:
         parts = auth.split()
@@ -205,6 +312,14 @@ def _get_user_from_request(request: Request):
 
 
 def _get_user_from_token(token: str):
+    """Decode JWT token and retrieve user.
+
+    Args:
+        token: JWT access token string.
+
+    Returns:
+        User dict if token valid and not blacklisted, None otherwise.
+    """
     try:
         data = jwt.decode(
             token,
@@ -228,6 +343,18 @@ def require_authenticated_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
+    """Dependency to require authenticated user.
+
+    Args:
+        request: FastAPI Request to check cookies.
+        credentials: Optional HTTPBearer credentials from Authorization header.
+
+    Returns:
+        User dict for authenticated user.
+
+    Raises:
+        HTTPException: If user not authenticated.
+    """
     user = None
     if credentials and credentials.credentials:
         if credentials.scheme.lower() != 'bearer':
@@ -243,6 +370,17 @@ def require_authenticated_user(
 
 
 def require_admin_user(user=Depends(require_authenticated_user)):
+    """Dependency to require admin user.
+
+    Args:
+        user: User dict from require_authenticated_user.
+
+    Returns:
+        User dict if admin, otherwise raises 403.
+
+    Raises:
+        HTTPException: If user is not admin.
+    """
     prof = auth_service.get_profile(user['id']) or {}
     if not prof.get('isadmin'):
         raise HTTPException(status_code=403, detail='Forbidden')
@@ -250,6 +388,16 @@ def require_admin_user(user=Depends(require_authenticated_user)):
 
 @router.post('/auth/logout')
 def logout(request: Request, response: Response, user=Depends(require_authenticated_user)):
+    """Logout and invalidate tokens (blacklist access token, revoke refresh tokens).
+
+    Args:
+        request: FastAPI Request to get Authorization header.
+        response: FastAPI Response to clear auth cookies.
+        user: Authenticated user from dependency.
+
+    Returns:
+        Dict with status 'ok'.
+    """
     # AUTH-04: Invalidate access token immediately
     auth_header = request.headers.get('authorization', '')
     if auth_header.startswith('Bearer '):
@@ -273,11 +421,31 @@ def logout(request: Request, response: Response, user=Depends(require_authentica
 
 @router.get('/auth/roles', response_model=list[RoleOut])
 def get_roles(user=Depends(require_authenticated_user)):
+    """Get list of available roles.
+
+    Args:
+        user: Authenticated user from dependency.
+
+    Returns:
+        List of RoleOut objects.
+    """
     return auth_service.list_roles()
 
 
 @router.post('/auth/change-password')
 def change_password(payload: ChangePasswordIn, user=Depends(require_authenticated_user)):
+    """Change user password.
+
+    Args:
+        payload: ChangePasswordIn with old_password and new_password.
+        user: Authenticated user from dependency.
+
+    Returns:
+        Dict with status 'ok'.
+
+    Raises:
+        HTTPException: On weak password or incorrect old password.
+    """
     password_error = validate_password_strength(payload.new_password)
     if password_error:
         raise HTTPException(status_code=400, detail=password_error)
@@ -289,6 +457,14 @@ def change_password(payload: ChangePasswordIn, user=Depends(require_authenticate
 
 @router.get('/auth/profile', response_model=ProfileOut)
 def get_profile(user=Depends(require_authenticated_user)):
+    """Get current user profile.
+
+    Args:
+        user: Authenticated user from dependency.
+
+    Returns:
+        ProfileOut with user profile data.
+    """
     prof = auth_service.get_profile(user['id']) or {}
     prof['username'] = user.get('username')
     return prof
@@ -296,6 +472,18 @@ def get_profile(user=Depends(require_authenticated_user)):
 
 @router.put('/auth/profile')
 def update_profile(payload: ProfileIn, user=Depends(require_authenticated_user)):
+    """Update current user profile.
+
+    Args:
+        payload: ProfileIn with profile fields to update.
+        user: Authenticated user from dependency.
+
+    Returns:
+        Dict with status 'ok'.
+
+    Raises:
+        HTTPException: On update failure.
+    """
     ok = auth_service.update_profile(user['id'], payload.model_dump())
     if not ok:
         raise HTTPException(status_code=500, detail='Could not update profile')
@@ -304,6 +492,17 @@ def update_profile(payload: ProfileIn, user=Depends(require_authenticated_user))
 
 @router.get('/auth/users', response_model=list[UserOut])
 def list_users(query: Optional[str] = None, limit: int = 100, offset: int = 0, user=Depends(require_admin_user)):
+    """List users with optional search query (admin only).
+
+    Args:
+        query: Optional search string for username.
+        limit: Maximum number of users to return.
+        offset: Offset for pagination.
+        user: Admin user from dependency.
+
+    Returns:
+        List of UserOut objects.
+    """
     return auth_service.list_users(query=query, limit=limit, offset=offset)
 
 
@@ -312,6 +511,15 @@ def cleanup_old_users_with_empty_profile(
     older_than_months: int = 1,
     user=Depends(require_admin_user),
 ):
+    """Delete users with empty profiles older than specified months (admin only).
+
+    Args:
+        older_than_months: Delete users with empty profiles older than this many months.
+        user: Admin user from dependency.
+
+    Returns:
+        UserCleanupOut with deletion count.
+    """
     return auth_service.delete_old_users_with_empty_profile(older_than_months=older_than_months)
 
 
@@ -324,6 +532,19 @@ def get_auth_audit_log(
     offset: int = 0,
     user=Depends(require_admin_user),
 ):
+    """Get authentication audit logs (admin only).
+
+    Args:
+        query: Optional search query.
+        event_type: Optional filter by event type.
+        success: Optional filter by success boolean.
+        limit: Maximum number of logs to return.
+        offset: Offset for pagination.
+        user: Admin user from dependency.
+
+    Returns:
+        List of AuthAuditLogOut objects.
+    """
     return auth_service.list_auth_audit_logs(
         query=query,
         event_type=event_type,
@@ -338,11 +559,32 @@ def cleanup_auth_audit_log(
     older_than_months: int = 3,
     user=Depends(require_admin_user),
 ):
+    """Delete old authentication audit logs (admin only).
+
+    Args:
+        older_than_months: Delete logs older than this many months.
+        user: Admin user from dependency.
+
+    Returns:
+        AuthAuditLogCleanupOut with deletion count.
+    """
     return auth_service.delete_old_auth_audit_logs(older_than_months=older_than_months)
 
 
 @router.get('/auth/users/{user_id}', response_model=UserOut)
 def get_user(user_id: int, user=Depends(require_admin_user)):
+    """Get user by ID (admin only).
+
+    Args:
+        user_id: User ID to retrieve.
+        user: Admin user from dependency.
+
+    Returns:
+        UserOut object.
+
+    Raises:
+        HTTPException: If user not found.
+    """
     u = auth_service.admin_get_user(user_id)
     if not u:
         raise HTTPException(status_code=404, detail='User not found')
@@ -351,6 +593,19 @@ def get_user(user_id: int, user=Depends(require_admin_user)):
 
 @router.put('/auth/users/{user_id}')
 def update_user(user_id: int, payload: UserUpdateIn, user=Depends(require_admin_user)):
+    """Update user by ID (admin only).
+
+    Args:
+        user_id: User ID to update.
+        payload: UserUpdateIn with fields to update.
+        user: Admin user from dependency.
+
+    Returns:
+        Dict with status 'ok'.
+
+    Raises:
+        HTTPException: On update failure (e.g., username taken).
+    """
     ok = auth_service.admin_update_user(user_id, payload.model_dump())
     if not ok:
         raise HTTPException(status_code=400, detail='Could not update user (username may be taken)')
@@ -359,6 +614,19 @@ def update_user(user_id: int, payload: UserUpdateIn, user=Depends(require_admin_
 
 @router.post('/auth/users/{user_id}/password')
 def set_user_password(user_id: int, payload: PasswordIn, user=Depends(require_admin_user)):
+    """Set user password (admin only).
+
+    Args:
+        user_id: User ID to set password for.
+        payload: PasswordIn with new_password.
+        user: Admin user from dependency.
+
+    Returns:
+        Dict with status 'ok'.
+
+    Raises:
+        HTTPException: On weak password or failure.
+    """
     password_error = validate_password_strength(payload.new_password)
     if password_error:
         raise HTTPException(status_code=400, detail=password_error)
@@ -370,6 +638,18 @@ def set_user_password(user_id: int, payload: PasswordIn, user=Depends(require_ad
 
 @router.delete('/auth/users/{user_id}')
 def delete_user(user_id: int, user=Depends(require_admin_user)):
+    """Delete user by ID (admin only).
+
+    Args:
+        user_id: User ID to delete.
+        user: Admin user from dependency.
+
+    Returns:
+        Dict with status 'ok'.
+
+    Raises:
+        HTTPException: If user not found.
+    """
     ok = auth_service.admin_delete_user(user_id)
     if not ok:
         raise HTTPException(status_code=404, detail='User not found')

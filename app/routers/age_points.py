@@ -35,6 +35,15 @@ AGE_POINTS_SYSTEM_PROMPT = "age_points"
 
 
 def _resolve_role_name_for_age_points(request: Request, payload: AgePointsRequest) -> str:
+    """Resolve the role name for age points interpretation based on user and person.
+
+    Args:
+        request: The FastAPI request object.
+        payload: The AgePointsRequest containing person_id.
+
+    Returns:
+        The role name string (e.g., "Laie", "Fortgeschritten", "Experte").
+    """
     user = _get_user_from_request(request)
     if not user:
         return "Laie"
@@ -80,10 +89,27 @@ AGE_POINT_PLANET_TRANSLATIONS = {
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: The event type string.
+        data: The data dictionary to serialize as JSON.
+
+    Returns:
+        A formatted SSE string with event and data fields.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _translate_age_point_text(value: Optional[str]) -> str:
+    """Translate German age point terms and planet names to German.
+
+    Args:
+        value: The text string to translate.
+
+    Returns:
+        The translated text with German terms and planet names.
+    """
     if not value:
         return ""
 
@@ -102,6 +128,14 @@ def _translate_age_point_text(value: Optional[str]) -> str:
 
 
 def _normalize_age_point(point):
+    """Normalize an age point to a consistent dictionary format with translated text.
+
+    Args:
+        point: An age point as either a dict or object with day, mon, year, lab, cl fields.
+
+    Returns:
+        A normalized dictionary with translated labels and descriptions.
+    """
     if isinstance(point, dict):
         normalized = dict(point)
     else:
@@ -119,10 +153,26 @@ def _normalize_age_point(point):
 
 
 def _normalize_age_points(age_points):
+    """Normalize a list of age points.
+
+    Args:
+        age_points: A list of age point objects or dictionaries.
+
+    Returns:
+        A list of normalized age point dictionaries.
+    """
     return [_normalize_age_point(point) for point in age_points or []]
 
 
 def _build_plan_from_planets(planets_list):
+    """Build a sorted planet plan from a list of planet positions.
+
+    Args:
+        planets_list: List of planet longitude degrees.
+
+    Returns:
+        A list of dicts with 'degree' (0-360) and 'ix' (index), sorted by degree.
+    """
     plan = []
     for ix, deg in enumerate(planets_list):
         plan.append({"degree": deg % 360.0, "ix": ix})
@@ -131,6 +181,14 @@ def _build_plan_from_planets(planets_list):
 
 
 def _compute_decimal_hour(request: AgePointsRequest) -> float:
+    """Compute decimal hour from request, converting to UTC if timezone is provided.
+
+    Args:
+        request: The AgePointsRequest with year, month, day, hour, minute, second, timezone.
+
+    Returns:
+        The decimal hour as a float (0-24).
+    """
     decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
     if getattr(request, 'timezone', None):
         try:
@@ -150,6 +208,17 @@ def _compute_decimal_hour(request: AgePointsRequest) -> float:
 
 
 def _compute_age_points_planets(jd: float):
+    """Compute planetary positions for age points calculation using Swiss Ephemeris.
+
+    Args:
+        jd: Julian day number for the birth date.
+
+    Returns:
+        A list of 13 planet longitudes (Sun through Pluto, Node, Lilith, Chiron).
+
+    Raises:
+        HTTPException: If planet calculation fails.
+    """
     from app import config as app_config
 
     # API/Chart order: Sun..Pluto, Node, Lilith, Chiron
@@ -191,6 +260,14 @@ def _compute_age_points_planets(jd: float):
 
 
 def _prepare_age_points_chart(request: AgePointsRequest) -> Chart:
+    """Prepare a Chart object for age points calculation from the request.
+
+    Args:
+        request: The AgePointsRequest with birth date, time, and location.
+
+    Returns:
+        A Chart object populated with planets and houses.
+    """
     decimal_hour = _compute_decimal_hour(request)
     jd = julday(request.year, request.month, request.day, decimal_hour)
     pls = _compute_age_points_planets(jd)
@@ -208,6 +285,18 @@ def _prepare_age_points_chart(request: AgePointsRequest) -> Chart:
 
 
 def _calculate_age_points(chart: Chart, request: AgePointsRequest):
+    """Calculate age points based on the chart and request kind.
+
+    Args:
+        chart: The Chart object with planetary positions.
+        request: The AgePointsRequest specifying the kind (radix, local, soul, nodal).
+
+    Returns:
+        A list of age points.
+
+    Raises:
+        HTTPException: If the kind is invalid.
+    """
     if request.kind == "radix":
         plan = _build_plan_from_planets(chart.planets)
         return chart.calc_agep(plan, local=False)
@@ -226,6 +315,17 @@ def _calculate_age_points(chart: Chart, request: AgePointsRequest):
 
 
 def _calculate_age_points_for_request(request: AgePointsRequest):
+    """Calculate age points from an AgePointsRequest.
+
+    Args:
+        request: The AgePointsRequest with birth data and calculation parameters.
+
+    Returns:
+        A list of age points.
+
+    Raises:
+        HTTPException: If calculation fails.
+    """
     chart = _prepare_age_points_chart(request)
     try:
         return _calculate_age_points(chart, request)
@@ -236,6 +336,17 @@ def _calculate_age_points_for_request(request: AgePointsRequest):
 
 
 def _filter_age_points(age_points, target_year: Optional[int], target_month: Optional[int], target_day: Optional[int]):
+    """Filter age points by optional year, month, and day.
+
+    Args:
+        age_points: List of age point dictionaries.
+        target_year: Optional year to filter by.
+        target_month: Optional month to filter by.
+        target_day: Optional day to filter by.
+
+    Returns:
+        Filtered list of age points.
+    """
     if target_year is None:
         return age_points
 
@@ -263,6 +374,16 @@ def _filter_age_points(age_points, target_year: Optional[int], target_month: Opt
 
 
 def _build_transit_sections_for_summary(age_points, req: AgePointsRequest, http_request: Request):
+    """Build transit sections for age points summary.
+
+    Args:
+        age_points: List of age points to get transits for.
+        req: The original AgePointsRequest.
+        http_request: The FastAPI request for auth and context.
+
+    Returns:
+        List of transit section strings for the summary.
+    """
     if not age_points:
         return []
 
@@ -341,6 +462,16 @@ def _build_transit_sections_for_summary(age_points, req: AgePointsRequest, http_
 
 
 def _build_target_year_summary(age_points, target_year: Optional[int], transit_sections: Optional[List[str]] = None):
+    """Build the AI summary prompt for age points interpretation.
+
+    Args:
+        age_points: List of age points.
+        target_year: Optional target year for the interpretation.
+        transit_sections: Optional list of transit sections to include.
+
+    Returns:
+        A prompt string for the AI interpretation.
+    """
     if not age_points:
         return None
     parts = []
@@ -368,6 +499,15 @@ def _build_target_year_summary(age_points, target_year: Optional[int], transit_s
 
 
 def _build_age_points_response(req: AgePointsRequest, http_request: Request) -> AgePointsResponse:
+    """Build the full AgePointsResponse with calculated points and summary prompt.
+
+    Args:
+        req: The AgePointsRequest with calculation parameters.
+        http_request: The FastAPI request for auth context.
+
+    Returns:
+        An AgePointsResponse with age_points and summary prompt.
+    """
     age_points = _calculate_age_points_for_request(req)
     filtered_points = _normalize_age_points(
         _filter_age_points(age_points, req.target_year, req.target_month, req.target_day)
@@ -388,12 +528,14 @@ def _build_age_points_response(req: AgePointsRequest, http_request: Request) -> 
 
 @router.post("/age-points", response_model=AgePointsResponse)
 def get_age_points(req: AgePointsRequest, http_request: Request):
-    """Berechnet Alterspunkte mittels `Chart.calc_agep` für das gegebene Radix.
+    """Calculate age points using Chart.calc_agep for the given birth chart.
 
-    Der Endpoint baut ein `Chart`-Objekt, füllt `planets` und `houses` mit
-    ephemeriden-berechneten Werten zum Geburts-JD, setzt `chart.date` und ruft
-    anschließend `calc_agep` auf. Aktuell wird nur `kind=="radix"` vollständig
-    unterstützt.
+    Args:
+        req: AgePointsRequest with birth date, time, location, and kind (radix, local, soul, nodal).
+        http_request: FastAPI request for authentication and context.
+
+    Returns:
+        AgePointsResponse with calculated age points and AI summary.
     """
 
     result = _build_age_points_response(req, http_request)
@@ -433,6 +575,15 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
 
 @router.post("/age-points/stream")
 async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
+    """Stream age points calculation with real-time AI summary generation.
+
+    Args:
+        req: AgePointsRequest with birth data and calculation parameters.
+        http_request: FastAPI request for authentication and context.
+
+    Returns:
+        StreamingResponse with SSE events for age points and AI summary.
+    """
     cached_summary = None
     perplexity_client = None
     try:
@@ -579,8 +730,14 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
 
 @router.post("/age-points/full", response_model=List[AgePoint])
 def get_full_age_points(request: AgePointsRequest):
-    """Erstellt die vollständige Alterspunkte-Kette (ca. 72 Jahre) für das Radix."""
+    """Calculate the full age points chain (approximately 72 years) for the radix.
 
+    Args:
+        request: AgePointsRequest with birth date, time, and location.
+
+    Returns:
+        List of AgePoint objects with the complete age points timeline.
+    """
     return _normalize_age_points(_calculate_age_points_for_request(request))
 
 
@@ -589,6 +746,11 @@ def get_full_age_points(request: AgePointsRequest):
     responses={200: {"content": {"image/png": {}}}},
 )
 def get_age_point_graphic():
+    """Get the age points graphic image (ap.png).
+
+    Returns:
+        FileResponse with the age points graphic PNG image.
+    """
     resource_path = Path(__file__).resolve().parents[2] / "astronex" / "resources" / "ap.png"
     if not resource_path.exists():
         raise HTTPException(status_code=404, detail="ap.png wurde nicht gefunden")
@@ -597,6 +759,14 @@ def get_age_point_graphic():
 
 @router.post("/age-points/ap-marker", response_model=AgePointMarkerResponse)
 def get_age_point_marker(request: AgePointMarkerRequest):
+    """Calculate the age point marker position for a specific transit date.
+
+    Args:
+        request: AgePointMarkerRequest with birth data and transit date/time.
+
+    Returns:
+        AgePointMarkerResponse with position data for the chart marker.
+    """
     birth_request = AgePointsRequest(
         year=request.year,
         month=request.month,

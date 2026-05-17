@@ -1,3 +1,13 @@
+/**
+ * Settings - User profile and person management page with tabs for profile, person form, person list, and password change.
+ * @component
+ * @returns {JSX.Element} Rendered settings page
+ * @hook useState - Manages messages, password fields, profile, roles, date/time, locations, persons, form, pagination, tabs, responsive
+ * @hook useEffect - Loads countries, regions, cities, roles, profile, persons on mount; handles responsive resize
+ * @hook useMemo - Filters persons by search, computes filtered cities, date picker options, role name map, pagination
+ * @hook useAuth - Accesses profile and refreshProfile from authentication context
+ * @hook usePersonSelection - Accesses refreshPersons function
+ */
 import React, { useEffect, useMemo, useState } from 'react'
 import { post, get, put, del } from '../services/api'
 import Flatpickr from 'react-flatpickr'

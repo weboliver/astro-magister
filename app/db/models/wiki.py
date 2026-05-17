@@ -45,6 +45,7 @@ class Entry(Base):
 
     entry_id = Column(Integer, primary_key=True, autoincrement=True)
     entry_name = Column(String(255), nullable=False)
+    slug = Column(String(511), nullable=False, unique=True)
     entry_short = Column(Text)
     entry_content = Column(Text)
     generate_text = Column(Text)
@@ -56,6 +57,11 @@ class Entry(Base):
     entry_published = Column(Date)
     created = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def regenerate_slug(self):
+        import re
+        base = re.sub(r'[^a-z0-9]+', '-', self.entry_name.lower()).strip('-')
+        self.slug = f"{base}-{self.entry_id}"
 
     category = relationship('Category', back_populates='entries')
     outgoing_relations = relationship('Relation', foreign_keys='Relation.entry_from_id', back_populates='entry_from')

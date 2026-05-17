@@ -13,6 +13,16 @@ def get_redis_cache(
     include_values: bool = Query(default=True),
     value_max_length: int = Query(default=2000, ge=50, le=20000),
 ):
+    """Get Redis cache overview with keys and optional values.
+
+    Args:
+        limit: Maximum number of cache keys to return.
+        include_values: Whether to include cached values in response.
+        value_max_length: Maximum length of values to include.
+
+    Returns:
+        Dict with cache keys and optional values.
+    """
     return get_cache_overview(
         limit=limit,
         include_values=include_values,
@@ -24,6 +34,14 @@ def get_redis_cache(
 def delete_redis_cache(
     key: str | None = Query(default=None),
 ):
+    """Delete Redis cache entries.
+
+    Args:
+        key: Optional specific cache key to delete. If None, clears all cache.
+
+    Returns:
+        Dict with deletion status.
+    """
     if key:
         return delete_cache_entry(key)
     return clear_cache()

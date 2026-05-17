@@ -1,3 +1,13 @@
+/**
+ * Houses - Page for calculating and interpreting astrological house positions in the birth chart.
+ * @component
+ * @returns {JSX.Element} Rendered houses page
+ * @hook useState - Manages response, loading, date/time, location, chart, summary, followups, hydration
+ * @hook useEffect - Handles responsive layout, loads user data, auto-fetches chart, manages selections
+ * @hook useCallback - Displays chart blob, computes graphic size, cache key, persists payload to sessionStorage, handles logout cleanup
+ * @hook useMemo - Computes current payload and cache key
+ * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller
+ */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { postStream, postWithSignal } from '../services/api'

@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
 
+/**
+ * logoutCache.js - Utility for handling logout event cleanup
+ * @module logoutCache
+ */
+
 const LOGOUT_EVENT = 'astronexLogout'
 
 export function useLogoutCleanup(handler) {

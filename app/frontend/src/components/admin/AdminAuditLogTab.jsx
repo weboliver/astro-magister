@@ -14,6 +14,11 @@ function formatTimestamp(value){
   }).format(date)
 }
 
+/**
+ * AdminAuditLogTab - Admin panel tab for viewing system audit logs with filtering and pagination
+ * @component
+ * @returns {JSX.Element} Rendered audit log viewer with event filtering and pagination
+ */
 export default function AdminAuditLogTab(){
   const [entries, setEntries] = useState([])
   const [query, setQuery] = useState('')

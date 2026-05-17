@@ -3,6 +3,13 @@ import { del, get, post } from '../../services/api'
 
 const SEARCH_PAGE_SIZE = 5
 
+/**
+ * AdminRelationsTab - Admin panel tab for managing entry relationships (related entries)
+ * @component
+ * @param {Object} props - Component props
+ * @param {Function} [props.onEditEntry] - Optional callback to edit an entry
+ * @returns {JSX.Element} Rendered relations management interface for linking entries
+ */
 export default function AdminRelationsTab({ onEditEntry }){
   const [leftQuery, setLeftQuery] = useState('')
   const [leftLoading, setLeftLoading] = useState(false)

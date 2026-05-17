@@ -7,12 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageCreate(BaseModel):
+    """Message creation schema."""
+
     role: Literal["user", "query", "assistant"]
     content: str
     position: int
 
 
 class InterpretationCreate(BaseModel):
+    """Interpretation session creation schema."""
+
     user_persons_id: Optional[int] = None
     context_type: Optional[str] = Field(None, max_length=64)
     model: Optional[str] = Field(None, max_length=64)
@@ -32,11 +36,14 @@ class InterpretationCreate(BaseModel):
 
 
 class FollowupMessageCreate(BaseModel):
-    """Wird für Folgefragen an eine bestehende Session verwendet."""
+    """Followup message for existing interpretation session."""
+
     content: str = Field(..., min_length=1, max_length=4096)
 
 
 class MessageOut(BaseModel):
+    """Message output schema."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -47,6 +54,8 @@ class MessageOut(BaseModel):
 
 
 class InterpretationOut(BaseModel):
+    """Interpretation session output with all details."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -70,6 +79,8 @@ class InterpretationOut(BaseModel):
 
 
 class InterpretationListItem(BaseModel):
+    """Interpretation list item for summaries."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -84,4 +95,6 @@ class InterpretationListItem(BaseModel):
 
 
 class InterpretationCreatedOut(BaseModel):
+    """Response after creating interpretation."""
+
     id: int

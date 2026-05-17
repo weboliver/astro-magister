@@ -2,13 +2,17 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useInterpretations } from '../hooks/useInterpretations'
 
 /**
- * Dropdown for selecting a past interpretation session above the optional question textarea.
- *
- * Props:
- *   contextType    – e.g. "planets" | "houses" | …
- *   userPersonsId  – person filter (null = own profile)
- *   onLoad(interp) – called with the full interpretation object when "Auswertung anzeigen" is clicked
- *   refreshToken   – increment to trigger a list refresh (e.g. after a new session was saved)
+ * InterpretationHistoryDropdown - Dropdown for selecting a past interpretation session above the optional question textarea
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.contextType - Context type for filtering interpretations (e.g. "planets" | "houses")
+ * @param {number|null} props.userPersonsId - Person filter (null = own profile)
+ * @param {Function} props.onLoad - Callback called with the full interpretation object when "Auswertung anzeigen" is clicked
+ * @param {Function} [props.onClear] - Optional callback when selection is cleared
+ * @param {number} [props.refreshToken] - Increment to trigger a list refresh (e.g. after a new session was saved)
+ * @param {boolean} [props.yearOnly=false] - If true, only display year in date format
+ * @param {number} [props.selectedInterpretationId] - Pre-selected interpretation ID
+ * @returns {JSX.Element|null} Rendered dropdown, or null if no interpretations exist
  */
 export default function InterpretationHistoryDropdown({
   contextType,

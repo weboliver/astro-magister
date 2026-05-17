@@ -7,6 +7,13 @@ const emptyPageForm = {
 
 const SEARCH_PAGE_SIZE = 5
 
+/**
+ * AdminPagesTab - Admin panel tab for managing wiki pages with entry assignment functionality
+ * @component
+ * @param {Object} props - Component props
+ * @param {Function} [props.onEditEntry] - Optional callback to edit an entry
+ * @returns {JSX.Element} Rendered page management interface with entry assignment
+ */
 export default function AdminPagesTab({ onEditEntry }){
   const [pages, setPages] = useState([])
   const [pageQuery, setPageQuery] = useState('')

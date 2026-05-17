@@ -11,6 +11,11 @@ function formatTimestamp(value){
   }).format(date)
 }
 
+/**
+ * AdminUsersTab - Admin panel tab for managing user accounts with search, edit, and role management
+ * @component
+ * @returns {JSX.Element} Rendered user management interface with CRUD operations
+ */
 export default function AdminUsersTab(){
   const [users, setUsers] = useState([])
   const [userQuery, setUserQuery] = useState('')

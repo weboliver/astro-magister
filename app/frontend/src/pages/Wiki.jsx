@@ -1,3 +1,19 @@
+/**
+ * Wiki - Wiki content browser page with sections, categories, entries, and optional related entries display.
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} [props.directPageName=''] - Direct page name to display (bypasses section/category navigation)
+ * @param {string} [props.directOriginPage=''] - Origin page for back navigation
+ * @param {string} [props.directOriginLabel=''] - Label for back navigation button
+ * @param {string} [props.targetSectionId=''] - Target section ID to preselect
+ * @param {string} [props.targetCategoryId=''] - Target category ID to preselect
+ * @param {string} [props.targetEntryId=''] - Target entry ID to expand on load
+ * @returns {JSX.Element} Rendered wiki page
+ * @hook useState - Manages sections, categories, entries, direct entries, related entries, selection state, loading, errors
+ * @hook useEffect - Loads data, handles navigation, manages URL/title updates, loads related entries
+ * @hook useMemo - Computes wiki section IDs, filtered categories, visible entries, selected category
+ * @hook useAuth - Accesses profile for admin rights and related entries visibility
+ */
 import React, { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'

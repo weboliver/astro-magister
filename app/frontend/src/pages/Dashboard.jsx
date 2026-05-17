@@ -1,3 +1,14 @@
+/**
+ * Dashboard - Main landing page with quick links to all astrological modules and profile/person selection.
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} [props.user=null] - Current authenticated user object
+ * @returns {JSX.Element} Rendered dashboard page
+ * @hook useState - Manages public login entries, loading state, errors
+ * @hook useEffect - Loads public login text for unauthenticated users
+ * @hook useAuth - Accesses profile from authentication context
+ * @hook usePersonSelection - Accesses selected person for calculations
+ */
 import React, { useEffect, useState } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import PersonSelector from '../components/PersonSelector'

@@ -13,6 +13,15 @@ SUPPORTED_COUNTRY_LANGS = {"es": 0, "en": 1, "de": 2, "ca": 3}
 
 
 def _extract_lang(request: Request, lang: str | None) -> str:
+    """Extract language code from query param or Accept-Language header.
+
+    Args:
+        request: FastAPI Request to read headers.
+        lang: Optional language code from query param.
+
+    Returns:
+        Language code (de, en, es, or ca).
+    """
     if lang:
         value = str(lang).strip().lower()
         if value in SUPPORTED_COUNTRY_LANGS:
@@ -31,6 +40,15 @@ def _extract_lang(request: Request, lang: str | None) -> str:
 
 
 def _translate_country_name(name: str, lang: str) -> str:
+    """Translate country name to requested language.
+
+    Args:
+        name: Original country name.
+        lang: Target language code.
+
+    Returns:
+        Translated country name.
+    """
     if not name:
         return name
     translations = COUNTRY_TRANSLATIONS.get(name)
@@ -43,6 +61,18 @@ def _translate_country_name(name: str, lang: str) -> str:
 
 @router.get('/locations/countries')
 def list_countries(request: Request, lang: str = Query(None, description="Language code: de|en|es|ca")):
+    """List all available countries with localized names.
+
+    Args:
+        request: FastAPI Request to detect language from headers.
+        lang: Optional language code override (de|en|es|ca).
+
+    Returns:
+        List of dicts with 'name' and 'code' for each country.
+
+    Raises:
+        HTTPException: On database error.
+    """
     session = get_session()
     try:
         selected_lang = _extract_lang(request, lang)
@@ -78,6 +108,17 @@ def list_countries(request: Request, lang: str = Query(None, description="Langua
 
 @router.get('/locations/regions')
 def list_regions(country: str = Query(..., description="Country code e.g. 'DE'")):
+    """List regions (admin states/provinces) for a country.
+
+    Args:
+        country: Country code (e.g., 'DE', 'US', 'FR').
+
+    Returns:
+        List of dicts with 'name' and 'code' for each region.
+
+    Raises:
+        HTTPException: On missing country or database error.
+    """
     session = get_session()
     try:
         if not country:
@@ -133,6 +174,18 @@ def list_regions(country: str = Query(..., description="Country code e.g. 'DE'")
 
 @router.get('/locations/cities')
 def list_cities(country: str = Query(..., description="Country code/table name"), region: str = Query(None, description="Region code (AC)")):
+    """List cities in a country, optionally filtered by region.
+
+    Args:
+        country: Country code/table name (e.g., 'DE', 'US').
+        region: Optional region code to filter cities.
+
+    Returns:
+        List of dicts with 'city' and 'code' for each city.
+
+    Raises:
+        HTTPException: On missing country or database error.
+    """
     session = get_session()
     try:
         if not country:

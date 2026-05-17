@@ -1,3 +1,14 @@
+/**
+ * Register - User registration page with username, password confirmation, Turnstile captcha, and auto-login on success.
+ * @component
+ * @param {Object} props - Component props
+ * @param {Function} [props.onRegistered] - Callback fired on successful registration and login
+ * @param {Function} [props.onCancel] - Callback to cancel registration and return
+ * @returns {JSX.Element} Rendered registration page
+ * @hook useState - Manages username, passwords, visibility toggles, messages, captcha token
+ * @hook useRef - References Turnstile widget for captcha execution
+ * @hook useAuth - Accesses refreshProfile function
+ */
 import React, { useRef, useState } from 'react'
 import InvisibleTurnstile from '../components/InvisibleTurnstile'
 import { useAuth } from '../contexts/AuthContext'

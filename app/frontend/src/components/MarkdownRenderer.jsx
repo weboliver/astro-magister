@@ -2,6 +2,15 @@ import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+/**
+ * MarkdownRenderer - Renders Markdown content with custom styling and GitHub Flavored Markdown support
+ * @component
+ * @param {Object} props - Component props
+ * @param {React.ReactNode|string} props.children - Markdown content to render
+ * @param {Object} props.components - Optional custom component overrides
+ * @returns {JSX.Element} Rendered Markdown content
+ */
+
 const markdownComponents = {
   h1: ({ node, ...props }) => <h1 style={{ margin: '0 0 12px', fontSize: '1.5rem', lineHeight: 1.2 }} {...props} />,
   h2: ({ node, ...props }) => <h2 style={{ margin: '20px 0 10px', fontSize: '1.2rem', lineHeight: 1.25 }} {...props} />,

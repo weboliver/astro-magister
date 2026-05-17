@@ -24,6 +24,15 @@ HOUSES_SYSTEM_PROMPT = "houses"
 
 
 def _resolve_role_name_for_houses(request: Request, payload: DateTimeRequest) -> str:
+    """Resolve role name for houses interpretation based on user and person.
+
+    Args:
+        request: FastAPI request object.
+        payload: DateTimeRequest with optional person_id.
+
+    Returns:
+        Role name string (e.g., "Laie", "Fortgeschritten", "Experte").
+    """
     user = _get_user_from_request(request)
     if not user:
         return "Laie"
@@ -31,10 +40,30 @@ def _resolve_role_name_for_houses(request: Request, payload: DateTimeRequest) ->
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: Event type string.
+        data: Data dictionary to serialize as JSON.
+
+    Returns:
+        Formatted SSE string.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _build_houses_response(request: DateTimeRequest) -> HousesResponse:
+    """Build houses response with calculated house cusps and AI summary.
+
+    Args:
+        request: DateTimeRequest with birth date, time, and location.
+
+    Returns:
+        HousesResponse with house positions and summary prompt.
+
+    Raises:
+        HTTPException: If house calculation fails.
+    """
     # compute decimal hour in UT, honoring provided IANA timezone when present
     decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
     if getattr(request, 'timezone', None):
@@ -98,6 +127,17 @@ def _build_houses_response(request: DateTimeRequest) -> HousesResponse:
 
 @router.post("/houses", response_model=HousesResponse)
 def get_houses(request: DateTimeRequest):
+    """Calculate house cusps using Swiss Ephemeris.
+
+    Args:
+        request: DateTimeRequest with birth date, time, latitude, longitude.
+
+    Returns:
+        HousesResponse with house positions and AI summary.
+
+    Raises:
+        HTTPException: On calculation error.
+    """
     try:
         return _build_houses_response(request)
     except HTTPException:
@@ -108,6 +148,15 @@ def get_houses(request: DateTimeRequest):
 
 @router.post("/houses/stream")
 async def get_houses_stream(payload: DateTimeRequest, request: Request):
+    """Stream house calculation with real-time AI summary generation.
+
+    Args:
+        payload: DateTimeRequest with birth data.
+        request: FastAPI Request for auth context.
+
+    Returns:
+        StreamingResponse with SSE events for houses and AI summary.
+    """
     cached_summary = None
     perplexity_client = None
     try:

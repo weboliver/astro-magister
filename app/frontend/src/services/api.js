@@ -1,3 +1,9 @@
+/**
+ * api.js - API client service for Astro-Magister frontend
+ * @module api
+ * @description HTTP client wrapper with JWT authentication, session management, and error handling
+ */
+
 const SESSION_REFRESH_WINDOW_MS = 15 * 60 * 1000
 const SESSION_ACTIVITY_REFRESH_INTERVAL_MS = 15 * 60 * 1000
 const SESSION_ACTIVITY_DEBOUNCE_MS = 30 * 1000

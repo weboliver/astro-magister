@@ -50,6 +50,15 @@ _db_adapter_patched = False
 
 
 def _to_decimal(value, text_value=None):
+    """Convert coordinate value to decimal degrees.
+
+    Args:
+        value: Numeric value or None.
+        text_value: Optional text value to parse.
+
+    Returns:
+        Decimal degrees as float, or None if invalid.
+    """
     if value is not None:
         try:
             f = float(value)
@@ -72,6 +81,16 @@ def _to_decimal(value, text_value=None):
 
 
 def _resolve_world_zone(session, country_code: str, region_code: str):
+    """Resolve timezone for world location.
+
+    Args:
+        session: Database session.
+        country_code: ISO country code.
+        region_code: Region code.
+
+    Returns:
+        Timezone name string.
+    """
     entries = session.query(ZoneEntry).filter(ZoneEntry.alfa == country_code).all()
     for entry in entries:
         zone = entry.zones or ''
@@ -89,6 +108,16 @@ def _resolve_world_zone(session, country_code: str, region_code: str):
 
 
 def _resolve_usa_zone(session, state_code: str, region_code: str):
+    """Resolve timezone for USA location.
+
+    Args:
+        session: Database session.
+        state_code: US state code.
+        region_code: Region code.
+
+    Returns:
+        Timezone name string.
+    """
     entries = session.query(ZoneEntry).filter(ZoneEntry.alfa == 'US').all()
     for entry in entries:
         zones = entry.zones or ''

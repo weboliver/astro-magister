@@ -21,18 +21,52 @@ TOKEN_AUDIENCE = ['astronex:auth']
 
 
 class PasslibPasswordHelper(PasswordHelperProtocol):
+    """Password helper using passlib for hashing and verification."""
+
     def verify_and_update(self, plain_password: str, hashed_password: str) -> tuple[bool, str | None]:
+        """Verify password and update hash if needed.
+
+        Args:
+            plain_password: Plain text password to verify.
+            hashed_password: Stored hashed password.
+
+        Returns:
+            Tuple of (is_valid, updated_hash or None).
+        """
         return pwd_context.verify_and_update(plain_password, hashed_password)
 
     def hash(self, password: str) -> str:
+        """Hash a plain text password.
+
+        Args:
+            password: Plain text password.
+
+        Returns:
+            Hashed password string.
+        """
         return pwd_context.hash(password)
 
     def generate(self) -> str:
+        """Generate a temporary random password.
+
+        Returns:
+            Hashed temporary password string.
+        """
         return pwd_context.hash('temporary-password')
 
 
 class AstronexUserDatabase(BaseUserDatabase[User, int]):
+    """SQLAlchemy-based user database for FastAPI-Users."""
+
     async def get(self, id: int) -> User | None:
+        """Get user by ID.
+
+        Args:
+            id: User ID.
+
+        Returns:
+            User object or None if not found.
+        """
         session = get_session()
         try:
             return session.query(User).options(joinedload(User.profile)).filter(User.id == id).first()
@@ -40,6 +74,14 @@ class AstronexUserDatabase(BaseUserDatabase[User, int]):
             session.close()
 
     async def get_by_email(self, email: str) -> User | None:
+        """Get user by email/username.
+
+        Args:
+            email: Email or username string.
+
+        Returns:
+            User object or None if not found.
+        """
         session = get_session()
         try:
             return session.query(User).options(joinedload(User.profile)).filter(User.username == email).first()
@@ -47,9 +89,21 @@ class AstronexUserDatabase(BaseUserDatabase[User, int]):
             session.close()
 
     async def get_by_oauth_account(self, oauth: str, account_id: str) -> User | None:
+        """OAuth not supported."""
         return None
 
     async def create(self, create_dict: dict[str, object]) -> User:
+        """Create a new user.
+
+        Args:
+            create_dict: Dictionary with user creation data.
+
+        Returns:
+            Created User object.
+
+        Raises:
+            UserAlreadyExists: If user already exists.
+        """
         session = get_session()
         try:
             username = str(create_dict.get('username') or create_dict.get('email') or '').strip()
@@ -79,6 +133,18 @@ class AstronexUserDatabase(BaseUserDatabase[User, int]):
             session.close()
 
     async def update(self, user: User, update_dict: dict[str, object]) -> User:
+        """Update an existing user.
+
+        Args:
+            user: User object to update.
+            update_dict: Dictionary with update data.
+
+        Returns:
+            Updated User object.
+
+        Raises:
+            UserAlreadyExists: If username already exists.
+        """
         session = get_session()
         try:
             db_user = session.query(User).options(joinedload(User.profile)).filter(User.id == user.id).first()
@@ -116,6 +182,11 @@ class AstronexUserDatabase(BaseUserDatabase[User, int]):
             session.close()
 
     async def delete(self, user: User) -> None:
+        """Delete a user.
+
+        Args:
+            user: User object to delete.
+        """
         session = get_session()
         try:
             db_user = session.query(User).filter(User.id == user.id).first()
@@ -127,20 +198,45 @@ class AstronexUserDatabase(BaseUserDatabase[User, int]):
             session.close()
 
     async def add_oauth_account(self, user: User, create_dict: dict[str, object]) -> User:
+        """OAuth not supported."""
         raise NotImplementedError()
 
     async def update_oauth_account(self, user: User, oauth_account: object, update_dict: dict[str, object]) -> User:
+        """OAuth not supported."""
         raise NotImplementedError()
 
 
 class AstronexUserManager(IntegerIDMixin, BaseUserManager[User, int]):
+    """Custom user manager for Astronex users."""
+
     reset_password_token_secret = app_config.SECRET_KEY
     verification_token_secret = app_config.SECRET_KEY
 
     async def get_by_username(self, username: str) -> User | None:
+        """Get user by username.
+
+        Args:
+            username: Username string.
+
+        Returns:
+            User object or None.
+        """
         return await self.user_db.get_by_email(username.strip())
 
     async def create_with_username(self, username: str, password: str, is_superuser: bool = False) -> User:
+        """Create a new user with username and password.
+
+        Args:
+            username: Username string.
+            password: Plain text password.
+            is_superuser: Whether user should be superuser.
+
+        Returns:
+            Created User object.
+
+        Raises:
+            UserAlreadyExists: If username already exists.
+        """
         existing = await self.get_by_username(username)
         if existing is not None:
             raise exceptions.UserAlreadyExists()
@@ -153,6 +249,15 @@ class AstronexUserManager(IntegerIDMixin, BaseUserManager[User, int]):
         })
 
     async def authenticate_with_username(self, username: str, password: str) -> User | None:
+        """Authenticate user by username and password.
+
+        Args:
+            username: Username string.
+            password: Plain text password.
+
+        Returns:
+            Authenticated User object or None.
+        """
         user = await self.get_by_username(username)
         if user is None:
             return None
@@ -166,14 +271,21 @@ class AstronexUserManager(IntegerIDMixin, BaseUserManager[User, int]):
 
 
 async def get_user_db() -> AsyncIterator[AstronexUserDatabase]:
+    """Dependency to get user database instance."""
     yield AstronexUserDatabase()
 
 
 async def get_user_manager(user_db: AstronexUserDatabase = Depends(get_user_db)) -> AsyncIterator[AstronexUserManager]:
+    """Dependency to get user manager instance."""
     yield AstronexUserManager(user_db, password_helper=PasslibPasswordHelper())
 
 
 def build_user_manager() -> AstronexUserManager:
+    """Build a user manager instance.
+
+    Returns:
+        AstronexUserManager instance.
+    """
     return AstronexUserManager(AstronexUserDatabase(), password_helper=PasslibPasswordHelper())
 
 
@@ -181,6 +293,11 @@ bearer_transport = BearerTransport(tokenUrl='/auth/login')
 
 
 def get_jwt_strategy() -> JWTStrategy[User, int]:
+    """Create JWT strategy for authentication.
+
+    Returns:
+        JWTStrategy instance.
+    """
     return JWTStrategy(
         secret=app_config.SECRET_KEY,
         lifetime_seconds=app_config.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
@@ -201,6 +318,14 @@ current_active_user = fastapi_users.current_user(active=True)
 
 
 def user_to_dict(user: User) -> dict[str, object]:
+    """Convert User object to dictionary.
+
+    Args:
+        user: User object.
+
+    Returns:
+        Dictionary with user data.
+    """
     return {
         'id': user.id,
         'username': user.username,
@@ -210,16 +335,51 @@ def user_to_dict(user: User) -> dict[str, object]:
 
 
 async def authenticate_by_username(username: str, password: str) -> User | None:
+    """Authenticate user by username and password.
+
+    Args:
+        username: Username string.
+        password: Plain text password.
+
+    Returns:
+        Authenticated User or None.
+    """
     return await build_user_manager().authenticate_with_username(username, password)
 
 
 async def create_user_with_username(username: str, password: str, is_superuser: bool = False) -> User:
+    """Create a new user with username.
+
+    Args:
+        username: Username string.
+        password: Plain text password.
+        is_superuser: Whether user should be superuser.
+
+    Returns:
+        Created User object.
+    """
     return await build_user_manager().create_with_username(username, password, is_superuser=is_superuser)
 
 
 async def get_user_by_id_async(user_id: int) -> User | None:
+    """Get user by ID asynchronously.
+
+    Args:
+        user_id: User ID.
+
+    Returns:
+        User object or None.
+    """
     return await AstronexUserDatabase().get(user_id)
 
 
 async def issue_access_token(user: User) -> str:
+    """Issue JWT access token for user.
+
+    Args:
+        user: User object.
+
+    Returns:
+        JWT token string.
+    """
     return await get_jwt_strategy().write_token(user)

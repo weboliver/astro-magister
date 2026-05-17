@@ -11,4 +11,4 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-exec docker compose --project-name "${PROJECT_NAME}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --force-recreate "$@"
+exec docker compose --project-name "${PROJECT_NAME}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build "$@"

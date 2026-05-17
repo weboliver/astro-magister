@@ -35,6 +35,15 @@ TRANSITS_SYSTEM_PROMPT = "transits"
 
 
 def _resolve_role_name_for_transits(request: Request, payload: TransitRequest) -> str:
+    """Resolve role name for transits interpretation.
+
+    Args:
+        request: FastAPI request.
+        payload: TransitRequest with optional person_id.
+
+    Returns:
+        Role name string.
+    """
     user = _get_user_from_request(request)
     if not user:
         return "Laie"
@@ -42,12 +51,28 @@ def _resolve_role_name_for_transits(request: Request, payload: TransitRequest) -
 
 
 def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Events message.
+
+    Args:
+        event: Event type string.
+        data: Data dictionary to serialize as JSON.
+
+    Returns:
+        Formatted SSE string.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _to_datetime_request(date_obj: DateObject, location: Location) -> DateTimeRequest:
-    """Convert the transit request pieces into a DateTimeRequest for the graphics helper."""
+    """Convert transit request pieces into a DateTimeRequest for graphics helper.
 
+    Args:
+        date_obj: DateObject with birth/transit date.
+        location: Location with latitude and longitude.
+
+    Returns:
+        DateTimeRequest for graphics calculation.
+    """
     return DateTimeRequest(
         year=date_obj.year,
         month=date_obj.month,
@@ -62,6 +87,14 @@ def _to_datetime_request(date_obj: DateObject, location: Location) -> DateTimeRe
 
 
 def _decimal_hour(dt: DateObject):
+    """Convert DateObject to decimal hour.
+
+    Args:
+        dt: DateObject with hour, minute, second.
+
+    Returns:
+        Decimal hour as float.
+    """
     return dt.hour + dt.minute / 60.0 + dt.second / 3600.0
 
 
@@ -437,11 +470,29 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
 
 @router.post("/transits", response_model=TransitResponse)
 def transits(req: TransitRequest, request: Request):
+    """Calculate transit aspects between birth chart and transit date.
+
+    Args:
+        req: TransitRequest with birth date/location and transit date/location.
+        request: FastAPI Request for auth context.
+
+    Returns:
+        TransitResponse with aspects, grouped aspects, and AI summary.
+    """
     return _build_transits_response(req, request)
 
 
 @router.post("/transits/stream")
 async def transits_stream(req: TransitRequest, request: Request):
+    """Stream transit calculation with real-time AI summary generation.
+
+    Args:
+        req: TransitRequest with birth and transit data.
+        request: FastAPI Request for auth context.
+
+    Returns:
+        StreamingResponse with SSE events for transits and AI summary.
+    """
     cached_summary = None
     perplexity_client = None
     try:
@@ -600,7 +651,17 @@ def transits_graphic(
     width: int = Query(750, ge=200, le=2048, description="Image width in pixels"),
     height: int = Query(750, ge=200, le=2048, description="Image height in pixels"),
 ):
-    """Render a transit chart graphic similar to the desktop draw_transits operation."""
+    """Render a transit chart graphic with natal and transit positions overlaid.
+
+    Args:
+        payload: TransitRequest with birth and transit data.
+        request: FastAPI Request.
+        width: Image width in pixels (200-2048).
+        height: Image height in pixels (200-2048).
+
+    Returns:
+        PNG image of the transit chart.
+    """
 
     try:
         birth_year, birth_month, birth_day, birth_hour = _to_utc_components(payload.birthday)

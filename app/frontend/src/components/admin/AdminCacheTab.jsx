@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { del, get } from '../../services/api'
 import { formatTtl } from './cacheUtils'
 
+/**
+ * AdminCacheTab - Admin panel tab for viewing and managing Redis cache entries
+ * @component
+ * @returns {JSX.Element} Rendered cache management interface with search, view, and delete capabilities
+ */
 export default function AdminCacheTab(){
   const [cacheData, setCacheData] = useState(null)
   const [loading, setLoading] = useState(false)

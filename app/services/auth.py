@@ -43,6 +43,14 @@ PERSON_INSERT_COLUMNS = ['user_id'] + PERSON_FIELDS
 
 
 def _coerce_role_id(value):
+    """Coerce a value to a valid role_id (default 1 if invalid).
+
+    Args:
+        value: The value to coerce to a role_id.
+
+    Returns:
+        Integer role_id (default 1).
+    """
     try:
         return int(value) if value is not None else 1
     except (TypeError, ValueError):
@@ -50,10 +58,23 @@ def _coerce_role_id(value):
 
 
 def _profile_can_manage_roles(profile_row: Optional[UserProfile]) -> bool:
+    """Check if a user profile can manage roles (admin or poweruser).
+
+    Args:
+        profile_row: UserProfile database row.
+
+    Returns:
+        True if profile can manage roles, False otherwise.
+    """
     return bool(profile_row and (getattr(profile_row, 'isadmin', False) or getattr(profile_row, 'is_poweruser', False)))
 
 
 def list_roles():
+    """List all available roles ordered by role_id.
+
+    Returns:
+        List of dicts with role_id and role_name.
+    """
     session = get_session()
     try:
         rows = session.query(Role).order_by(Role.role_id).all()
@@ -69,6 +90,14 @@ def list_roles():
 
 
 def get_role_by_id(role_id: int) -> Optional[dict]:
+    """Get a role by its ID.
+
+    Args:
+        role_id: The role ID to look up.
+
+    Returns:
+        Dict with role_id and role_name, or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(Role).filter(Role.role_id == role_id).first()
@@ -83,6 +112,15 @@ def get_role_by_id(role_id: int) -> Optional[dict]:
 
 
 def get_role_name_for_subject(user_id: int, person_id: Optional[int] = None) -> str:
+    """Get the role name for a user, optionally for a specific person.
+
+    Args:
+        user_id: The user ID.
+        person_id: Optional person ID to get role for (if user has multiple persons).
+
+    Returns:
+        Role name string (e.g., "Laie", "Fortgeschritten", "Experte").
+    """
     if person_id is not None:
         person = get_person(user_id, int(person_id))
         role_id = person.get('role_id', 1) if person else 1
@@ -95,7 +133,13 @@ def get_role_name_for_subject(user_id: int, person_id: Optional[int] = None) -> 
         return role.get('role_name') or 'Laie'
     return 'Laie'
 
+
 def revoke_user_token_by_user_id(user_id: str):
+    """Revoke all refresh tokens for a user.
+
+    Args:
+        user_id: The user ID to revoke tokens for.
+    """
     session = get_session()
     try:
         session.query(RefreshToken).filter(RefreshToken.user_id == int(user_id)).delete()
@@ -103,7 +147,13 @@ def revoke_user_token_by_user_id(user_id: str):
     finally:
         session.close()
 
+
 def revoke_user_token_by_token(token: str):
+    """Revoke a specific refresh token.
+
+    Args:
+        token: The refresh token to revoke.
+    """
     session = get_session()
     try:
         session.query(RefreshToken).filter(RefreshToken.token == token).delete()
@@ -111,15 +161,42 @@ def revoke_user_token_by_token(token: str):
     finally:
         session.close()
 
+
 def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt.
+
+    Args:
+        password: Plain text password to hash.
+
+    Returns:
+        Hashed password string.
+    """
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against a bcrypt hash.
+
+    Args:
+        plain_password: Plain text password to verify.
+        hashed_password: bcrypt hash to verify against.
+
+    Returns:
+        True if password matches, False otherwise.
+    """
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_user(username: str, password: str) -> bool:
+    """Create a new user with username and password.
+
+    Args:
+        username: Desired username.
+        password: Plain text password (will be hashed).
+
+    Returns:
+        True if user created successfully, False if username exists.
+    """
     session = get_session()
     try:
         user = User(username=username, password_hash=get_password_hash(password))
@@ -134,6 +211,15 @@ def create_user(username: str, password: str) -> bool:
 
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:
+    """Authenticate a user with username and password.
+
+    Args:
+        username: Username to authenticate.
+        password: Plain text password to verify.
+
+    Returns:
+        Dict with id and username if successful, None otherwise.
+    """
     session = get_session()
     try:
         user = session.query(User).filter(User.username == username).first()
@@ -148,6 +234,15 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token.
+
+    Args:
+        data: Dict of claims to encode in the token.
+        expires_delta: Optional expiration timedelta. Defaults to config setting.
+
+    Returns:
+        Encoded JWT string.
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -162,6 +257,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def create_refresh_token(user_id: int, days: int = 7) -> str:
+    """Create a refresh token for a user.
+
+    Args:
+        user_id: The user ID to create token for.
+        days: Number of days until expiration (default 7).
+
+    Returns:
+        Token string, or None on failure.
+    """
     session = get_session()
     token = secrets.token_urlsafe(32)
     expires = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
@@ -179,6 +283,14 @@ def create_refresh_token(user_id: int, days: int = 7) -> str:
 
 
 def verify_refresh_token(token: str) -> Optional[int]:
+    """Verify a refresh token and return the user ID if valid.
+
+    Args:
+        token: The refresh token to verify.
+
+    Returns:
+        User ID if token is valid and not expired, None otherwise.
+    """
     session = get_session()
     try:
         row = session.query(RefreshToken).filter(RefreshToken.token == token).first()
@@ -200,14 +312,32 @@ def verify_refresh_token(token: str) -> Optional[int]:
 
 
 def revoke_refresh_token(token: str):
+    """Revoke a specific refresh token.
+
+    Args:
+        token: The refresh token to revoke.
+    """
     revoke_user_token_by_token(token)
 
 
 def revoke_user_refresh_tokens(user_id: int):
+    """Revoke all refresh tokens for a user.
+
+    Args:
+        user_id: The user ID to revoke tokens for.
+    """
     revoke_user_token_by_user_id(user_id)
 
 
 def get_user_by_id(user_id: int) -> Optional[dict]:
+    """Get user by ID.
+
+    Args:
+        user_id: The user ID to look up.
+
+    Returns:
+        Dict with id and username, or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(User).filter(User.id == user_id).first()
@@ -219,6 +349,14 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 
 
 def is_poweruser(user_id: int) -> bool:
+    """Check if a user has poweruser status.
+
+    Args:
+        user_id: The user ID to check.
+
+    Returns:
+        True if user is a poweruser, False otherwise.
+    """
     session = get_session()
     try:
         prof = session.query(UserProfile).filter(UserProfile.user_id == user_id).first()
@@ -228,6 +366,16 @@ def is_poweruser(user_id: int) -> bool:
 
 
 def list_users(query: Optional[str] = None, limit: int = 100, offset: int = 0):
+    """List users with optional search and pagination.
+
+    Args:
+        query: Optional username search filter.
+        limit: Maximum number of results.
+        offset: Number of results to skip.
+
+    Returns:
+        List of user dicts with id, username, role_id, isadmin, is_poweruser, created.
+    """
     session = get_session()
     try:
         # Use joinedload to fetch profiles in single query (fixes N+1)
@@ -259,6 +407,18 @@ def list_auth_audit_logs(
     limit: int = 100,
     offset: int = 0,
 ):
+    """List authentication audit logs with optional filters.
+
+    Args:
+        query: Optional search filter (username, detail, ip_address).
+        event_type: Optional filter by event type.
+        success: Optional filter by success status.
+        limit: Maximum number of results.
+        offset: Number of results to skip.
+
+    Returns:
+        List of audit log dicts.
+    """
     session = get_session()
     try:
         q = session.query(AuthAuditLog)
@@ -299,6 +459,15 @@ def list_auth_audit_logs(
 
 
 def _subtract_months(value: datetime, months: int) -> datetime:
+    """Subtract months from a datetime, capping day to 28 for valid dates.
+
+    Args:
+        value: Input datetime.
+        months: Number of months to subtract.
+
+    Returns:
+        New datetime with months subtracted.
+    """
     month_index = value.month - 1 - months
     year = value.year + month_index // 12
     month = month_index % 12 + 1
@@ -307,6 +476,14 @@ def _subtract_months(value: datetime, months: int) -> datetime:
 
 
 def delete_old_auth_audit_logs(*, older_than_months: int = 3) -> dict:
+    """Delete authentication audit logs older than specified months.
+
+    Args:
+        older_than_months: Delete logs older than this many months (default 3).
+
+    Returns:
+        Dict with deleted_count, older_than_months, and cutoff timestamp.
+    """
     months = max(1, int(older_than_months))
     cutoff = _subtract_months(datetime.now(timezone.utc), months)
 
@@ -328,6 +505,14 @@ def delete_old_auth_audit_logs(*, older_than_months: int = 3) -> dict:
 
 
 def delete_old_users_with_empty_profile(*, older_than_months: int = 1) -> dict:
+    """Delete users older than specified months with empty/incomplete profiles.
+
+    Args:
+        older_than_months: Delete users older than this many months (default 1).
+
+    Returns:
+        Dict with deleted_count, older_than_months, and cutoff timestamp.
+    """
     months = max(1, int(older_than_months))
     cutoff = _subtract_months(datetime.now(timezone.utc), months)
 
@@ -366,6 +551,14 @@ def delete_old_users_with_empty_profile(*, older_than_months: int = 1) -> dict:
 
 
 def admin_get_user(user_id: int) -> Optional[dict]:
+    """Get user details for admin purposes.
+
+    Args:
+        user_id: The user ID to retrieve.
+
+    Returns:
+        Dict with user details or None if not found.
+    """
     session = get_session()
     try:
         row = session.query(User).filter(User.id == user_id).first()
@@ -385,6 +578,15 @@ def admin_get_user(user_id: int) -> Optional[dict]:
 
 
 def admin_update_user(user_id: int, data: dict) -> bool:
+    """Update user fields as admin (username, role, admin status, poweruser status).
+
+    Args:
+        user_id: The user ID to update.
+        data: Dict with fields to update.
+
+    Returns:
+        True if updated successfully, False if user not found or IntegrityError.
+    """
     session = get_session()
     try:
         row = session.query(User).filter(User.id == user_id).first()
@@ -413,6 +615,14 @@ def admin_update_user(user_id: int, data: dict) -> bool:
 
 
 def admin_delete_user(user_id: int) -> bool:
+    """Delete a user and all related data (tokens, profiles, persons).
+
+    Args:
+        user_id: The user ID to delete.
+
+    Returns:
+        True if user was deleted, False if not found.
+    """
     session = get_session()
     try:
         session.query(RefreshToken).filter(RefreshToken.user_id == user_id).delete()
@@ -426,6 +636,15 @@ def admin_delete_user(user_id: int) -> bool:
 
 
 def admin_set_password(user_id: int, new_password: str) -> bool:
+    """Set a new password for a user (admin function).
+
+    Args:
+        user_id: The user ID to set password for.
+        new_password: New plain text password.
+
+    Returns:
+        True if password set successfully, False if user not found.
+    """
     session = get_session()
     try:
         row = session.query(User).filter(User.id == user_id).first()
@@ -440,6 +659,16 @@ def admin_set_password(user_id: int, new_password: str) -> bool:
 
 
 def change_password(user_id: int, old_password: str, new_password: str) -> bool:
+    """Change a user's password with old password verification.
+
+    Args:
+        user_id: The user ID.
+        old_password: Current password for verification.
+        new_password: New password to set.
+
+    Returns:
+        True if password changed successfully, False if verification fails or user not found.
+    """
     session = get_session()
     row = session.query(User).filter(User.id == user_id).first()
     if not row:
@@ -457,6 +686,14 @@ def change_password(user_id: int, old_password: str, new_password: str) -> bool:
 
 
 def get_profile(user_id: int) -> Optional[dict]:
+    """Get user profile data.
+
+    Args:
+        user_id: The user ID to get profile for.
+
+    Returns:
+        Dict with profile fields or None if profile doesn't exist.
+    """
     keys = ["role_id","birth_year","birth_month","birth_day","birth_hour","birth_minute","birth_second","birth_latitude","birth_longitude","birth_place","birth_country","birth_region","birth_city","birth_timezone","residence_latitude","residence_longitude","residence_place","residence_country","residence_region","residence_city","residence_timezone","isadmin","is_poweruser"]
     session = get_session()
     try:
@@ -471,6 +708,15 @@ def get_profile(user_id: int) -> Optional[dict]:
 
 
 def update_profile(user_id: int, profile: dict) -> bool:
+    """Update user profile with birth and residence data.
+
+    Args:
+        user_id: The user ID to update.
+        profile: Dict with profile fields to update.
+
+    Returns:
+        True if updated successfully.
+    """
     session = get_session()
     tzname = profile.get('birth_timezone')
     res_tz = profile.get('residence_timezone')
@@ -538,12 +784,28 @@ def update_profile(user_id: int, profile: dict) -> bool:
 
 
 def _person_row_to_dict(row):
+    """Convert a UserPerson database row to a dict.
+
+    Args:
+        row: UserPerson database row.
+
+    Returns:
+        Dict with person fields or None if row is None.
+    """
     if not row:
         return None
     return {k: getattr(row, k) for k in PERSON_SELECT_COLUMNS}
 
 
 def list_persons(user_id: int):
+    """List all persons (birth profiles) for a user.
+
+    Args:
+        user_id: The user ID to list persons for.
+
+    Returns:
+        List of person dicts ordered by name.
+    """
     session = get_session()
     rows = (
         session.query(UserPerson)
@@ -556,6 +818,15 @@ def list_persons(user_id: int):
 
 
 def get_person(user_id: int, person_id: int):
+    """Get a specific person by ID for a user.
+
+    Args:
+        user_id: The user ID.
+        person_id: The person ID to retrieve.
+
+    Returns:
+        Person dict or None if not found.
+    """
     session = get_session()
     row = (
         session.query(UserPerson)
@@ -567,6 +838,15 @@ def get_person(user_id: int, person_id: int):
 
 
 def create_person(user_id: int, person: dict):
+    """Create a new person (birth profile) for a user.
+
+    Args:
+        user_id: The user ID to create person for.
+        person: Dict with person fields (name, birth data, residence, etc.).
+
+    Returns:
+        New person ID if created, None on IntegrityError.
+    """
     session = get_session()
     try:
         actor_profile = session.query(UserProfile).filter(UserProfile.user_id == user_id).first()
@@ -589,6 +869,16 @@ def create_person(user_id: int, person: dict):
 
 
 def update_person(user_id: int, person_id: int, person: dict) -> bool:
+    """Update an existing person (birth profile) for a user.
+
+    Args:
+        user_id: The user ID.
+        person_id: The person ID to update.
+        person: Dict with fields to update.
+
+    Returns:
+        True if updated successfully, False if not found.
+    """
     session = get_session()
     actor_profile = session.query(UserProfile).filter(UserProfile.user_id == user_id).first()
     can_manage_roles = _profile_can_manage_roles(actor_profile)
@@ -602,18 +892,26 @@ def update_person(user_id: int, person_id: int, person: dict) -> bool:
         return False
     for col in PERSON_FIELDS:
         if col == 'role_id':
-            value = _coerce_role_id(person.get(col)) if can_manage_roles else row.role_id
-        else:
-            value = person.get(col)
-        setattr(row, col, value)
+            if can_manage_roles:
+                row.role_id = _coerce_role_id(person.get(col))
+        elif person.get(col) is not None:
+            setattr(row, col, person.get(col))
     session.add(row)
     session.commit()
     session.close()
-    success = True
-    return success
+    return True
 
 
 def delete_person(user_id: int, person_id: int) -> bool:
+    """Delete a person (birth profile) for a user.
+
+    Args:
+        user_id: The user ID.
+        person_id: The person ID to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     session = get_session()
     rows = (
         session.query(UserPerson)
@@ -627,6 +925,14 @@ def delete_person(user_id: int, person_id: int) -> bool:
 
 
 def user_to_dict(user: User) -> dict:
+    """Convert a User model to a dict.
+
+    Args:
+        user: User database model.
+
+    Returns:
+        Dict with id, username, isadmin, is_poweruser.
+    """
     return {
         'id': user.id,
         'username': user.username,
@@ -636,6 +942,15 @@ def user_to_dict(user: User) -> dict:
 
 
 async def authenticate_by_username(username: str, password: str) -> Optional[User]:
+    """Authenticate a user by username and password (async).
+
+    Args:
+        username: Username to authenticate.
+        password: Plain text password to verify.
+
+    Returns:
+        User object if authenticated, None otherwise.
+    """
     session = get_session()
     try:
         user = session.query(User).filter(User.username == username.strip()).first()
@@ -650,6 +965,19 @@ async def authenticate_by_username(username: str, password: str) -> Optional[Use
 
 
 async def create_user_with_username(username: str, password: str, is_superuser: bool = False) -> User:
+    """Create a new user with username and password (async).
+
+    Args:
+        username: Desired username.
+        password: Plain text password.
+        is_superuser: Whether to grant admin/superuser status.
+
+    Returns:
+        Created User object.
+
+    Raises:
+        UserAlreadyExists: If username already exists.
+    """
     session = get_session()
     try:
         existing = session.query(User).filter(User.username == username.strip()).first()
@@ -674,6 +1002,14 @@ async def create_user_with_username(username: str, password: str, is_superuser: 
 
 
 async def get_user_by_id_async(user_id: int) -> Optional[User]:
+    """Get a user by ID with profile loaded (async).
+
+    Args:
+        user_id: The user ID to retrieve.
+
+    Returns:
+        User object with profile, or None if not found.
+    """
     session = get_session()
     try:
         return session.query(User).options(joinedload(User.profile)).filter(User.id == user_id).first()
@@ -682,5 +1018,13 @@ async def get_user_by_id_async(user_id: int) -> Optional[User]:
 
 
 async def issue_access_token(user: User) -> str:
+    """Issue a JWT access token for a user (async).
+
+    Args:
+        user: User object to issue token for.
+
+    Returns:
+        JWT token string.
+    """
     from app.services.fastapi_users import get_jwt_strategy
     return await get_jwt_strategy().write_token(user)

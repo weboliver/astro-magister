@@ -42,6 +42,61 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    location = /sitemap.xml {
+        proxy_pass http://api:8000/sitemap.xml;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Astro wiki index (overview page) — /astro-wiki/ → dist/index.html
+    location = /astro-wiki/ {
+        root /workspace/app/wiki/dist;
+        try_files /index.html =500;
+    }
+
+    # Redirect /astro-wiki to /astro-wiki/
+    location = /astro-wiki {
+        return 301 https://$host/astro-wiki/;
+    }
+
+    # Astro wiki static pages
+    location = /astro-wiki/impressum/ {
+        root /workspace/app/wiki/dist;
+        try_files /impressum/index.html =404;
+    }
+    location = /astro-wiki/datenschutz/ {
+        root /workspace/app/wiki/dist;
+        try_files /datenschutz/index.html =404;
+    }
+    location = /astro-wiki/kontakt/ {
+        root /workspace/app/wiki/dist;
+        try_files /kontakt/index.html =404;
+    }
+
+    # Astro wiki entries — /astro-wiki/{slug}/ → dist/wiki/{slug}/index.html
+    location ~ ^/astro-wiki/([^/]+)/$ {
+        root /workspace/app/wiki/dist/wiki;
+        try_files /$1/index.html =404;
+    }
+
+    location /_astro {
+        alias /workspace/app/wiki/dist/_astro;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    location /astro-wiki/_astro {
+        alias /workspace/app/wiki/dist/_astro;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # SPA (Vite dev server)
     location / {
         include /etc/nginx/includes/geoip2-api-guard.conf;
         proxy_pass http://frontend:5173;
@@ -53,7 +108,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-    
+
     # 429 Handler
     location @ratelimited {
         default_type application/json;

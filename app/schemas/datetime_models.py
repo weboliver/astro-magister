@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 class JuldayRequest(BaseModel):
+    """Request to convert datetime to Julian Day."""
+
     year: int = Field(..., description="Year")
     month: int = Field(..., ge=1, le=12, description="Month (1-12)")
     day: int = Field(..., ge=1, le=31, description="Day (1-31)")
@@ -9,14 +11,23 @@ class JuldayRequest(BaseModel):
     minute: int = Field(default=0, ge=0, le=59, description="Minute (0-59)")
     second: int = Field(default=0, ge=0, le=59, description="Second (0-59)")
 
+
 class JuldayResponse(BaseModel):
+    """Response with Julian Day number."""
+
     julian_day: float = Field(..., description="Julian Day Number")
 
+
 class RevjulRequest(BaseModel):
+    """Request to convert Julian Day to calendar date."""
+
     julian_day: float = Field(..., description="Julian Day Number")
     gregorian_calendar: bool = Field(default=True, description="Use Gregorian calendar")
 
+
 class DateResponse(BaseModel):
+    """Calendar date components."""
+
     year: int
     month: int
     day: int
@@ -24,7 +35,10 @@ class DateResponse(BaseModel):
     minute: int
     second: int
 
+
 class DateTimeRequest(BaseModel):
+    """Full datetime request with location for astrological calculations."""
+
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person whose role should be used for interpretation")
     interpretation_id: Optional[int] = Field(None, description="ID einer bestehenden Interpretations-Session; wenn gesetzt wird die Frage daran angehängt statt eine neue Session anzulegen")
     additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
@@ -38,7 +52,10 @@ class DateTimeRequest(BaseModel):
     latitude: float = Field(default=0.0, ge=-90, le=90, description="Geographic latitude for relevant calculations", json_schema_extra={"example": 48.8566})
     longitude: float = Field(default=0.0, ge=-180, le=180, description="Geographic longitude for relevant calculations", json_schema_extra={"example": 2.3522})
 
+
 class SidtimeResponse(BaseModel):
+    """Sidereal time response."""
+
     year: int
     month: int
     day: int
@@ -48,7 +65,10 @@ class SidtimeResponse(BaseModel):
     julian_day: float
     sidereal_time: float = Field(..., description="Sidereal time in hours")
 
+
 class PlanetPosition(BaseModel):
+    """Position of a single planet with sign and house information."""
+
     planet_id: int = Field(..., description="Planet ID (0=Sun, 1=Moon, etc)")
     planet_name: str = Field(..., description="Planet name")
     longitude: float = Field(..., description="Ecliptic longitude in degrees")
@@ -61,6 +81,8 @@ class PlanetPosition(BaseModel):
 
 
 class Aspect(BaseModel):
+    """Aspect between two planets."""
+
     p1: int = Field(..., description="Index of first planet")
     p2: int = Field(..., description="Index of second planet")
     p1_name: Optional[str] = Field(None, description="Name of first planet")
@@ -72,7 +94,10 @@ class Aspect(BaseModel):
     label: str = Field(..., description="Aspect label (e.g. trig, opos, sext)")
     separation: Optional[float] = Field(None, description="Angular separation in degrees")
 
+
 class CalcResponse(BaseModel):
+    """Planetary calculation response with positions and aspects."""
+
     year: int
     month: int
     day: int
@@ -82,7 +107,10 @@ class CalcResponse(BaseModel):
     status: int = Field(..., description="Calculation status (0=OK, <0=error)")
     summary: Optional[str] = Field(None, description="Concise summary for the calculation (single-planet calc)")
 
+
 class HousesResponse(BaseModel):
+    """House cusps response with sign and degree information."""
+
     year: int
     month: int
     day: int
@@ -90,7 +118,10 @@ class HousesResponse(BaseModel):
     julian_day: float
     latitude: float
     longitude: float
+
     class HouseEntry(BaseModel):
+        """Single house cusp entry."""
+
         house: int = Field(..., description="House number (1-12)")
         longitude: float = Field(..., description="Absolute ecliptic longitude of the house cusp in degrees")
         sign_index: int = Field(..., description="0-based zodiac sign index (0=Aries..11=Pisces)")
@@ -100,7 +131,10 @@ class HousesResponse(BaseModel):
     houses: List[HouseEntry] = Field(..., description="12 house cusps with sign and degree within sign")
     summary: Optional[str] = Field(None, description="Concise houses summary, e.g. 'Houses: AC - Pisces (12°09′); ...')")
 
+
 class FixstarResponse(BaseModel):
+    """Fixed star position response."""
+
     star_name: str
     year: int
     month: int
@@ -114,6 +148,8 @@ class FixstarResponse(BaseModel):
 
 
 class SolarReturnRequest(BaseModel):
+    """Request for solar return calculation."""
+
     person_id: Optional[int] = Field(None, description="Optional ID of the selected saved person whose role should be used for interpretation")
     interpretation_id: Optional[int] = Field(None, description="ID einer bestehenden Interpretations-Session; wenn gesetzt wird die Frage daran angehängt")
     additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
@@ -130,6 +166,8 @@ class SolarReturnRequest(BaseModel):
 
 
 class SolarReturnResponse(BaseModel):
+    """Solar return calculation response."""
+
     target_year: int = Field(..., description="Year used for the solar return")
     return_year: int = Field(..., description="Calendar year of the solar return instant")
     return_month: int = Field(..., description="Calendar month of the solar return instant")
@@ -147,12 +185,16 @@ class SolarReturnResponse(BaseModel):
 
 
 class LocationQuery(BaseModel):
+    """Location query for geocoding."""
+
     country: str = Field(..., description="Country code or table name (e.g. 'DE' or 'US')")
     city: str = Field(..., description="City name")
     bezirk: str = Field(..., description="Region/district code (AC) for the city)")
 
 
 class PositionResponse(BaseModel):
+    """Geocoded position response."""
+
     country_code: Optional[str] = Field(None, description="Country code from DB")
     country: Optional[str] = Field(None, description="Country name")
     region_code: Optional[str] = Field(None, description="Region/district code (AC)")

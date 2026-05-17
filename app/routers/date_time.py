@@ -15,7 +15,14 @@ router = APIRouter(tags=["date-time"], dependencies=[Depends(require_authenticat
 
 
 def split_decimal_hour(decimal_hour):
-    """Split a decimal hour into (hour, minute, second) ints."""
+    """Split a decimal hour into (hour, minute, second) integers.
+
+    Args:
+        decimal_hour: Hour as a decimal number (e.g., 14.5 = 14:30).
+
+    Returns:
+        Tuple of (hour, minute, second) as integers.
+    """
     try:
         hour_int = int(decimal_hour)
         rem_min = (decimal_hour - hour_int) * 60.0
@@ -38,6 +45,17 @@ def split_decimal_hour(decimal_hour):
 
 @router.post("/julday", response_model=JuldayResponse)
 def get_julday(request: JuldayRequest):
+    """Calculate Julian Day number from calendar date and time.
+
+    Args:
+        request: JuldayRequest with year, month, day, hour, minute, second.
+
+    Returns:
+        JuldayResponse with julian_day value.
+
+    Raises:
+        HTTPException: On calculation error.
+    """
     try:
         decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
         jd = julday(request.year, request.month, request.day, decimal_hour)
@@ -48,6 +66,17 @@ def get_julday(request: JuldayRequest):
 
 @router.post("/revjul", response_model=DateResponse)
 def get_revjul(request: RevjulRequest):
+    """Convert Julian Day number to calendar date.
+
+    Args:
+        request: RevjulRequest with julian_day and gregorian_calendar flag.
+
+    Returns:
+        DateResponse with year, month, day, hour, minute, second.
+
+    Raises:
+        HTTPException: On conversion error.
+    """
     try:
         gregflag = 1 if request.gregorian_calendar else 0
         y, m, d, h = revjul(request.julian_day, gregflag)
@@ -66,6 +95,17 @@ def get_revjul(request: RevjulRequest):
 
 @router.post("/sidtime", response_model=SidtimeResponse)
 def get_sidtime(request: DateTimeRequest):
+    """Calculate sidereal time for a given date and time.
+
+    Args:
+        request: DateTimeRequest with year, month, day, hour, minute, second.
+
+    Returns:
+        SidtimeResponse with date components, julian_day, and sidereal_time.
+
+    Raises:
+        HTTPException: On calculation error.
+    """
     try:
         decimal_hour = request.hour + request.minute / 60.0 + request.second / 3600.0
         jd = julday(request.year, request.month, request.day, decimal_hour)

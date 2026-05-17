@@ -40,6 +40,17 @@ class PersonOut(PersonBase):
 
 @router.get('/auth/persons', response_model=List[PersonOut])
 def list_persons(request: Request):
+    """List all persons for the authenticated user.
+
+    Args:
+        request: FastAPI Request.
+
+    Returns:
+        List of PersonOut objects.
+
+    Raises:
+        HTTPException: If not authenticated.
+    """
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')
@@ -49,6 +60,18 @@ def list_persons(request: Request):
 
 @router.post('/auth/persons', response_model=PersonOut, status_code=201)
 def create_person(payload: PersonIn, request: Request):
+    """Create a new person profile (powerusers only).
+
+    Args:
+        payload: PersonIn with person data.
+        request: FastAPI Request.
+
+    Returns:
+        Created PersonOut object.
+
+    Raises:
+        HTTPException: If not authenticated or not a poweruser.
+    """
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')
@@ -68,6 +91,18 @@ def create_person(payload: PersonIn, request: Request):
 
 @router.get('/auth/persons/{person_id}', response_model=PersonOut)
 def get_person(person_id: int, request: Request):
+    """Get a specific person by ID.
+
+    Args:
+        person_id: ID of person to retrieve.
+        request: FastAPI Request.
+
+    Returns:
+        PersonOut object.
+
+    Raises:
+        HTTPException: If not authenticated or person not found.
+    """
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')
@@ -79,6 +114,19 @@ def get_person(person_id: int, request: Request):
 
 @router.put('/auth/persons/{person_id}', response_model=PersonOut)
 def update_person(person_id: int, payload: PersonIn, request: Request):
+    """Update a person's data.
+
+    Args:
+        person_id: ID of person to update.
+        payload: PersonIn with updated data.
+        request: FastAPI Request.
+
+    Returns:
+        Updated PersonOut object.
+
+    Raises:
+        HTTPException: If not authenticated or person not found.
+    """
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')
@@ -93,6 +141,18 @@ def update_person(person_id: int, payload: PersonIn, request: Request):
 
 @router.delete('/auth/persons/{person_id}')
 def delete_person(person_id: int, request: Request):
+    """Delete a person profile.
+
+    Args:
+        person_id: ID of person to delete.
+        request: FastAPI Request.
+
+    Returns:
+        Dict with status 'ok'.
+
+    Raises:
+        HTTPException: If not authenticated or person not found.
+    """
     user = _get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')

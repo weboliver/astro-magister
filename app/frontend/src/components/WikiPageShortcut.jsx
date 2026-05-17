@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { get } from '../services/api'
 
+/**
+ * WikiPageShortcut - Displays a button to navigate to a wiki page if it exists
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.pageName - Name of the wiki page to check and navigate to
+ * @param {string} [props.originPage=''] - Origin page name for tracking navigation context
+ * @param {string} [props.originLabel=''] - Origin label for display purposes
+ * @returns {JSX.Element|null} Button to navigate to wiki page, or null if page doesn't exist
+ */
 export default function WikiPageShortcut({ pageName, originPage = '', originLabel = '' }){
   const [visible, setVisible] = useState(false)
 

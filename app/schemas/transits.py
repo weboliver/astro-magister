@@ -4,10 +4,15 @@ from pydantic import BaseModel, Field
 
 
 class Location(BaseModel):
+    """Geographic location for chart calculations."""
+
     latitude: float = Field(default=0.0, ge=-90, le=90, description="Geografische Breite für Häuser")
     longitude: float = Field(default=0.0, ge=-180, le=180, description="Geografische Länge für Häuser")
 
+
 class DateObject(BaseModel):
+    """Date and time object."""
+
     year: int
     month: int
     day: int
@@ -18,6 +23,8 @@ class DateObject(BaseModel):
 
 
 class TransitRequest(BaseModel):
+    """Transit calculation request."""
+
     person_id: Optional[int] = Field(default=None, description="Optional ID of the selected saved person")
     interpretation_id: Optional[int] = Field(default=None, description="ID einer bestehenden Interpretations-Session; wenn gesetzt wird die Frage daran angehängt")
     additional_question: Optional[str] = Field(default=None, max_length=255, description="Optional follow-up question that should be considered in the AI interpretation")
@@ -30,6 +37,8 @@ class TransitRequest(BaseModel):
 
 
 class PlanetOut(BaseModel):
+    """Planet position output with house placements."""
+
     planet_id: int
     planet_name: str
     longitude: float
@@ -39,7 +48,6 @@ class PlanetOut(BaseModel):
     house_index: Optional[int]
     house: Optional[int]
     house_degree: Optional[str]
-    # house placements relative to the other chart
     house_at_transit_index: Optional[int] = None
     house_at_transit: Optional[int] = None
     house_at_transit_degree: Optional[str] = None
@@ -49,6 +57,8 @@ class PlanetOut(BaseModel):
 
 
 class TransitResponse(BaseModel):
+    """Transit calculation response."""
+
     aspects: Optional[List[dict]] = None
     grouped_aspects: Optional[Dict[str, List[dict]]] = None
     summary: Optional[str] = None
