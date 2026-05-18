@@ -31,6 +31,7 @@ from app.routers.fixed_stars import router as fixed_stars_router
 from app.routers.solar import router as solar_router
 from app.routers.age_points import router as age_points_router, public_router as age_points_public_router
 from app.routers.horoscope import router as horoscope_router
+from app.routers.nodes import router as nodes_router
 from app.routers.transits import router as transits_router
 from app.routers.auth import router as auth_router
 from app.routers.locations import router as locations_router
@@ -157,6 +158,7 @@ app.include_router(solar_router)
 app.include_router(age_points_router)
 app.include_router(age_points_public_router)
 app.include_router(horoscope_router)
+app.include_router(nodes_router)
 app.include_router(transits_router)
 app.include_router(auth_router)
 app.include_router(locations_router)

@@ -480,11 +480,11 @@ class PerplexityClient:
                 "Füge am Ende eine Zusammenfassung / psychologische Gesamtschau an.\n"
                 f"{allgemeine_deutung}\n"
             )
-        PLANET_SYSTEM_PROMPT = (
+        NODE_SYSTEM_PROMPT = (
             f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Planeten Interpretation - [Datum]\n"
-            f"Schreibe danach eine detailierte Erläuterung zu den Planeten als Bullet Liste {self.text_type} {self.token_count}\n"\
-            "Füge am Ende eine Zusammenfassung der Planetenpositionen an.\n"
+            "Schreibe am Anfang die Überschrift: Mondknoten Interpretation - [Datum]\n"
+            f"Schreibe danach eine detailierte Erläuterung zu den Mondknoten als Bullet Liste {self.text_type} {self.token_count}\n"\
+            "Füge am Ende eine Zusammenfassung der Mondknotenpositionen an.\n"
             f"{allgemeine_deutung}\n"
         )
         HOUSES_SYSTEM_PROMPT = (
@@ -524,7 +524,7 @@ class PerplexityClient:
         )
 
         self.system_prompt["horoskop"] = HOROSCOPE_SYSTEM_PROMPT
-        self.system_prompt["planets"] = PLANET_SYSTEM_PROMPT
+        self.system_prompt["mondknoten"] = NODE_SYSTEM_PROMPT
         self.system_prompt["houses"] = HOUSES_SYSTEM_PROMPT
         self.system_prompt["transits"] = TRANSITS_SYSTEM_PROMPT
         self.system_prompt["solar_return"] = SOLAR_RETURN_SYSTEM_PROMPT

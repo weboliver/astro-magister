@@ -14,13 +14,13 @@ const apiProxy = {
   '/auth': { target: proxyTarget, changeOrigin: true, secure: false },
   '/locations': { target: proxyTarget, changeOrigin: true, secure: false },
   '/getPosition': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/planets': { target: proxyTarget, changeOrigin: true, secure: false },
   '/solar-return': { target: proxyTarget, changeOrigin: true, secure: false },
   '/age-points': { target: proxyTarget, changeOrigin: true, secure: false },
   '/interpretations': { target: proxyTarget, changeOrigin: true, secure: false },
   '/persons': { target: proxyTarget, changeOrigin: true, secure: false },
   '/timezone': { target: proxyTarget, changeOrigin: true, secure: false },
   '/wiki': { target: proxyTarget, changeOrigin: true, secure: false },
+  '/nodes': { target: proxyTarget, changeOrigin: true, secure: false },
 }
 
 export default defineConfig({

@@ -1,12 +1,12 @@
 /**
- * Planets - Page for calculating and interpreting planetary positions in the birth chart.
+ * Mondknoten - Moon Node (Rahu/Ketu) horoscope page for calculating and interpreting the lunar nodes in the birth chart.
  * @component
- * @returns {JSX.Element} Rendered planets page
- * @hook useState - Manages response, loading, date/time, location, chart, summary, followups, hydration
- * @hook useEffect - Handles responsive layout, loads user data, auto-fetches chart, manages selections, cleanup
- * @hook useCallback - Displays chart blob, computes graphic size and cache key, persists payload to sessionStorage
+ * @returns {JSX.Element} Rendered Mondknoten page
+ * @hook useState - Manages response, loading, date/time, location, chart image, summary, followups
+ * @hook useEffect - Handles responsive layout, loads user data, fetches chart automatically, manages selections
+ * @hook useCallback - Revokes object URLs, computes graphic size, cache key, handles logout cleanup
  * @hook useMemo - Computes current payload for API requests
- * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller
+ * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller, revocation timeout
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
@@ -24,16 +24,14 @@ import InterpretationHistoryDropdown from '../components/InterpretationHistoryDr
 import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
-
 import { parseSseBlock } from '../utils/sseParser'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { PoweruserNoticeLink } from '../components/PoweruserNotice'
 
-const sharedPlanetsCache = new Map()
-const STORAGE_KEY = 'astronex_planets_chart_payload'
+const sharedMondknotenCache = new Map()
 
-async function postPlanetsStream(path, payload) {
+async function postMondknotenStream(path, payload) {
   const response = await postStream(path, payload)
 
   if (!response.ok) {
@@ -55,23 +53,23 @@ async function postPlanetsStream(path, payload) {
   return response
 }
 
-export default function Planets(){
+export default function Mondknoten(){
   const [resp, setResp] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth()+1)
   const [day, setDay] = useState(new Date().getDate())
   const [hour, setHour] = useState(12)
   const [minute, setMinute] = useState(0)
   const [second, setSecond] = useState(0)
-  const [datetimeLocal, setDatetimeLocal] = useState('')
   const [latitude, setLatitude] = useState(52.52)
   const [longitude, setLongitude] = useState(13.4050)
   const [timezone, setTimezone] = useState(typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
+  const [datetimeLocal, setDatetimeLocal] = useState('')
   const [chartImage, setChartImage] = useState(null)
   const [imageLoading, setImageLoading] = useState(false)
   const [imageError, setImageError] = useState('')
-  const [hydrated, setHydrated] = useState(false)
   const [cachedSummary, setCachedSummary] = useState('')
   const [showSummary, setShowSummary] = useState(false)
   const [additionalQuestion, setAdditionalQuestion] = useState('')
@@ -82,9 +80,29 @@ export default function Planets(){
   const followupBaseRef = useRef('')
   const summaryRef = useRef(null)
   const imageUrlRef = useRef(null)
-  const chartCacheRef = useRef(sharedPlanetsCache)
+  const chartCacheRef = useRef(sharedMondknotenCache)
   const graphicAbortRef = useRef(null)
+  const activeChartCacheKeyRef = useRef(null)
+  const hasInitializedSelectionResetRef = useRef(false)
   const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' ? window.innerWidth < 800 : false)
+
+  const revokeTimeoutRef = useRef(null)
+  const revokeObjectUrlLater = useCallback((url) => {
+    if (!url || typeof window === 'undefined') return
+    const candidate = url
+    window.setTimeout(() => {
+      try {
+        if (imageUrlRef.current === candidate) {
+          console.debug('[Mondknoten] skip revoke of active URL')
+          return
+        }
+        URL.revokeObjectURL(candidate)
+        console.debug('[Mondknoten] revoked object URL')
+      } catch (e) {
+        console.debug('[Mondknoten] revoke failed', e)
+      }
+    }, 500)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -93,25 +111,24 @@ export default function Planets(){
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
-  const { profile } = useAuth()
+  const { profile, initialized: authInitialized } = useAuth()
   const prevProfileIdRef = useRef(profile?.id)
   const { selectedPerson } = usePersonSelection()
   const displayChartBlob = useCallback((blob) => {
-    if (imageUrlRef.current) {
-      URL.revokeObjectURL(imageUrlRef.current)
-    }
+    const previousUrl = imageUrlRef.current
     const url = URL.createObjectURL(blob)
     imageUrlRef.current = url
     setChartImage(url)
-  }, [])
+    revokeObjectUrlLater(previousUrl)
+  }, [revokeObjectUrlLater])
   const currentPayload = useMemo(() => ({
     person_id: selectedPerson?.id ?? null,
-    year: parseInt(year,10),
-    month: parseInt(month,10),
-    day: parseInt(day,10),
-    hour: parseInt(hour,10),
-    minute: parseInt(minute,10),
-    second: parseInt(second,10),
+    year: parseInt(year, 10),
+    month: parseInt(month, 10),
+    day: parseInt(day, 10),
+    hour: parseInt(hour, 10),
+    minute: parseInt(minute, 10),
+    second: parseInt(second, 10),
     timezone: timezone || null,
     latitude: parseFloat(latitude),
     longitude: parseFloat(longitude),
@@ -122,162 +139,23 @@ export default function Planets(){
   }, [])
   const computeCacheKey = useCallback((payload, size) => {
     const subjectId = selectedPerson?.id || profile?.id || 'manual'
-    return JSON.stringify({ type: 'planets', subjectId, ...payload, width: size, height: size })
+    return JSON.stringify({ type: 'nodes', subjectId, ...payload, width: size, height: size })
   }, [profile?.id, selectedPerson?.id])
 
-  const persistPayload = useCallback((payload) => {
-    if(typeof window === 'undefined') return
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ payload, datetimeLocal }))
-  }, [datetimeLocal])
-
-
-  useEffect(() => () => {
-    if (imageUrlRef.current) {
-      URL.revokeObjectURL(imageUrlRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
-    // Ensure textarea is hidden/cleared when the page is first opened
-    setCachedSummary('')
-    setShowSummary(false)
-    setFollowups([])
-    setCurrentFollowup('')
-  }, [])
-
   const handleLogoutCleanup = useCallback(() => {
+    const previousUrl = imageUrlRef.current
     chartCacheRef.current.clear()
-    setChartImage(null)
     setResp(null)
     setImageError('')
-    setImageLoading(false)
-    setHydrated(false)
+    setChartImage(null)
+    activeChartCacheKeyRef.current = null
+    imageUrlRef.current = null
+    revokeObjectUrlLater(previousUrl)
     setCachedSummary('')
-    if (imageUrlRef.current) {
-      URL.revokeObjectURL(imageUrlRef.current)
-      imageUrlRef.current = null
-    }
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(STORAGE_KEY)
-    }
   }, [])
   useLogoutCleanup(handleLogoutCleanup)
 
-  useEffect(() => {
-    if (prevProfileIdRef.current && !profile?.id) {
-      handleLogoutCleanup()
-    }
-    prevProfileIdRef.current = profile?.id
-  }, [profile?.id, handleLogoutCleanup])
-
-  useEffect(() => {
-    if (!hydrated) return
-    const size = computeGraphicSize()
-    const key = computeCacheKey(currentPayload, size)
-    const cached = chartCacheRef.current.get(key)
-    if (cached) {
-      setImageError('')
-      displayChartBlob(cached.blob)
-      // Do NOT set cached summary here. Keep summary/text lazy until user clicks button.
-      persistPayload(currentPayload)
-    } else {
-      setChartImage(null)
-      setCachedSummary('')
-      // automatically fetch only the graphic (no summary)
-      const fetchAutoGraphic = async () => {
-        setImageLoading(true)
-        setImageError('')
-        try {
-          // abort any previous in-flight graphic request
-          try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
-          const controller = new AbortController()
-          graphicAbortRef.current = controller
-          const reqSize = computeGraphicSize()
-          const cacheKey = computeCacheKey(currentPayload, reqSize)
-          const cached2 = chartCacheRef.current.get(cacheKey)
-          if (cached2) {
-            graphicAbortRef.current = null
-            displayChartBlob(cached2.blob)
-            return
-          }
-          const headers = { 'Content-Type': 'application/json' }
-          const token = localStorage.getItem('token')
-          if (token) headers['Authorization'] = `Bearer ${token}`
-          const graphicResp = await postWithSignal(`/horoscope/graphic?width=${reqSize}&height=${reqSize}`, currentPayload, controller.signal)
-          if (!graphicResp.ok) {
-            throw new Error(`Graphic request failed (${graphicResp.status})`)
-          }
-          const blob = await graphicResp.blob()
-          // store blob in cache but do not set summary so text stays unloaded
-          chartCacheRef.current.set(cacheKey, { blob })
-          const currentKey = computeCacheKey(currentPayload, reqSize)
-          if (currentKey === cacheKey) {
-            displayChartBlob(blob)
-            persistPayload(currentPayload)
-          } else {
-            console.debug('[Planets] autoFetch dropped display (stale)', { cacheKey, currentKey })
-          }
-          graphicAbortRef.current = null
-        } catch (err) {
-          if (err.name === 'AbortError') {
-            console.debug('[Planets] autoFetch aborted')
-          } else {
-            setImageError(err.message || 'Graphic konnte nicht geladen werden')
-          }
-        } finally {
-          setImageLoading(false)
-        }
-      }
-      fetchAutoGraphic()
-    }
-  }, [hydrated, currentPayload, computeCacheKey, computeGraphicSize, displayChartBlob, persistPayload])
-
-  useEffect(() => {
-    // abort any ongoing graphic request when selection/profile changes
-    try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
-    graphicAbortRef.current = null
-    if (imageUrlRef.current) {
-      URL.revokeObjectURL(imageUrlRef.current)
-      imageUrlRef.current = null
-    }
-    setChartImage(null)
-    setImageError('')
-    setCachedSummary('')
-    setShowSummary(false)
-  }, [selectedPerson?.id, profile?.id])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      setHydrated(true)
-      return
-    }
-    const stored = window.sessionStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        if (parsed.payload) {
-          const payload = parsed.payload
-          if (payload.year !== undefined) setYear(payload.year)
-          if (payload.month !== undefined) setMonth(payload.month)
-          if (payload.day !== undefined) setDay(payload.day)
-          if (payload.hour !== undefined) setHour(payload.hour)
-          if (payload.minute !== undefined) setMinute(payload.minute)
-          if (payload.second !== undefined) setSecond(payload.second)
-          if (payload.latitude !== undefined) setLatitude(payload.latitude)
-          if (payload.longitude !== undefined) setLongitude(payload.longitude)
-          if (payload.timezone !== undefined) setTimezone(payload.timezone)
-        }
-        if (parsed.datetimeLocal) {
-          setDatetimeLocal(String(parsed.datetimeLocal).replace('T', ' '))
-        }
-      } catch (_error) {
-        // ignore
-      }
-    }
-    setHydrated(true)
-  }, [])
-
-  useEffect(()=>{
+  useEffect(() =>{
     const data = selectedPerson || profile
     if (!data) return
     if (data && data.birth_latitude !== undefined && data.birth_latitude !== null) setLatitude(data.birth_latitude)
@@ -303,7 +181,129 @@ export default function Planets(){
     setCurrentFollowup('')
   }, [profile, selectedPerson])
 
-  async function fetchPlanets(){
+  useEffect(() => () => {
+    if (imageUrlRef.current) {
+      URL.revokeObjectURL(imageUrlRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    setCachedSummary('')
+    setShowSummary(false)
+    setFollowups([])
+    setCurrentFollowup('')
+  }, [])
+
+  useEffect(() => {
+    if (prevProfileIdRef.current && !profile?.id) {
+      handleLogoutCleanup()
+    }
+    prevProfileIdRef.current = profile?.id
+  }, [profile?.id, handleLogoutCleanup])
+
+  useEffect(() => {
+    if (!selectedPerson && !authInitialized) {
+      console.debug('[Mondknoten] autoFetch waiting for auth initialization')
+      return
+    }
+
+    const size = computeGraphicSize()
+
+    const sourcePerson = selectedPerson || profile
+    if (sourcePerson) {
+      if ((sourcePerson.birth_year && sourcePerson.birth_year !== currentPayload.year) ||
+          (sourcePerson.birth_month && sourcePerson.birth_month !== currentPayload.month) ||
+          (sourcePerson.birth_day && sourcePerson.birth_day !== currentPayload.day) ||
+          (sourcePerson.birth_hour !== undefined && sourcePerson.birth_hour !== null && sourcePerson.birth_hour !== currentPayload.hour) ||
+          (sourcePerson.birth_minute !== undefined && sourcePerson.birth_minute !== null && sourcePerson.birth_minute !== currentPayload.minute) ||
+          (sourcePerson.birth_second !== undefined && sourcePerson.birth_second !== null && sourcePerson.birth_second !== currentPayload.second) ||
+          (sourcePerson.birth_latitude !== undefined && sourcePerson.birth_latitude !== null && parseFloat(sourcePerson.birth_latitude) !== currentPayload.latitude) ||
+          (sourcePerson.birth_longitude !== undefined && sourcePerson.birth_longitude !== null && parseFloat(sourcePerson.birth_longitude) !== currentPayload.longitude) ||
+          (sourcePerson.birth_timezone && sourcePerson.birth_timezone !== currentPayload.timezone)) {
+        console.debug('[Mondknoten] autoFetch waiting for source person state sync')
+        return
+      }
+    }
+
+    const key = computeCacheKey(currentPayload, size)
+    const cached = chartCacheRef.current.get(key)
+    if (cached) {
+      setImageError('')
+      displayChartBlob(cached.blob)
+      activeChartCacheKeyRef.current = key
+    } else {
+      setChartImage(null)
+      setCachedSummary('')
+      const fetchAutoGraphic = async () => {
+        setImageLoading(true)
+        setImageError('')
+        try {
+          try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
+          const controller = new AbortController()
+          graphicAbortRef.current = controller
+          const reqSize = computeGraphicSize()
+          const cacheKey = computeCacheKey(currentPayload, reqSize)
+          console.debug('[Mondknoten] autoFetch start', { cacheKey, subjectId: selectedPerson?.id || profile?.id, payload: currentPayload })
+          const cached2 = chartCacheRef.current.get(cacheKey)
+          if (cached2) {
+            displayChartBlob(cached2.blob)
+            graphicAbortRef.current = null
+            return
+          }
+          const graphicResp = await postWithSignal(`/nodes/graphic?width=${reqSize}&height=${reqSize}`, currentPayload, controller.signal)
+          if (!graphicResp.ok) {
+            throw new Error(`Graphic request failed (${graphicResp.status})`)
+          }
+          const blob = await graphicResp.blob()
+          chartCacheRef.current.set(cacheKey, { blob })
+          const currentKey = computeCacheKey(currentPayload, reqSize)
+          if (currentKey === cacheKey) {
+            console.debug('[Mondknoten] autoFetch display', { cacheKey })
+            displayChartBlob(blob)
+            activeChartCacheKeyRef.current = cacheKey
+          } else {
+            console.debug('[Mondknoten] autoFetch dropped display (stale)', { cacheKey, currentKey })
+          }
+          graphicAbortRef.current = null
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            console.debug('[Mondknoten] autoFetch aborted')
+          } else {
+            setImageError(err.message || 'Graphic konnte nicht geladen werden')
+          }
+        } finally {
+          setImageLoading(false)
+        }
+      }
+      fetchAutoGraphic()
+    }
+  }, [authInitialized, currentPayload, computeCacheKey, computeGraphicSize, displayChartBlob, profile, selectedPerson])
+
+
+  useEffect(() => {
+    if (!hasInitializedSelectionResetRef.current) {
+      hasInitializedSelectionResetRef.current = true
+      return
+    }
+    const previousUrl = imageUrlRef.current
+    imageUrlRef.current = null
+    try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
+    graphicAbortRef.current = null
+    setChartImage(null)
+    activeChartCacheKeyRef.current = null
+    setImageError('')
+    setCachedSummary('')
+    setShowSummary(false)
+    setFollowups([])
+    setCurrentFollowup('')
+    revokeObjectUrlLater(previousUrl)
+  }, [selectedPerson?.id, profile?.id])
+
+  async function fetchMondknoten(){
+    const reqSize = computeGraphicSize()
+    const cacheKey = computeCacheKey(currentPayload, reqSize)
+    const cachedGraphic = chartCacheRef.current.get(cacheKey)
+    const hasCurrentGraphic = !!chartImage && activeChartCacheKeyRef.current === cacheKey
     const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
     if (activeInterpretationId) {
       const normalizedFollowup = normalizeAdditionalQuestion(currentFollowup)
@@ -334,38 +334,26 @@ export default function Planets(){
       }
       return
     }
-    setLoading(true)
-    setResp(null)
+    setLoading(true); setResp(null)
     setImageError('')
     setCachedSummary('')
     setShowSummary(true)
-
     const payload = normalizedAdditionalQuestion
       ? { ...currentPayload, additional_question: normalizedAdditionalQuestion }
       : currentPayload
-    const reqSize = computeGraphicSize()
-    const cacheKey = computeCacheKey(payload, reqSize)
-    try {
-      console.debug('[Planets] fetchPlanets start', { cacheKey, payload })
-      const cached = chartCacheRef.current.get(cacheKey)
-      let skipGraphic = false
-      if (cached) {
-        displayChartBlob(cached.blob)
-        skipGraphic = true
-      }
+    if (!cachedGraphic && !hasCurrentGraphic) {
+      const previousUrl = imageUrlRef.current
+      setChartImage(null)
+      imageUrlRef.current = null
+      activeChartCacheKeyRef.current = null
+      setImageLoading(true)
+      revokeObjectUrlLater(previousUrl)
+    } else {
+      setImageLoading(false)
+    }
 
-      if (!skipGraphic) {
-        setChartImage(null)
-        if (imageUrlRef.current) {
-          URL.revokeObjectURL(imageUrlRef.current)
-          imageUrlRef.current = null
-        }
-        setImageLoading(true)
-      } else {
-        setImageLoading(false)
-      }
-
-      const streamResp = await postPlanetsStream('/planets/stream', payload)
+    try{
+      const streamResp = await postMondknotenStream('/nodes/stream', payload)
       const reader = streamResp.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -422,42 +410,54 @@ export default function Planets(){
         if (done) break
       }
 
-      try {
-        const summaryText = streamedSummary || 'Kein Summary vorhanden'
-        if (skipGraphic) {
-          setCachedSummary(summaryText)
-          persistPayload(payload)
-        } else {
-          console.debug('[Planets] fetchPlanets graphic start', { cacheKey, payload })
-          try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
-          const controller = new AbortController()
-          graphicAbortRef.current = controller
-          const graphicResp = await postWithSignal(`/horoscope/graphic?width=${reqSize}&height=${reqSize}`, payload, controller.signal)
-          if (!graphicResp.ok) {
-            throw new Error(`Graphic request failed (${graphicResp.status})`)
+      try{
+        const cached = chartCacheRef.current.get(cacheKey)
+        if (cached) {
+          if (!hasCurrentGraphic) {
+            displayChartBlob(cached.blob)
           }
-          const blob = await graphicResp.blob()
-          chartCacheRef.current.set(cacheKey, { blob })
-          setCachedSummary(summaryText)
-          const currentKey = computeCacheKey(currentPayload, reqSize)
-          if (currentKey === cacheKey) {
-            displayChartBlob(blob)
-            persistPayload(payload)
-          } else {
-            console.debug('[Planets] fetchPlanets dropped display (stale)', { cacheKey, currentKey })
-          }
-          graphicAbortRef.current = null
-        }
-      } catch (imgErr) {
-        if (imgErr.name === 'AbortError') {
-          console.debug('[Planets] fetchPlanets aborted')
+          activeChartCacheKeyRef.current = cacheKey
+          setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
+        } else if (hasCurrentGraphic) {
+          activeChartCacheKeyRef.current = cacheKey
+          setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
         } else {
-          setImageError(imgErr.message || 'Graphic konnte nicht geladen werden')
+          console.debug('[Mondknoten] fetchMondknoten graphic start', { cacheKey, payload })
+          try {
+            try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
+            const controller = new AbortController()
+            graphicAbortRef.current = controller
+            const graphicResp = await postWithSignal(`/nodes/graphic?width=${reqSize}&height=${reqSize}`, payload, controller.signal)
+            if (!graphicResp.ok) {
+              throw new Error(`Graphic request failed (${graphicResp.status})`)
+            }
+            const blob = await graphicResp.blob()
+            const summaryText = streamedSummary || 'Kein Summary vorhanden'
+            chartCacheRef.current.set(cacheKey, { blob })
+            setCachedSummary(summaryText)
+            const currentKey = computeCacheKey(currentPayload, reqSize)
+            if (currentKey === cacheKey) {
+              console.debug('[Mondknoten] fetchMondknoten display', { cacheKey })
+              displayChartBlob(blob)
+              activeChartCacheKeyRef.current = cacheKey
+            } else {
+              console.debug('[Mondknoten] fetchMondknoten dropped display (stale)', { cacheKey, currentKey })
+            }
+            graphicAbortRef.current = null
+          } catch (imgErr) {
+            if (imgErr.name === 'AbortError') {
+              console.debug('[Mondknoten] fetchMondknoten aborted')
+            } else {
+              throw imgErr
+            }
+          }
         }
+      }catch(imgErr){
+        setImageError(imgErr.message || 'Graphic konnte nicht geladen werden')
       }
-    } catch(e) {
+    }catch(e){
       setResp({ ok:false, error: e.message })
-    } finally {
+    }finally{
       setLoading(false)
       setImageLoading(false)
     }
@@ -473,13 +473,13 @@ export default function Planets(){
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <h3 style={{ marginBottom: 0 }}>Planeten</h3>
-        <WikiPageShortcut pageName="Planeten" originPage="planets" originLabel="Planeten" />
+        <h3 style={{ marginBottom: 0 }}>Mondknoten Horoskop</h3>
+        <WikiPageShortcut pageName="Mondknoten" originPage="mondknoten" originLabel="Mondknoten" />
       </div>
-      <PersonSelector helperText="Person für die Planetenberechnung wählen" />
+      <PersonSelector helperText="Person für die Mondknoten-Berechnung wählen" />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, alignItems: 'flex-start' }}>
         <div className="container-400pt" style={{ flex: '1 1 360px', minWidth: 240 }}>
-          <div style={{ display: 'none' }}>
+          <div style={{ marginTop: 8, marginBottom: 8 , display: 'none' }}>
           <label>Datum & Uhrzeit</label>
           <Flatpickr
             value={datetimeLocal}
@@ -493,16 +493,20 @@ export default function Planets(){
               setDatetimeLocal(formatDateTimeValue(y, m, d, hh, mm, ss))
             }}
           />
-            <label>Timezone</label>
-            <input className="tz-input" value={timezone} onChange={e=>setTimezone(e.target.value)} />
-            <label>Latitude</label>
-            <input value={latitude} onChange={e=>setLatitude(e.target.value)} />
-            <label>Longitude</label>
-            <input value={longitude} onChange={e=>setLongitude(e.target.value)} />
           </div>
+          {showAdvanced && (
+            <>
+              <label>Timezone</label>
+              <input className="tz-input" value={timezone} onChange={e=>setTimezone(e.target.value)} />
+              <label>Latitude</label>
+              <input value={latitude} onChange={e=>setLatitude(e.target.value)} />
+              <label>Longitude</label>
+              <input value={longitude} onChange={e=>setLongitude(e.target.value)} />
+            </>
+          )}
           {profile?.id && (
             <InterpretationHistoryDropdown
-              contextType="planets"
+              contextType="nodes"
               userPersonsId={selectedPerson?.id ?? null}
               refreshToken={activeInterpretationId || dropdownRefreshToken}
               selectedInterpretationId={activeInterpretationId}
@@ -553,38 +557,38 @@ export default function Planets(){
             onChange={(event) => setAdditionalQuestion(event.target.value.slice(0, ADDITIONAL_QUESTION_MAX_LENGTH))}
             maxLength={ADDITIONAL_QUESTION_MAX_LENGTH}
             rows={3}
-            placeholder="Optional: Worauf soll die KI bei der Interpretation besonders eingehen?"
+            placeholder="Optional: Worauf soll die KI bei der Auswertung besonders eingehen?"
             style={{ width: '100%', resize: 'vertical', background: activeInterpretationId ? '#f5f5f5' : undefined }}
             disabled={!!activeInterpretationId}
           />
           {!activeInterpretationId && (
             <div style={{ marginTop: 4, color: '#577', fontSize: 12, textAlign: 'right' }}>{additionalQuestion.length}/{ADDITIONAL_QUESTION_MAX_LENGTH}</div>
           )}
-            {(showSummary && (cachedSummary || resp || loading)) ? (
-              <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'hidden' }}>
-                {summaryError ? (
-                  <ErrorMessage message={summaryError} />
-                ) : null}
-                <div ref={summaryRef}>
-                  <MarkdownRenderer>{summaryText || (loading ? 'Analyse wird erstellt ...' : '')}</MarkdownRenderer>
-                </div>
+          {(showSummary && (cachedSummary || resp || loading)) ? (
+            <div style={{ marginTop: 12, background: '#f7f7f7', padding: 16, width: '94%', maxHeight: 420, borderRadius: 10, border: '1px solid #dde1e7', color: '#203244', overflowY: 'auto', overflowX: 'auto' }}>
+              {summaryError ? (
+                <ErrorMessage message={summaryError} />
+              ) : null}
+              <div ref={summaryRef}>
+                <MarkdownRenderer>{summaryText || (loading ? 'Analyse wird erstellt ...' : '')}</MarkdownRenderer>
               </div>
-            ) : null}
-            {cachedSummary && (
-              <div style={{ marginTop: 4, textAlign: 'right' }}>
-                <button
-                  onClick={() => {
-                    const subject = selectedPerson || profile
-                    const birthDate = subject ? `${subject.birth_day ?? '?'}.${subject.birth_month ?? '?'}.${subject.birth_year ?? '?'}` : ''
-                    printInterpretationAsPdf('Planeten Positionen', summaryRef.current, { personName: selectedPerson?.name || profile?.username || 'Eigenes Profil', birthDate, birthCity: subject?.birth_city || '', birthRegionCode: subject?.birth_region || '', birthCountryCode: subject?.birth_country || '', additionalQuestion, imageUrl: chartImage })
-                  }}
-                  title="Druckversion erzeugen"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
-                >
-                  <img src="/x-pdf-32.png" alt="PDF herunterladen" style={{ width: 28, height: 28, verticalAlign: 'middle' }} />
-                </button>
-              </div>
-            )}
+            </div>
+          ) : null}
+          {cachedSummary && (
+            <div style={{ marginTop: 4, textAlign: 'right' }}>
+              <button
+                onClick={() => {
+                  const subject = selectedPerson || profile
+                  const birthDate = subject ? `${subject.birth_day ?? '?'}.${subject.birth_month ?? '?'}.${subject.birth_year ?? '?'}` : ''
+                  printInterpretationAsPdf('Mondknoten Horoskop', summaryRef.current, { personName: selectedPerson?.name || profile?.username || 'Eigenes Profil', birthDate, birthCity: subject?.birth_city || '', birthRegionCode: subject?.birth_region || '', birthCountryCode: subject?.birth_country || '', additionalQuestion, imageUrl: chartImage })
+                }}
+                title="Druckversion erzeugen"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
+              >
+                <img src="/x-pdf-32.png" alt="PDF herunterladen" style={{ width: 28, height: 28, verticalAlign: 'middle' }} />
+              </button>
+            </div>
+          )}
           {followups.map((fu, idx) => (
             <div key={idx} style={{ marginTop: 12 }}>
               <label><b>Zusatzfrage {idx + 1}</b></label>
@@ -620,10 +624,10 @@ export default function Planets(){
           )}
           <div style={{marginTop:8, display:'flex', flexWrap:'wrap', gap:8, alignItems:'center'}}>
             <button
-              onClick={fetchPlanets}
+              onClick={fetchMondknoten}
               disabled={loading || (activeInterpretationId ? (!profile?.is_poweruser || !currentFollowup.trim() || followups.length >= 10) : false)}
             >
-              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Planeten Positionen interpretieren')}
+              {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Mondknoten interpretieren')}
             </button>
             {activeInterpretationId && (
               <button
@@ -649,15 +653,15 @@ export default function Planets(){
 
         </div>
         <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 750 }}>
-          <div style={{ border: '1px solid #dde1e7', borderRadius: 12, marginTop: (isNarrow ? 0 : -70), padding: 12, minHeight: 420, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
-            <h4 style={{ marginTop: 0, marginBottom: 12 }}>Planeten Positionen</h4>
-            {imageLoading && <LoadingSpinner message="Horoskop wird gerendert…" />}
+          <div style={{ border: '1px solid #dde1e7', marginTop: (isNarrow ? 0 : -70), borderRadius: 12, padding: 12, minHeight: 320, background: '#fff', boxShadow: '0 2px 12px rgba(15,23,42,0.12)' }}>
+            <h4 style={{ marginTop: 0, marginBottom: 12 }}>Mondknoten Diagramm</h4>
+            {imageLoading && <LoadingSpinner message="Mondknoten wird gerendert…" />}
             {imageError && <ErrorMessage message={imageError} />}
             {chartImage && !imageLoading && (
-              <img src={chartImage} alt="Planeten Positionen" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
+              <img src={chartImage} alt="Mondknoten Diagramm" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
             )}
             {!chartImage && !imageLoading && !imageError && (
-              <div style={{ color: '#577' }}>Klicke auf «Planeten Positionen interpretieren», um das Chart rechts neben dem Formular anzuzeigen.</div>
+              <div style={{ color: '#577' }}>Klicke auf «Mondknoten interpretieren», um das Chart rechts neben dem Formular anzuzeigen und eine Auswertung zu erhalten.</div>
             )}
           </div>
         </div>

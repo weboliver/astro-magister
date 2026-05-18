@@ -9,7 +9,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
-import Planets from './pages/Planets'
+import Mondknoten from './pages/Mondknoten'
 import SolarReturn from './pages/SolarReturn'
 import AgePoints from './pages/AgePoints'
 import Horoscope from './pages/Horoscope'
@@ -23,12 +23,12 @@ import { useSeoMeta } from './hooks/useSeoMeta'
 
 const MOBILE_MENU_BREAKPOINT = 850
 const TOP_NAV_MIN_WIDTH = 200
-const RESTRICTED_PROFILE_PAGES = new Set(['horoscope', 'planets', 'houses', 'transits', 'solar', 'agepoints'])
+const RESTRICTED_PROFILE_PAGES = new Set(['horoscope', 'mondknoten', 'houses', 'transits', 'solar', 'agepoints'])
 const SELF_STYLED_PAGES = new Set(['admin', 'settings'])
 const PAGE_META = {
   dashboard: { title: 'Startseite', description: 'Astro-Magister – dein Portal für astrologische Selbsterfahrung. Horoskop, Planeten, Häuser, Transite und mehr.' },
   horoscope: { title: 'Horoskop', description: 'Dein persönliches Horoskop auf einen Blick – Planetenstellungen und astrologische Deutungen.' },
-  planets: { title: 'Planeten', description: 'Planetenpositionen und astrologische Bedeutungen im Überblick.' },
+  mondknoten: { title: 'Mondknoten', description: 'Das Mondknoten Horoskop nach Huber — Rahu und Ketu in Zeichen und Häusern.' },
   houses: { title: 'Häuser', description: 'Die astrologischen Häuser und ihre Deutungen in deinem Horoskop.' },
   transits: { title: 'Transite', description: 'Aktuelle Transite und ihre astrologische Wirkung auf dein Geburtshoroskop.' },
   solar: { title: 'Solar Jahr', description: 'Das solare Rückkehrhoroskop für dein aktuelles Lebensjahr.' },
@@ -45,7 +45,7 @@ const PAGE_LABELS = {
   login: 'Login',
   register: 'Registrierung',
   horoscope: 'Horoskop',
-  planets: 'Planeten',
+  mondknoten: 'Mondknoten',
   houses: 'Häuser',
   transits: 'Transite',
   solar: 'Solar Jahr',
@@ -73,7 +73,7 @@ const FOOTER_LINKS = [
 const PATH_TO_PAGE = {
   '/': 'dashboard',
   '/dashboard': 'dashboard',
-  '/planets': 'planets',
+  '/mondknoten': 'mondknoten',
   '/horoscope': 'horoscope',
   '/transits': 'transits',
   '/houses': 'houses',
@@ -248,7 +248,7 @@ export default function App(){
     if (page === 'login') return <Login onLogin={(u)=>{ setUser(u); navigateTo('dashboard') }} onShowRegister={()=>navigateTo('register')} />
     if (page === 'register') return <Register onRegistered={(u)=>{ setUser(u); navigateTo('dashboard') }} onCancel={()=>navigateTo('login')} />
     if (page === 'dashboard') return <Dashboard user={user} />
-    if (page === 'planets') return <Planets />
+    if (page === 'mondknoten') return <Mondknoten />
     if (page === 'horoscope') return <Horoscope />
     if (page === 'transits') return <Transits />
     if (page === 'houses') return <Houses />
@@ -323,7 +323,7 @@ export default function App(){
                 {user ? (
                   <>
                     {!needsProfileSetup && <span className={getNavItemClassName('horoscope')} onClick={()=>navigateTo('horoscope')}>Horoskop</span>}
-                    {!needsProfileSetup && <span className={getNavItemClassName('planets')} onClick={()=>navigateTo('planets')}>Planeten</span>}
+                    {!needsProfileSetup && <span className={getNavItemClassName('mondknoten')} onClick={()=>navigateTo('mondknoten')}>Mondknoten</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('houses')} onClick={()=>navigateTo('houses')}>Häuser</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('transits')} onClick={()=>navigateTo('transits')}>Transite</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('solar')} onClick={()=>navigateTo('solar')}>Solar Jahr</span>}
@@ -346,7 +346,7 @@ export default function App(){
             {user ? (
               <>
                 {!needsProfileSetup && <span className={getNavItemClassName('horoscope')} onClick={()=>navigateTo('horoscope')}>Horoskop</span>}
-                {!needsProfileSetup && <span className={getNavItemClassName('planets')} onClick={()=>navigateTo('planets')}>Planeten</span>}
+                {!needsProfileSetup && <span className={getNavItemClassName('mondknoten')} onClick={()=>navigateTo('mondknoten')}>Mondknoten</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('houses')} onClick={()=>navigateTo('houses')}>Häuser</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('transits')} onClick={()=>navigateTo('transits')}>Transite</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('solar')} onClick={()=>navigateTo('solar')}>Solar Jahr</span>}

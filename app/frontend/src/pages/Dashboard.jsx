@@ -18,7 +18,7 @@ import { get } from '../services/api'
 
 const quickLinks = [
   { title: 'Horoskop', page: 'horoscope', description: 'Erkunde dein Geburtshoroskop mit Häusern und Aspekten.' },
-  { title: 'Planeten', page: 'planets', description: 'Die Positionen der Planeten und ihre Bewegungen.' },
+  { title: 'Mondknoten', page: 'mondknoten', description: 'Mondknoten-Horoskop und ihre Bewegungen.' },
   { title: 'Häuser', page: 'houses', description: 'Ein Blick auf die Hausverteilungen.' },
   { title: 'Transite', page: 'transits', description: 'Transite zur Deutung aktueller Einflüsse.' },
   { title: 'Solar Jahr', page: 'solar', description: 'Sonnenrückkehr-Chart für das nächste Lebensjahr.' },
