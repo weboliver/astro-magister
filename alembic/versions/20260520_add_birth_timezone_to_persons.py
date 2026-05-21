@@ -7,6 +7,7 @@ Create Date: 2026-05-20
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect as sa_inspect
 
 revision: str = 'add_birth_timezone_to_persons'
 down_revision: Union[str, None] = 'drop_parent_id'
@@ -15,7 +16,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    from sqlalchemy import inspect as sa_inspect
     conn = op.get_bind()
     inspector = sa_inspect(conn)
     columns = [c['name'] for c in inspector.get_columns('user_persons')]
@@ -24,7 +24,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    from sqlalchemy import inspect as sa_inspect
     conn = op.get_bind()
     inspector = sa_inspect(conn)
     columns = [c['name'] for c in inspector.get_columns('user_persons')]

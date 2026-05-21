@@ -7,6 +7,7 @@ Create Date: 2026-05-19
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect as sa_inspect
 
 
 revision: str = 'b1c2d3e4f5a6'
@@ -16,7 +17,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    from sqlalchemy import inspect as sa_inspect
     conn = op.get_bind()
     inspector = sa_inspect(conn)
     columns = [c['name'] for c in inspector.get_columns('user_interpretations')]
@@ -56,16 +56,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    from sqlalchemy import inspect as sa_inspect
     conn = op.get_bind()
     inspector = sa_inspect(conn)
-    columns = [c['name'] for c in inspector.get_columns('user_interpretations')]
-
-    if 'user_persons_b_id' not in columns:
-        op.add_column('user_interpretations', sa.Column('user_persons_b_id', sa.Integer(), nullable=True))
-    indexes = [i['name'] for i in inspector.get_indexes('user_interpretations')]
-    if 'ix_user_interpretations_user_persons_b_id' not in indexes:
-        op.create_index('ix_user_interpretations_user_persons_b_id', 'user_interpretations', ['user_persons_b_id'])
 
     fks = inspector.get_foreign_keys('user_interpretations')
     has_self_fk = any(

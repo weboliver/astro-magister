@@ -7,6 +7,7 @@ Create Date: 2026-05-19
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect as sa_inspect
 
 
 revision: str = 'c1d2e3f4a5b6'
@@ -16,7 +17,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    from sqlalchemy import inspect as sa_inspect
     conn = op.get_bind()
     inspector = sa_inspect(conn)
     columns = [c['name'] for c in inspector.get_columns('user_interpretations')]
@@ -25,4 +25,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column('user_interpretations', 'comparison_mode')
+    conn = op.get_bind()
+    inspector = sa_inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('user_interpretations')]
+    if 'comparison_mode' in columns:
+        op.drop_column('user_interpretations', 'comparison_mode')
