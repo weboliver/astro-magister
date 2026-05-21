@@ -37,6 +37,8 @@ PERSON_FIELDS = [
     'birth_city',
     'birth_latitude',
     'birth_longitude',
+    'birth_timezone',
+    'residence_timezone',
 ]
 PERSON_SELECT_COLUMNS = ['id'] + PERSON_FIELDS
 PERSON_INSERT_COLUMNS = ['user_id'] + PERSON_FIELDS

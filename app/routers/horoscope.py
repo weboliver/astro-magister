@@ -11,7 +11,8 @@ from app.schemas.datetime_models import PlanetPosition, Aspect, SolarReturnRespo
 from app.services.horoscope_graphics import build_chart_from_request, draw_chart_png
 from app.services.planet_names import get_planet_name
 from app.services.planet_positions import calculate_api_planet_entries
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 import asyncio
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
@@ -357,8 +358,8 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
                     status_code=403,
                     detail='KI-Interpretation ist Mitgliedern mit Spenderstatus vorbehalten. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic',
                 )
-            perplexityClient = PerplexityClient(role_type=role_name)
-            cached_summary = perplexityClient.get_cached_summary(
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(
                 summary=response_data['summary_prompt'],
                 system_prompt="horoskop",
             )
@@ -381,7 +382,7 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
                         detail=build_ai_rate_limit_error_detail(rate_limit),
                         headers={'Retry-After': str(rate_limit.retry_after_seconds)},
                     )
-                summary = perplexityClient.send_summary_text(
+                summary = provider.chat_completion(
                     summary=response_data['summary_prompt'],
                     system_prompt="horoskop",
                 )
@@ -429,14 +430,14 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
         HTTPException: If not authenticated, rate limited, or calculation fails.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         response_data = _build_horoscope_response_data(payload)
         if response_data['summary_prompt']:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_horoscope(request, payload)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(
                 summary=response_data['summary_prompt'],
                 system_prompt=HOROSCOPE_SYSTEM_PROMPT,
             )
@@ -490,7 +491,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="horoscope",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=payload.year,
                             interp_month=payload.month,
                             interp_day=payload.day,
@@ -507,7 +508,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
             return
 
         try:
-            async for chunk in perplexity_client.send_summary_stream(
+            async for chunk in provider.stream_completion(
                 summary=response_data['summary_prompt'],
                 system_prompt=HOROSCOPE_SYSTEM_PROMPT,
             ):
@@ -519,25 +520,22 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                 try:
                     logger.debug("No streamed chunks received, invoking synchronous fallback")
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         response_data['summary_prompt'],
                         HOROSCOPE_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                     logger.debug("Fallback returned length=%d", len(text))
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed")
+                    logger.exception("Synchronous fallback to chat_completion failed")
 
             full_summary = "".join(summary_parts)
             logger.debug("Assembled full summary, length=%d", len(full_summary))
-            # store the assembled summary in the cache for identical future requests
             try:
-                resolved_prompt = perplexity_client._resolve_system_prompt(HOROSCOPE_SYSTEM_PROMPT)
-                key = _make_cache_key(response_data['summary_prompt'], resolved_prompt, perplexity_client.model)
-                _cache_set(key, full_summary)
-                logger.debug("Wrote full summary to Perplexity cache key=%s", key[:16])
+                provider.cache_result(response_data['summary_prompt'], HOROSCOPE_SYSTEM_PROMPT, full_summary)
+                logger.debug("Wrote full summary to cache")
             except Exception:
-                logger.exception("Failed to set Perplexity cache")
+                logger.exception("Failed to set cache")
 
             yield _sse_event("done", {"summary": full_summary})
             try:
@@ -552,7 +550,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="horoscope",
-                        model=perplexity_client.model,
+                        model=provider.model_name,
                         interp_year=payload.year,
                         interp_month=payload.month,
                         interp_day=payload.day,

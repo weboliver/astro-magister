@@ -18,7 +18,9 @@ class InterpretationCreate(BaseModel):
     """Interpretation session creation schema."""
 
     user_persons_id: Optional[int] = None
+    user_person_id_2: Optional[int] = None
     context_type: Optional[str] = Field(None, max_length=64)
+    comparison_mode: Optional[str] = Field(None, max_length=8)
     model: Optional[str] = Field(None, max_length=64)
     interp_year: Optional[int] = None
     interp_month: Optional[int] = None
@@ -60,7 +62,9 @@ class InterpretationOut(BaseModel):
 
     id: int
     user_persons_id: Optional[int] = None
+    user_person_id_2: Optional[int] = None
     context_type: Optional[str] = None
+    comparison_mode: Optional[str] = None
     model: Optional[str] = None
     interp_year: Optional[int] = None
     interp_month: Optional[int] = None
@@ -91,7 +95,11 @@ class InterpretationListItem(BaseModel):
     interp_day: Optional[int] = None
     location_city: Optional[str] = None
     user_persons_id: Optional[int] = None
+    user_person_id_2: Optional[int] = None
+    comparison_mode: Optional[str] = None
     first_question: Optional[str] = None
+    user_person_name: Optional[str] = None
+    user_person_2_name: Optional[str] = None
 
 
 class InterpretationCreatedOut(BaseModel):

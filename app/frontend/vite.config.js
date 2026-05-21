@@ -21,6 +21,7 @@ const apiProxy = {
   '/timezone': { target: proxyTarget, changeOrigin: true, secure: false },
   '/wiki': { target: proxyTarget, changeOrigin: true, secure: false },
   '/nodes': { target: proxyTarget, changeOrigin: true, secure: false },
+  '/synastry': { target: proxyTarget, changeOrigin: true, secure: false },
 }
 
 export default defineConfig({

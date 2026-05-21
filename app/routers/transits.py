@@ -18,7 +18,8 @@ from app.services.horoscope_graphics import build_chart_from_request, draw_chart
 from app.services.astro_env import ensure_astro_env
 from app.schemas.datetime_models import DateTimeRequest
 from app.static.texte import get_general_anweisung
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
 from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
@@ -494,7 +495,7 @@ async def transits_stream(req: TransitRequest, request: Request):
         StreamingResponse with SSE events for transits and AI summary.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         result = _build_transits_response(req, request)
         response_data = result.model_dump()
@@ -502,8 +503,8 @@ async def transits_stream(req: TransitRequest, request: Request):
         if summary_prompt:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_transits(request, req)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(summary_prompt, TRANSITS_SYSTEM_PROMPT)
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(summary_prompt, TRANSITS_SYSTEM_PROMPT)
             if cached_summary is None:
                 rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:transits')
                 if not rate_limit.allowed:
@@ -552,7 +553,7 @@ async def transits_stream(req: TransitRequest, request: Request):
                             assistant_content=cached_summary,
                             user_persons_id=getattr(req, 'person_id', None),
                             context_type="transits",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=req.transitdate.year,
                             interp_month=req.transitdate.month,
                             interp_day=req.transitdate.day,
@@ -571,7 +572,7 @@ async def transits_stream(req: TransitRequest, request: Request):
             return
 
         try:
-            async for chunk in perplexity_client.send_summary_stream(
+            async for chunk in provider.stream_completion(
                 summary=summary_prompt,
                 system_prompt=TRANSITS_SYSTEM_PROMPT,
             ):
@@ -581,21 +582,19 @@ async def transits_stream(req: TransitRequest, request: Request):
             if not summary_parts:
                 try:
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         summary_prompt,
                         TRANSITS_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed for transits")
+                    logger.exception("Synchronous fallback to chat_completion failed for transits")
 
             full_summary = "".join(summary_parts)
             try:
-                resolved_prompt = perplexity_client._resolve_system_prompt(TRANSITS_SYSTEM_PROMPT)
-                key = _make_cache_key(summary_prompt, resolved_prompt, perplexity_client.model)
-                _cache_set(key, full_summary)
+                provider.cache_result(summary_prompt, TRANSITS_SYSTEM_PROMPT, full_summary)
             except Exception:
-                logger.exception("Failed to set Perplexity cache for transits")
+                logger.exception("Failed to set cache for transits")
 
             yield _sse_event("done", {"summary": full_summary})
             try:
@@ -610,7 +609,7 @@ async def transits_stream(req: TransitRequest, request: Request):
                         assistant_content=full_summary,
                         user_persons_id=getattr(req, 'person_id', None),
                         context_type="transits",
-                        model=perplexity_client.model,
+                        model=provider.model_name,
                         interp_year=req.transitdate.year,
                         interp_month=req.transitdate.month,
                         interp_day=req.transitdate.day,

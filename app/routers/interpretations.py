@@ -9,6 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from app import config as app_config
 from app.db.models.interpretations import UserInterpretation
 from app.db.session import get_session
 from app.routers.auth import _get_user_from_request, require_authenticated_user
@@ -23,7 +24,7 @@ from app.schemas.interpretations import (
 from app.services.auth import is_poweruser
 from app.services import auth as auth_service
 from app.services import interpretation_store as store
-from app.services.perplexity import PerplexityClient
+from app.services.providers import get_chat_provider
 from app.services.auth_security import (
     build_ai_rate_limit_error_detail,
     check_ai_rate_limit,
@@ -82,7 +83,8 @@ def _to_list_item(interp: UserInterpretation) -> InterpretationListItem:
     first_question: Optional[str] = None
     if interp.messages:
         first_question = store.get_first_user_question(interp.messages)
-    return InterpretationListItem(
+
+    item = InterpretationListItem(
         id=interp.id,
         context_type=interp.context_type,
         created=interp.created,
@@ -91,8 +93,22 @@ def _to_list_item(interp: UserInterpretation) -> InterpretationListItem:
         interp_day=interp.interp_day,
         location_city=interp.location_city,
         user_persons_id=interp.user_persons_id,
+        user_person_id_2=interp.user_person_id_2,
+        comparison_mode=interp.comparison_mode,
         first_question=first_question,
     )
+
+    if interp.context_type == "synastry":
+        if interp.user_person and interp.user_person.name:
+            item.user_person_name = interp.user_person.name
+        elif interp.user_persons_id is None:
+            item.user_person_name = "Eigenes Profil"
+        if interp.user_person_2 and interp.user_person_2.name:
+            item.user_person_2_name = interp.user_person_2.name
+        elif interp.user_person_id_2 is None:
+            item.user_person_2_name = "Eigenes Profil"
+
+    return item
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +209,9 @@ def get_interpretation(interpretation_id: int, request: Request):
         return InterpretationOut(
             id=interp.id,
             user_persons_id=interp.user_persons_id,
+            user_person_id_2=interp.user_person_id_2,
             context_type=interp.context_type,
+            comparison_mode=interp.comparison_mode,
             model=interp.model,
             interp_year=interp.interp_year,
             interp_month=interp.interp_month,
@@ -308,8 +326,8 @@ async def followup_message(
         query_content = json.dumps(history, ensure_ascii=False)
         store.append_message(db, interp, role="query", content=query_content, position=next_pos)
 
-        perplexity_client = PerplexityClient(role_type=None)
-        model_name = interp.model or perplexity_client.model
+        provider = get_chat_provider(role_type=None)
+        model_name = interp.model or provider.model_name
 
     except HTTPException:
         db.close()
@@ -320,17 +338,24 @@ async def followup_message(
         raise HTTPException(status_code=500, detail=str(e))
 
     async def event_stream():
+        if app_config.DISABLE_AI:
+            placeholder = "\n\n---\n\n**KI-Interpretation ist derzeit deaktiviert.**\n*(DISABLE_AI ist gesetzt — keine Perplexity-Anfragen werden gesendet.)*\n\n---\n\n"
+            yield _sse_event("summary_delta", {"content": placeholder})
+            yield _sse_event("done", {"summary": placeholder})
+            return
         summary_parts: list[str] = []
         try:
-            # Perplexity erwartet messages-Liste; wir nutzen _build_messages nicht direkt,
-            # sondern übergeben die vollständige Kette als "summary" über einen kleinen Wrapper.
-            # Da PerplexityClient.send_summary_stream nur summary+system_prompt kennt,
-            # rufen wir die API direkt mit der vollständigen History auf.
+            # Legacy direct Perplexity API call for history-based messages.
+            # The ChatProvider ABC does not expose a history-aware streaming method,
+            # so this endpoint bypasses the provider abstraction and calls the
+            # Perplexity API directly with the full message chain.
             import httpx
+            # Note: PERPLEXITY_API_URL is Perplexity-specific. This legacy direct-API call
+            # should be removed when PerplexityClient is fully deprecated.
             from app.services.perplexity import PERPLEXITY_API_URL
 
             headers_http = {
-                "Authorization": f"Bearer {perplexity_client.api_key}",
+                "Authorization": f"Bearer {provider.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream",
             }
@@ -339,10 +364,10 @@ async def followup_message(
                 "messages": history,
                 "stream": True,
                 "disable_search": True,
-                "max_tokens": perplexity_client.tokens,
+                "max_tokens": provider.tokens,
             }
 
-            async with httpx.AsyncClient(timeout=perplexity_client.timeout) as client:
+            async with httpx.AsyncClient(timeout=provider.timeout) as client:
                 async with client.stream(
                     "POST", PERPLEXITY_API_URL, json=api_payload, headers=headers_http
                 ) as resp:

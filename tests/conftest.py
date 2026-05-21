@@ -9,6 +9,7 @@ from app.routers import houses as houses_router
 from app.routers import transits as transits_router
 from app.routers import solar as solar_router
 from app.routers import interpretations as interpretations_router
+from app.routers import synastry as synastry_router
 
 
 class _DummyPerplexityClient:
@@ -48,6 +49,7 @@ def mock_perplexity(monkeypatch):
         transits_router,
         solar_router,
         interpretations_router,
+        synastry_router,
     ]:
         monkeypatch.setattr(router_mod, 'PerplexityClient', _DummyPerplexityClient)
         monkeypatch.setattr(router_mod, 'check_ai_rate_limit', lambda *args, **kwargs: _DummyRateLimitResult())

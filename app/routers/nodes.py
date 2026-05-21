@@ -10,7 +10,8 @@ from app.static.zodiac_names import get_zodiac_name
 from app.static.aspect_names import get_aspect_english_by_index
 from app.services.planet_names import get_planet_name
 from app.static.texte import get_general_anweisung
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 from app.db.session import get_session
 from app.services import interpretation_store as _istore
 from app.schemas.datetime_models import DateTimeRequest, PlanetPosition
@@ -293,14 +294,14 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
         HTTPException: If not authenticated, rate limited, or calculation fails.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         response_data = _calculate_nodes_response(payload)
         if response_data['summary_prompt']:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_nodes(request, payload)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(
                 response_data['summary_prompt'],
                 NODES_SYSTEM_PROMPT,
             )
@@ -354,7 +355,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="nodes",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=payload.year,
                             interp_month=payload.month,
                             interp_day=payload.day,
@@ -371,7 +372,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
             return
 
         try:
-            async for chunk in perplexity_client.send_summary_stream(
+            async for chunk in provider.stream_completion(
                 summary=response_data['summary_prompt'],
                 system_prompt=NODES_SYSTEM_PROMPT,
             ):
@@ -382,24 +383,22 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
                 try:
                     logger.debug("No streamed chunks received, invoking synchronous fallback for nodes")
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         response_data['summary_prompt'],
                         NODES_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                     logger.debug("Fallback returned length=%d", len(text))
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed for nodes")
+                    logger.exception("Synchronous fallback to chat_completion failed for nodes")
 
             full_summary = "".join(summary_parts)
             logger.debug("Assembled full nodes summary, length=%d", len(full_summary))
             try:
-                resolved_prompt = perplexity_client._resolve_system_prompt(NODES_SYSTEM_PROMPT)
-                key = _make_cache_key(response_data['summary_prompt'], resolved_prompt, perplexity_client.model)
-                _cache_set(key, full_summary)
-                logger.debug("Wrote full nodes summary to cache key=%s", key[:16])
+                provider.cache_result(response_data['summary_prompt'], NODES_SYSTEM_PROMPT, full_summary)
+                logger.debug("Wrote full nodes summary to cache")
             except Exception:
-                logger.exception("Failed to set Perplexity cache for nodes")
+                logger.exception("Failed to set cache for nodes")
 
             yield _sse_event("done", {"summary": full_summary})
             try:
@@ -414,7 +413,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="nodes",
-                        model=perplexity_client.model,
+                        model=provider.model_name,
                         interp_year=payload.year,
                         interp_month=payload.month,
                         interp_day=payload.day,

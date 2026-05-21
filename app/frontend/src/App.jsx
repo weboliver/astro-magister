@@ -13,22 +13,25 @@ import Mondknoten from './pages/Mondknoten'
 import SolarReturn from './pages/SolarReturn'
 import AgePoints from './pages/AgePoints'
 import Horoscope from './pages/Horoscope'
+import Synastrie from './pages/Synastrie'
 import Transits from './pages/Transits'
 import Houses from './pages/Houses'
 import Admin from './pages/Admin'
 import Wiki from './pages/Wiki'
 import { useAuth } from './contexts/AuthContext'
+import { SynastrySelectionProvider } from './contexts/SynastrySelectionContext'
 import { clearStoredSession } from './services/api'
 import { useSeoMeta } from './hooks/useSeoMeta'
 
 const MOBILE_MENU_BREAKPOINT = 850
 const TOP_NAV_MIN_WIDTH = 200
-const RESTRICTED_PROFILE_PAGES = new Set(['horoscope', 'mondknoten', 'houses', 'transits', 'solar', 'agepoints'])
+const RESTRICTED_PROFILE_PAGES = new Set(['horoscope', 'mondknoten', 'houses', 'transits', 'solar', 'agepoints', 'synastrie'])
 const SELF_STYLED_PAGES = new Set(['admin', 'settings'])
 const PAGE_META = {
   dashboard: { title: 'Startseite', description: 'Astro-Magister – dein Portal für astrologische Selbsterfahrung. Horoskop, Planeten, Häuser, Transite und mehr.' },
   horoscope: { title: 'Horoskop', description: 'Dein persönliches Horoskop auf einen Blick – Planetenstellungen und astrologische Deutungen.' },
   mondknoten: { title: 'Mondknoten', description: 'Das Mondknoten Horoskop nach Huber — Rahu und Ketu in Zeichen und Häusern.' },
+  synastrie: { title: 'Synastrie', description: 'Partnervergleich und Beziehungsanalyse nach Huber-Astrologie – Synastrie mit zwei individuellen Horoskopen.' },
   houses: { title: 'Häuser', description: 'Die astrologischen Häuser und ihre Deutungen in deinem Horoskop.' },
   transits: { title: 'Transite', description: 'Aktuelle Transite und ihre astrologische Wirkung auf dein Geburtshoroskop.' },
   solar: { title: 'Solar Jahr', description: 'Das solare Rückkehrhoroskop für dein aktuelles Lebensjahr.' },
@@ -46,6 +49,7 @@ const PAGE_LABELS = {
   register: 'Registrierung',
   horoscope: 'Horoskop',
   mondknoten: 'Mondknoten',
+  synastrie: 'Synastrie',
   houses: 'Häuser',
   transits: 'Transite',
   solar: 'Solar Jahr',
@@ -74,6 +78,7 @@ const PATH_TO_PAGE = {
   '/': 'dashboard',
   '/dashboard': 'dashboard',
   '/mondknoten': 'mondknoten',
+  '/synastrie': 'synastrie',
   '/horoscope': 'horoscope',
   '/transits': 'transits',
   '/houses': 'houses',
@@ -249,6 +254,7 @@ export default function App(){
     if (page === 'register') return <Register onRegistered={(u)=>{ setUser(u); navigateTo('dashboard') }} onCancel={()=>navigateTo('login')} />
     if (page === 'dashboard') return <Dashboard user={user} />
     if (page === 'mondknoten') return <Mondknoten />
+    if (page === 'synastrie') return <SynastrySelectionProvider><Synastrie /></SynastrySelectionProvider>
     if (page === 'horoscope') return <Horoscope />
     if (page === 'transits') return <Transits />
     if (page === 'houses') return <Houses />
@@ -328,6 +334,7 @@ export default function App(){
                     {!needsProfileSetup && <span className={getNavItemClassName('transits')} onClick={()=>navigateTo('transits')}>Transite</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('solar')} onClick={()=>navigateTo('solar')}>Solar Jahr</span>}
                     {!needsProfileSetup && <span className={getNavItemClassName('agepoints')} onClick={()=>navigateTo('agepoints')}>Alterspunkte</span>}
+                    {!needsProfileSetup && <span className={getNavItemClassName('synastrie')} onClick={()=>navigateTo('synastrie')}>Synastrie</span>}
                     <span className={getNavItemClassName('settings')} onClick={()=>navigateTo('settings')}>Profil</span>
                     {isAdmin && <span className={getNavItemClassName('admin')} onClick={()=>navigateTo('admin')}>Admin</span>}
                     <span className="app-nav-link app-nav-link-logout" onClick={logout}>Logout</span>
@@ -351,6 +358,7 @@ export default function App(){
                 {!needsProfileSetup && <span className={getNavItemClassName('transits')} onClick={()=>navigateTo('transits')}>Transite</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('solar')} onClick={()=>navigateTo('solar')}>Solar Jahr</span>}
                 {!needsProfileSetup && <span className={getNavItemClassName('agepoints')} onClick={()=>navigateTo('agepoints')}>Alterspunkte</span>}
+                {!needsProfileSetup && <span className={getNavItemClassName('synastrie')} onClick={()=>navigateTo('synastrie')}>Synastrie</span>}
                 <span className={getNavItemClassName('settings')} onClick={()=>navigateTo('settings')}>Profil</span>
                 {isAdmin && <span className={getNavItemClassName('admin')} onClick={()=>navigateTo('admin')}>Admin</span>}
               </>

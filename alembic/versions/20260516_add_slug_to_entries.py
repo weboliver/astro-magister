@@ -15,7 +15,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('entries', sa.Column('slug', sa.String(length=511), nullable=True))
+    from sqlalchemy import inspect as sa_inspect
+    conn = op.get_bind()
+    inspector = sa_inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('entries')]
+    if 'slug' not in columns:
+        op.add_column('entries', sa.Column('slug', sa.String(length=511), nullable=True))
 
 
 def downgrade() -> None:

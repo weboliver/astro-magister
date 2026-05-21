@@ -33,6 +33,7 @@ class UserInterpretation(Base):
     __table_args__ = (
         Index("ix_user_interpretations_user_id", "user_id"),
         Index("ix_user_interpretations_user_persons_id", "user_persons_id"),
+        Index("ix_user_interpretations_user_person_id_2", "user_person_id_2"),
         Index("ix_user_interpretations_created", "created"),
     )
 
@@ -52,8 +53,18 @@ class UserInterpretation(Base):
         nullable=True,
     )
 
-    # Fachlicher Kontext (z. B. "horoscope", "transit", "age_points", "solar")
+    # Zweite Person für Synastrie-Vergleich (nullable — nur für context_type="synastry")
+    user_person_id_2 = Column(
+        Integer,
+        ForeignKey("user_persons.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    # Fachlicher Kontext (z. B. "horoscope", "transit", "age_points", "solar", "synastry")
     context_type = Column(String(64), nullable=True)
+
+    # Vergleichsmodus für Synastrie: "hh" (Häuservergleich) oder "rr" (Radixvergleich)
+    comparison_mode = Column(String(8), nullable=True)
 
     # Verwendetes KI-Modell (z. B. "sonar-pro", "sonar")
     model = Column(String(64), nullable=True)
@@ -93,6 +104,12 @@ class UserInterpretation(Base):
         "UserPerson",
         primaryjoin="foreign(UserInterpretation.user_persons_id) == UserPerson.id",
         back_populates="interpretations",
+        uselist=False,
+    )
+
+    user_person_2 = relationship(
+        "UserPerson",
+        primaryjoin="foreign(UserInterpretation.user_person_id_2) == UserPerson.id",
         uselist=False,
     )
 

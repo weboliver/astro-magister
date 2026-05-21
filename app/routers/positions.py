@@ -22,7 +22,8 @@ router = APIRouter(tags=["positions"], dependencies=[Depends(require_authenticat
 logger = logging.getLogger(__name__)
 
 # Perplexity AI streaming/caching
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
 from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
 from app.services import interpretation_store as _istore
@@ -314,7 +315,7 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
         HTTPException: If not authenticated, rate limited, or calculation fails.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         # Reuse existing logic to compute positions and a summary
         result = get_planets(payload)
@@ -325,8 +326,8 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
         if response_data["summary_prompt"]:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_planets(request, payload)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(
                 response_data["summary_prompt"],
                 PLANETS_SYSTEM_PROMPT,
             )
@@ -380,7 +381,7 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="planets",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=payload.year,
                             interp_month=payload.month,
                             interp_day=payload.day,
@@ -397,7 +398,7 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
             return
 
         try:
-            async for chunk in perplexity_client.send_summary_stream(
+            async for chunk in provider.stream_completion(
                 summary=response_data["summary_prompt"],
                 system_prompt=PLANETS_SYSTEM_PROMPT,
             ):
@@ -408,24 +409,22 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
                 try:
                     logger.debug("No streamed chunks received, invoking synchronous fallback for planets")
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         response_data["summary_prompt"],
                         PLANETS_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                     logger.debug("Fallback returned length=%d", len(text))
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed for planets")
+                    logger.exception("Synchronous fallback to chat_completion failed for planets")
 
             full_summary = "".join(summary_parts)
             logger.debug("Assembled full planets summary, length=%d", len(full_summary))
             try:
-                resolved_prompt = perplexity_client._resolve_system_prompt(PLANETS_SYSTEM_PROMPT)
-                key = _make_cache_key(response_data["summary_prompt"], resolved_prompt, perplexity_client.model)
-                _cache_set(key, full_summary)
-                logger.debug("Wrote full planets summary to cache key=%s", key[:16])
+                provider.cache_result(response_data["summary_prompt"], PLANETS_SYSTEM_PROMPT, full_summary)
+                logger.debug("Wrote full planets summary to cache")
             except Exception:
-                logger.exception("Failed to set Perplexity cache for planets")
+                logger.exception("Failed to set cache for planets")
 
             yield _sse_event("done", {"summary": full_summary})
             try:
@@ -440,7 +439,7 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="planets",
-                        model=perplexity_client.model,
+                        model=provider.model_name,
                         interp_year=payload.year,
                         interp_month=payload.month,
                         interp_day=payload.day,

@@ -135,6 +135,8 @@ class UserPerson(Base):
     birth_city = Column(Text)
     birth_latitude = Column(Float)
     birth_longitude = Column(Float)
+    birth_timezone = Column(Text)
+    residence_timezone = Column(Text)
 
     interpretations = relationship(
         'UserInterpretation',

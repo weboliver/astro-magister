@@ -87,6 +87,7 @@ def draw_chart_png(
     height: int = 600,
     operation: str = 'draw_nat',
     transit_chart: Optional[Chart] = None,
+    second_chart: Optional[Chart] = None,
 ) -> bytes:
     """Render the provided chart as a PNG byte blob using the requested draw operation."""
 
@@ -110,18 +111,23 @@ def draw_chart_png(
         'charts_now': state.charts.get('now'),
     }
 
-    click_chart = Chart('click')
-    click_chart.planets = list(chart.planets)
-    click_chart.houses = list(chart.houses)
-    click_chart.first = chart.first
-    click_chart.last = chart.last
-    click_chart.city = chart.city
-    click_chart.region = chart.region
-    click_chart.country = chart.country
-    click_chart.latitud = chart.latitud
-    click_chart.longitud = chart.longitud
-    click_chart.zone = chart.zone
-    click_chart.date = chart.date
+    if second_chart is not None:
+        # Synastry mode: use the second chart directly for curr_click (not a copy)
+        click_chart = second_chart
+    else:
+        # Original behavior: copy the primary chart for curr_click
+        click_chart = Chart('click')
+        click_chart.planets = list(chart.planets)
+        click_chart.houses = list(chart.houses)
+        click_chart.first = chart.first
+        click_chart.last = chart.last
+        click_chart.city = chart.city
+        click_chart.region = chart.region
+        click_chart.country = chart.country
+        click_chart.latitud = chart.latitud
+        click_chart.longitud = chart.longitud
+        click_chart.zone = chart.zone
+        click_chart.date = chart.date
 
     with env.lock:
         try:

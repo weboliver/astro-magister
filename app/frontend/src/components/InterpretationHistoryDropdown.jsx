@@ -63,6 +63,12 @@ export default function InterpretationHistoryDropdown({
 
   const formatLabel = (item) => {
     const date = formatDate(item)
+    if (item.context_type === 'synastry') {
+      const person1 = item.user_person_name || item.user_person?.name || 'Unbekannte Person'
+      const person2 = item.user_person_2_name || item.user_person_2?.name || 'Unbekannte Person'
+      const mode = item.comparison_mode === 'hh' ? 'Häuser' : 'Radix'
+      return `${date} · ${person1} + ${person2} (${mode})`
+    }
     let question = 'keine optionale Zusatzfrage'
     if (item.first_question && item.first_question.trim()) {
       const q = item.first_question.trim()
@@ -82,7 +88,14 @@ export default function InterpretationHistoryDropdown({
     }
   }
 
-  if (!loadingList && interpretations.length === 0) return null
+  if (!loadingList && interpretations.length === 0) {
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ display: 'block', marginBottom: 4 }}><b>Historie:</b></label>
+        <div style={{ fontSize: 12, color: '#888' }}>Noch keine Auswertungen vorhanden.</div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ marginBottom: 10 }}>

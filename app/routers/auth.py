@@ -386,6 +386,98 @@ def require_admin_user(user=Depends(require_authenticated_user)):
         raise HTTPException(status_code=403, detail='Forbidden')
     return user
 
+
+@router.get('/auth/admin/provider-config', response_model=ProviderConfigOut)
+def get_provider_config(user=Depends(require_admin_user)):
+    """Get current chat provider configuration (admin only).
+
+    Returns the active chat_provider and the list of available providers.
+
+    Args:
+        user: Admin user from dependency.
+
+    Returns:
+        ProviderConfigOut with chat_provider and available_providers.
+    """
+    from app.services.providers import KNOWN_PROVIDERS
+    import os
+    from app.db.models.settings import AppSetting
+    from app.db.session import get_session
+    current = None
+    try:
+        session = get_session()
+        try:
+            row = session.query(AppSetting).filter(
+                AppSetting.setting_name == 'chat_provider'
+            ).first()
+            current = row.setting_value if row else None
+        finally:
+            session.close()
+    except Exception:
+        pass
+    if not current:
+        current = os.getenv('CHAT_PROVIDER', 'perplexity').strip().lower()
+    return {
+        'chat_provider': current,
+        'available_providers': list(KNOWN_PROVIDERS),
+    }
+
+
+@router.put('/auth/admin/provider-config', response_model=ProviderConfigOut)
+def update_provider_config(payload: ProviderConfigIn, user=Depends(require_admin_user)):
+    """Update chat provider configuration (admin only).
+
+    Validates the requested provider against KNOWN_PROVIDERS, persists to
+    app_settings, and returns the updated configuration.
+
+    Args:
+        payload: ProviderConfigIn with chat_provider field.
+        user: Admin user from dependency.
+
+    Returns:
+        ProviderConfigOut with updated chat_provider and available_providers.
+
+    Raises:
+        HTTPException: If chat_provider is not in available providers list.
+    """
+    from app.services.providers import KNOWN_PROVIDERS
+    from app.db.models.settings import AppSetting
+    from app.db.session import get_session
+
+    provider = payload.chat_provider.strip().lower()
+    if provider not in KNOWN_PROVIDERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Ungültiger Provider: {provider}. '
+                   f'Verfügbar: {", ".join(KNOWN_PROVIDERS)}',
+        )
+
+    session = get_session()
+    try:
+        row = session.query(AppSetting).filter(
+            AppSetting.setting_name == 'chat_provider'
+        ).first()
+        if row:
+            row.setting_value = provider
+        else:
+            row = AppSetting(setting_name='chat_provider', setting_value=provider)
+            session.add(row)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f'Provider-Einstellungen konnten nicht gespeichert werden: {e}',
+        )
+    finally:
+        session.close()
+
+    return {
+        'chat_provider': provider,
+        'available_providers': list(KNOWN_PROVIDERS),
+    }
+
+
 @router.post('/auth/logout')
 def logout(request: Request, response: Response, user=Depends(require_authenticated_user)):
     """Logout and invalidate tokens (blacklist access token, revoke refresh tokens).

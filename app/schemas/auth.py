@@ -1,7 +1,7 @@
 
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -110,3 +110,16 @@ class ChangePasswordIn(BaseModel):
 
     old_password: str
     new_password: str
+
+
+class ProviderConfigOut(BaseModel):
+    """Provider configuration response schema."""
+
+    chat_provider: str
+    available_providers: List[str]
+
+
+class ProviderConfigIn(BaseModel):
+    """Provider configuration update request schema."""
+
+    chat_provider: str

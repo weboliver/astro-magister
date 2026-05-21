@@ -22,7 +22,8 @@ except Exception as e:
     logger.debug(f"TimezoneFinder not available: {e}")
     TimezoneFinder = None
 from app.services.horoscope_graphics import draw_chart_png
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
 from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
@@ -441,7 +442,7 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
         HTTPException: If not authenticated, rate limited, or calculation fails.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         result = _build_solar_return_response(payload)
         response_data = result.model_dump()
@@ -449,8 +450,8 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
         if summary_prompt:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_solar_return(request, payload)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(summary_prompt, SOLAR_RETURN_SYSTEM_PROMPT)
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(summary_prompt, SOLAR_RETURN_SYSTEM_PROMPT)
             if cached_summary is None:
                 rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:solar-return')
                 if not rate_limit.allowed:
@@ -499,7 +500,7 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="solar",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=result.return_year,
                             interp_month=result.return_month,
                             interp_day=result.return_day,
@@ -516,7 +517,7 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
             return
 
         try:
-            async for chunk in perplexity_client.send_summary_stream(
+            async for chunk in provider.stream_completion(
                 summary=summary_prompt,
                 system_prompt=SOLAR_RETURN_SYSTEM_PROMPT,
             ):
@@ -526,21 +527,19 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
             if not summary_parts:
                 try:
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         summary_prompt,
                         SOLAR_RETURN_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed for solar return")
+                    logger.exception("Synchronous fallback to chat_completion failed for solar return")
 
             full_summary = "".join(summary_parts)
             try:
-                resolved_prompt = perplexity_client._resolve_system_prompt(SOLAR_RETURN_SYSTEM_PROMPT)
-                key = _make_cache_key(summary_prompt, resolved_prompt, perplexity_client.model)
-                _cache_set(key, full_summary)
+                provider.cache_result(summary_prompt, SOLAR_RETURN_SYSTEM_PROMPT, full_summary)
             except Exception:
-                logger.exception("Failed to set Perplexity cache for solar return")
+                logger.exception("Failed to set cache for solar return")
 
             yield _sse_event("done", {"summary": full_summary})
             try:
@@ -555,7 +554,7 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="solar",
-                        model=perplexity_client.model,
+                        model=provider.model_name,
                         interp_year=result.return_year,
                         interp_month=result.return_month,
                         interp_day=result.return_day,

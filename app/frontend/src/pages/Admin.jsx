@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react'
 import AdminAuditLogTab from '../components/admin/AdminAuditLogTab'
 import AdminCacheTab from '../components/admin/AdminCacheTab'
 import AdminCategoriesTab from '../components/admin/AdminCategoriesTab'
+import AdminEinstellungenTab from '../components/admin/AdminEinstellungenTab'
 import AdminEntriesTab from '../components/admin/AdminEntriesTab'
 import AdminOverviewTab from '../components/admin/AdminOverviewTab'
 import AdminPagesTab from '../components/admin/AdminPagesTab'
@@ -28,7 +29,8 @@ const tabs = [
   { id: 'pages', label: 'Seiten' },
   { id: 'audit', label: 'Audit Log' },
   { id: 'overview', label: 'Redis Übersicht' },
-  { id: 'cache', label: 'Redis Cache' }
+  { id: 'cache', label: 'Redis Cache' },
+  { id: 'einstellungen', label: 'Einstellungen' }
 ]
 
 export default function Admin({ initialActiveTab = 'users', initialEntryEditRequest = null }){
@@ -59,6 +61,7 @@ export default function Admin({ initialActiveTab = 'users', initialEntryEditRequ
     if (activeTab === 'sections') return <AdminSectionsTab />
     if (activeTab === 'categories') return <AdminCategoriesTab />
     if (activeTab === 'entries') return <AdminEntriesTab entryEditRequest={entryEditRequest} />
+    if (activeTab === 'einstellungen') return <AdminEinstellungenTab />
     if (activeTab === 'relations') return <AdminRelationsTab onEditEntry={openEntryEditor} />
     if (activeTab === 'pages') return <AdminPagesTab onEditEntry={openEntryEditor} />
     if (activeTab === 'audit') return <AdminAuditLogTab />

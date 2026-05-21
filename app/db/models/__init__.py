@@ -7,6 +7,7 @@ from .users import *
 from .locations import *
 from .wiki import *
 from .interpretations import *
+from .settings import *
 
 __all__ = [
     "User",
@@ -28,4 +29,5 @@ __all__ = [
     "PageContent",
     "UserInterpretation",
     "UserInterpretationMessage",
+    "AppSetting",
 ]

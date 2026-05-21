@@ -16,7 +16,8 @@ from astronex.chart import Chart
 from pytz import timezone as pytz_timezone
 from app.static.texte import get_general_anweisung
 from app.routers.transits import TransitRequest, DateObject, Location, transits
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
 from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
@@ -543,8 +544,8 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
         try:
             user = _get_user_from_request(http_request)
             role_name = _resolve_role_name_for_age_points(http_request, req)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(result.summary, AGE_POINTS_SYSTEM_PROMPT)
             if cached_summary is not None:
                 result.summary = cached_summary
             else:
@@ -564,7 +565,7 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
                         detail=build_ai_rate_limit_error_detail(rate_limit),
                         headers={'Retry-After': str(rate_limit.retry_after_seconds)},
                     )
-                result.summary = perplexity_client.send_summary_text(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+                result.summary = provider.chat_completion(result.summary, AGE_POINTS_SYSTEM_PROMPT)
         except HTTPException:
             raise
         except Exception as exc:
@@ -585,7 +586,7 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
         StreamingResponse with SSE events for age points and AI summary.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         result = _build_age_points_response(req, http_request)
         response_data = result.model_dump()
@@ -593,8 +594,8 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
         if summary_prompt:
             user = _get_user_from_request(http_request)
             role_name = _resolve_role_name_for_age_points(http_request, req)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(summary_prompt, AGE_POINTS_SYSTEM_PROMPT)
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(summary_prompt, AGE_POINTS_SYSTEM_PROMPT)
             if cached_summary is None:
                 rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
                 if not rate_limit.allowed:
@@ -638,7 +639,7 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
                             assistant_content=cached_summary,
                             user_persons_id=getattr(req, 'person_id', None),
                             context_type="age_points",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=getattr(req, 'target_year', None),
                             interp_month=getattr(req, 'target_month', None),
                             interp_day=getattr(req, 'target_day', None),
@@ -656,7 +657,7 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
 
         try:
             if summary_prompt:
-                async for chunk in perplexity_client.send_summary_stream(
+                async for chunk in provider.stream_completion(
                     summary=summary_prompt,
                     system_prompt=AGE_POINTS_SYSTEM_PROMPT,
                 ):
@@ -666,22 +667,20 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
             if summary_prompt and not summary_parts:
                 try:
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         summary_prompt,
                         AGE_POINTS_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed for age-points")
+                    logger.exception("Synchronous fallback to chat_completion failed for age-points")
 
             full_summary = "".join(summary_parts)
             if summary_prompt and full_summary:
                 try:
-                    resolved_prompt = perplexity_client._resolve_system_prompt(AGE_POINTS_SYSTEM_PROMPT)
-                    key = _make_cache_key(summary_prompt, resolved_prompt, perplexity_client.model)
-                    _cache_set(key, full_summary)
+                    provider.cache_result(summary_prompt, AGE_POINTS_SYSTEM_PROMPT, full_summary)
                 except Exception:
-                    logger.exception("Failed to set Perplexity cache for age-points")
+                    logger.exception("Failed to set cache for age-points")
 
             yield _sse_event("done", {"summary": full_summary})
             logger.info("AGE-POINTS SAVE CHECK: summary_prompt=%s full_summary_len=%d user=%s",
@@ -699,7 +698,7 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
                             assistant_content=full_summary,
                             user_persons_id=getattr(req, 'person_id', None),
                             context_type="age_points",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=getattr(req, 'target_year', None),
                             interp_month=getattr(req, 'target_month', None),
                             interp_day=getattr(req, 'target_day', None),

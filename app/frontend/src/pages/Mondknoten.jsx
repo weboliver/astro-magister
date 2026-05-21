@@ -1,16 +1,18 @@
 /**
- * Mondknoten - Moon Node (Rahu/Ketu) horoscope page for calculating and interpreting the lunar nodes in the birth chart.
+ * Mondknoten - Moon Node (Rahu/Ketu) horoscope page for calculating and
+ * interpreting the lunar nodes in the birth chart.
  * @component
  * @returns {JSX.Element} Rendered Mondknoten page
- * @hook useState - Manages response, loading, date/time, location, chart image, summary, followups
+ * @hook useState - Manages response, advanced toggle, date/time, location, summary state
  * @hook useEffect - Handles responsive layout, loads user data, fetches chart automatically, manages selections
- * @hook useCallback - Revokes object URLs, computes graphic size, cache key, handles logout cleanup
+ * @hook useCallback - Handles logout cleanup, interpretation submission
  * @hook useMemo - Computes current payload for API requests
- * @hook useRef - Tracks followup base, summary ref, image URL, chart cache, abort controller, revocation timeout
+ * @hook useRef - Tracks summary ref, streamed summary, selection init guard, profile change tracking
+ *
+ * Shared hooks: useInterpretationStream (SSE), useChartCache (chart graphic), useFollowupManager (followups)
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
-import { postStream, postWithSignal } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.css'
@@ -21,41 +23,21 @@ import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useLogoutCleanup } from '../utils/logoutCache'
 import { ADDITIONAL_QUESTION_MAX_LENGTH, normalizeAdditionalQuestion } from '../utils/aiPrompt'
 import InterpretationHistoryDropdown from '../components/InterpretationHistoryDropdown'
-import { streamFollowup, deleteInterpretation } from '../hooks/useInterpretations'
+import { deleteInterpretation } from '../hooks/useInterpretations'
 import { printInterpretationAsPdf } from '../utils/pdfExport'
 import { formatDateTimeValue } from '../utils/dateTime'
-import { parseSseBlock } from '../utils/sseParser'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { PoweruserNoticeLink } from '../components/PoweruserNotice'
-
-const sharedMondknotenCache = new Map()
-
-async function postMondknotenStream(path, payload) {
-  const response = await postStream(path, payload)
-
-  if (!response.ok) {
-    let detail = `Request failed (${response.status})`
-    try {
-      const errorBody = await response.json()
-      detail = errorBody.detail || detail
-    } catch (error) {
-      const text = await response.text()
-      if (text) detail = text
-    }
-    throw new Error(detail)
-  }
-
-  if (!response.body) {
-    throw new Error('Streaming wird von diesem Browser nicht unterstützt')
-  }
-
-  return response
-}
+import { useInterpretationStream } from '../hooks/useInterpretationStream'
+import { useChartCache } from '../hooks/useChartCache'
+import { useFollowupManager } from '../hooks/useFollowupManager'
 
 export default function Mondknoten(){
+  // ---------------------------------------------------------------------------
+  // Page-specific state
+  // ---------------------------------------------------------------------------
   const [resp, setResp] = useState(null)
-  const [loading, setLoading] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth()+1)
@@ -67,60 +49,59 @@ export default function Mondknoten(){
   const [longitude, setLongitude] = useState(13.4050)
   const [timezone, setTimezone] = useState(typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
   const [datetimeLocal, setDatetimeLocal] = useState('')
-  const [chartImage, setChartImage] = useState(null)
-  const [imageLoading, setImageLoading] = useState(false)
-  const [imageError, setImageError] = useState('')
   const [cachedSummary, setCachedSummary] = useState('')
   const [showSummary, setShowSummary] = useState(false)
   const [additionalQuestion, setAdditionalQuestion] = useState('')
   const [activeInterpretationId, setActiveInterpretationId] = useState(null)
   const [dropdownRefreshToken, setDropdownRefreshToken] = useState(0)
-  const [followups, setFollowups] = useState([])
-  const [currentFollowup, setCurrentFollowup] = useState('')
-  const followupBaseRef = useRef('')
-  const summaryRef = useRef(null)
-  const imageUrlRef = useRef(null)
-  const chartCacheRef = useRef(sharedMondknotenCache)
-  const graphicAbortRef = useRef(null)
-  const activeChartCacheKeyRef = useRef(null)
-  const hasInitializedSelectionResetRef = useRef(false)
   const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' ? window.innerWidth < 800 : false)
 
-  const revokeTimeoutRef = useRef(null)
-  const revokeObjectUrlLater = useCallback((url) => {
-    if (!url || typeof window === 'undefined') return
-    const candidate = url
-    window.setTimeout(() => {
-      try {
-        if (imageUrlRef.current === candidate) {
-          console.debug('[Mondknoten] skip revoke of active URL')
-          return
-        }
-        URL.revokeObjectURL(candidate)
-        console.debug('[Mondknoten] revoked object URL')
-      } catch (e) {
-        console.debug('[Mondknoten] revoke failed', e)
-      }
-    }, 500)
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handler = () => setIsNarrow(window.innerWidth < 800)
-    handler()
-    window.addEventListener('resize', handler)
-    return () => window.removeEventListener('resize', handler)
-  }, [])
+  // ---------------------------------------------------------------------------
+  // Context hooks
+  // ---------------------------------------------------------------------------
   const { profile, initialized: authInitialized } = useAuth()
   const prevProfileIdRef = useRef(profile?.id)
   const { selectedPerson } = usePersonSelection()
-  const displayChartBlob = useCallback((blob) => {
-    const previousUrl = imageUrlRef.current
-    const url = URL.createObjectURL(blob)
-    imageUrlRef.current = url
-    setChartImage(url)
-    revokeObjectUrlLater(previousUrl)
-  }, [revokeObjectUrlLater])
+
+  // ---------------------------------------------------------------------------
+  // Shared hooks: SSE streaming, chart cache, followup management
+  // ---------------------------------------------------------------------------
+  const { startStream, isStreaming } = useInterpretationStream()
+
+  const {
+    chartImage, setChartImage, imageLoading, imageError, setImageError,
+    displayChartBlob,
+    computeGraphicSize,
+    computeCacheKey,
+    chartCacheRef,
+    graphicAbortRef,
+    activeChartCacheKeyRef,
+    imageUrlRef,
+    handleLogoutCleanup: chartLogoutCleanup,
+    fetchGraphic,
+  } = useChartCache({ graphicEndpointPath: '/nodes/graphic', cacheKeyPrefix: 'nodes' })
+
+  const {
+    followups, setFollowups,
+    currentFollowup, setCurrentFollowup,
+    isFollowupLoading,
+    submitFollowup,
+    maxFollowupsReached,
+  } = useFollowupManager()
+
+  // Derived loading: true while SSE stream or followup request is active
+  const loading = isStreaming || isFollowupLoading
+
+  // ---------------------------------------------------------------------------
+  // Refs
+  // ---------------------------------------------------------------------------
+  const streamedSummaryRef = useRef('')
+  const summaryRef = useRef(null)
+  const hasInitializedSelectionResetRef = useRef(false)
+
+  // ---------------------------------------------------------------------------
+  // Current payload (page-specific: includes date/time/location state)
+  // ---------------------------------------------------------------------------
   const currentPayload = useMemo(() => ({
     person_id: selectedPerson?.id ?? null,
     year: parseInt(year, 10),
@@ -133,29 +114,22 @@ export default function Mondknoten(){
     latitude: parseFloat(latitude),
     longitude: parseFloat(longitude),
   }), [selectedPerson?.id, year, month, day, hour, minute, second, timezone, latitude, longitude])
-  const computeGraphicSize = useCallback(() => {
-    const ratio = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1
-    return Math.min(1200, Math.round(750 * Math.max(1, ratio)))
-  }, [])
-  const computeCacheKey = useCallback((payload, size) => {
-    const subjectId = selectedPerson?.id || profile?.id || 'manual'
-    return JSON.stringify({ type: 'nodes', subjectId, ...payload, width: size, height: size })
-  }, [profile?.id, selectedPerson?.id])
 
-  const handleLogoutCleanup = useCallback(() => {
-    const previousUrl = imageUrlRef.current
-    chartCacheRef.current.clear()
-    setResp(null)
-    setImageError('')
-    setChartImage(null)
-    activeChartCacheKeyRef.current = null
-    imageUrlRef.current = null
-    revokeObjectUrlLater(previousUrl)
-    setCachedSummary('')
+  // ---------------------------------------------------------------------------
+  // Responsive layout effect
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => setIsNarrow(window.innerWidth < 800)
+    handler()
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
   }, [])
-  useLogoutCleanup(handleLogoutCleanup)
 
-  useEffect(() =>{
+  // ---------------------------------------------------------------------------
+  // Populate form from selected person or profile
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
     const data = selectedPerson || profile
     if (!data) return
     if (data && data.birth_latitude !== undefined && data.birth_latitude !== null) setLatitude(data.birth_latitude)
@@ -181,12 +155,18 @@ export default function Mondknoten(){
     setCurrentFollowup('')
   }, [profile, selectedPerson])
 
+  // ---------------------------------------------------------------------------
+  // Unmount cleanup: revoke active blob URL
+  // ---------------------------------------------------------------------------
   useEffect(() => () => {
     if (imageUrlRef.current) {
       URL.revokeObjectURL(imageUrlRef.current)
     }
   }, [])
 
+  // ---------------------------------------------------------------------------
+  // Initial mount: clear summary state
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     setCachedSummary('')
     setShowSummary(false)
@@ -194,13 +174,26 @@ export default function Mondknoten(){
     setCurrentFollowup('')
   }, [])
 
+  // ---------------------------------------------------------------------------
+  // Logout cleanup: combine chart cleanup + page state reset
+  // ---------------------------------------------------------------------------
+  const combinedLogoutCleanup = useCallback(() => {
+    chartLogoutCleanup()  // clears cache, revokes URLs, resets chartImage/imageError
+    setResp(null)
+    setCachedSummary('')
+  }, [chartLogoutCleanup])
+  useLogoutCleanup(combinedLogoutCleanup)
+
   useEffect(() => {
     if (prevProfileIdRef.current && !profile?.id) {
-      handleLogoutCleanup()
+      combinedLogoutCleanup()
     }
     prevProfileIdRef.current = profile?.id
-  }, [profile?.id, handleLogoutCleanup])
+  }, [profile?.id, combinedLogoutCleanup])
 
+  // ---------------------------------------------------------------------------
+  // Auto-fetch chart graphic when payload or person changes
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!selectedPerson && !authInitialized) {
       console.debug('[Mondknoten] autoFetch waiting for auth initialization')
@@ -209,6 +202,7 @@ export default function Mondknoten(){
 
     const size = computeGraphicSize()
 
+    // Guard: skip if form state hasn't synced with selected person yet
     const sourcePerson = selectedPerson || profile
     if (sourcePerson) {
       if ((sourcePerson.birth_year && sourcePerson.birth_year !== currentPayload.year) ||
@@ -234,52 +228,13 @@ export default function Mondknoten(){
     } else {
       setChartImage(null)
       setCachedSummary('')
-      const fetchAutoGraphic = async () => {
-        setImageLoading(true)
-        setImageError('')
-        try {
-          try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
-          const controller = new AbortController()
-          graphicAbortRef.current = controller
-          const reqSize = computeGraphicSize()
-          const cacheKey = computeCacheKey(currentPayload, reqSize)
-          console.debug('[Mondknoten] autoFetch start', { cacheKey, subjectId: selectedPerson?.id || profile?.id, payload: currentPayload })
-          const cached2 = chartCacheRef.current.get(cacheKey)
-          if (cached2) {
-            displayChartBlob(cached2.blob)
-            graphicAbortRef.current = null
-            return
-          }
-          const graphicResp = await postWithSignal(`/nodes/graphic?width=${reqSize}&height=${reqSize}`, currentPayload, controller.signal)
-          if (!graphicResp.ok) {
-            throw new Error(`Graphic request failed (${graphicResp.status})`)
-          }
-          const blob = await graphicResp.blob()
-          chartCacheRef.current.set(cacheKey, { blob })
-          const currentKey = computeCacheKey(currentPayload, reqSize)
-          if (currentKey === cacheKey) {
-            console.debug('[Mondknoten] autoFetch display', { cacheKey })
-            displayChartBlob(blob)
-            activeChartCacheKeyRef.current = cacheKey
-          } else {
-            console.debug('[Mondknoten] autoFetch dropped display (stale)', { cacheKey, currentKey })
-          }
-          graphicAbortRef.current = null
-        } catch (err) {
-          if (err.name === 'AbortError') {
-            console.debug('[Mondknoten] autoFetch aborted')
-          } else {
-            setImageError(err.message || 'Graphic konnte nicht geladen werden')
-          }
-        } finally {
-          setImageLoading(false)
-        }
-      }
-      fetchAutoGraphic()
+      fetchGraphic(currentPayload)
     }
-  }, [authInitialized, currentPayload, computeCacheKey, computeGraphicSize, displayChartBlob, profile, selectedPerson])
+  }, [authInitialized, currentPayload, computeCacheKey, computeGraphicSize, displayChartBlob, profile, selectedPerson, fetchGraphic, setImageError, setChartImage, chartCacheRef, activeChartCacheKeyRef])
 
-
+  // ---------------------------------------------------------------------------
+  // Selection change: clear previous chart and interpretation state
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasInitializedSelectionResetRef.current) {
       hasInitializedSelectionResetRef.current = true
@@ -296,173 +251,122 @@ export default function Mondknoten(){
     setShowSummary(false)
     setFollowups([])
     setCurrentFollowup('')
-    revokeObjectUrlLater(previousUrl)
+    try { if (previousUrl) URL.revokeObjectURL(previousUrl) } catch(_) {}
   }, [selectedPerson?.id, profile?.id])
 
-  async function fetchMondknoten(){
+  // ---------------------------------------------------------------------------
+  // Main handler: new interpretation or followup question
+  // ---------------------------------------------------------------------------
+  const handleInterpret = useCallback(async () => {
     const reqSize = computeGraphicSize()
     const cacheKey = computeCacheKey(currentPayload, reqSize)
     const cachedGraphic = chartCacheRef.current.get(cacheKey)
     const hasCurrentGraphic = !!chartImage && activeChartCacheKeyRef.current === cacheKey
     const normalizedAdditionalQuestion = normalizeAdditionalQuestion(additionalQuestion)
+
+    // ── Followup path ──────────────────────────────────────────────────────
     if (activeInterpretationId) {
       const normalizedFollowup = normalizeAdditionalQuestion(currentFollowup)
-      if (!normalizedFollowup || followups.length >= 10) return
-      setLoading(true)
+      if (!normalizedFollowup || maxFollowupsReached) return
+
       setShowSummary(true)
-      followupBaseRef.current = cachedSummary
-      const questionText = normalizedFollowup
-      const questionNumber = followups.length + 1
-      const separatorPrefix = `\n\n---\n\n**Zusatzfrage ${questionNumber}:** ${questionText}\n\n`
-      let streamedText = ''
+      streamedSummaryRef.current = ''
+
       try {
-        await streamFollowup(activeInterpretationId, normalizedFollowup, {
-          onDelta: (chunk) => {
-            streamedText += chunk
-            setCachedSummary(followupBaseRef.current + separatorPrefix + streamedText)
+        await submitFollowup(activeInterpretationId, normalizedFollowup, cachedSummary, {
+          onDelta: (fullContent) => {
+            // hook already provides baseSummary + separator + streamed text
+            setCachedSummary(fullContent)
           },
-          onDone: (summary) => {
-            const finalText = summary || streamedText
-            setCachedSummary(followupBaseRef.current + separatorPrefix + finalText)
-            setFollowups(prev => [...prev, { question: questionText }])
-            setCurrentFollowup('')
+          onDone: (_answerText) => {
+            // hook passes only the followup answer (without base content).
+            // The last onDelta already set the full display text; no further
+            // update needed here.
           },
-          onError: (err) => { setResp({ ok: false, error: err.message }) },
+          onError: (err) => {
+            setResp({ ok: false, error: err.message })
+          },
         })
-      } finally {
-        setLoading(false)
+      } catch (_) {
+        // errors handled by onError callback
       }
       return
     }
-    setLoading(true); setResp(null)
+
+    // ── New interpretation path ─────────────────────────────────────────────
+    setResp(null)
     setImageError('')
     setCachedSummary('')
     setShowSummary(true)
+    streamedSummaryRef.current = ''
+
     const payload = normalizedAdditionalQuestion
       ? { ...currentPayload, additional_question: normalizedAdditionalQuestion }
       : currentPayload
+
+    // If no cached graphic and no current graphic displayed, clear the image
+    // area. fetchGraphic (called after stream) will reload it.
     if (!cachedGraphic && !hasCurrentGraphic) {
       const previousUrl = imageUrlRef.current
       setChartImage(null)
       imageUrlRef.current = null
       activeChartCacheKeyRef.current = null
-      setImageLoading(true)
-      revokeObjectUrlLater(previousUrl)
+      try { if (previousUrl) URL.revokeObjectURL(previousUrl) } catch (_) {}
+    }
+
+    // Start SSE interpretation stream (Mondknoten endpoint)
+    await startStream('/nodes/stream', payload, {
+      onMeta: (metaData) => {
+        setResp({ ok: true, status: 200, data: { ...metaData, summary: streamedSummaryRef.current } })
+      },
+      onSummaryDelta: (content) => {
+        streamedSummaryRef.current += content
+        setCachedSummary(streamedSummaryRef.current)
+        setResp(prev => {
+          const baseData = prev?.data || {}
+          return { ok: true, status: 200, data: { ...baseData, summary: streamedSummaryRef.current } }
+        })
+      },
+      onDone: (fullSummary) => {
+        const final = fullSummary || streamedSummaryRef.current
+        streamedSummaryRef.current = final
+        setCachedSummary(final)
+        setResp(prev => {
+          const baseData = prev?.data || {}
+          return { ok: true, status: 200, data: { ...baseData, summary: final } }
+        })
+      },
+      onSaved: (interpretationId) => {
+        setActiveInterpretationId(interpretationId)
+      },
+      onError: (err) => {
+        setResp({ ok: false, error: err.message })
+      },
+    })
+
+    // After stream: ensure graphic is loaded
+    const postCached = chartCacheRef.current.get(cacheKey)
+    if (postCached) {
+      if (!hasCurrentGraphic) {
+        displayChartBlob(postCached.blob)
+      }
+      activeChartCacheKeyRef.current = cacheKey
+    } else if (hasCurrentGraphic) {
+      activeChartCacheKeyRef.current = cacheKey
     } else {
-      setImageLoading(false)
+      await fetchGraphic(payload)
     }
+  }, [
+    currentPayload, computeGraphicSize, computeCacheKey, chartImage,
+    activeChartCacheKeyRef, additionalQuestion, activeInterpretationId,
+    currentFollowup, maxFollowupsReached, cachedSummary,
+    submitFollowup, startStream, chartCacheRef, imageUrlRef,
+    displayChartBlob, fetchGraphic, setChartImage, setImageError,
+  ])
 
-    try{
-      const streamResp = await postMondknotenStream('/nodes/stream', payload)
-      const reader = streamResp.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let streamedSummary = ''
-      let metaData = null
-
-      while (true) {
-        const { value, done } = await reader.read()
-        buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
-
-        const blocks = buffer.split(/\r?\n\r?\n/)
-        buffer = blocks.pop() || ''
-
-        for (const block of blocks) {
-          const parsed = parseSseBlock(block)
-          if (!parsed) continue
-
-          if (parsed.event === 'meta') {
-            metaData = parsed.data
-            setResp({ ok: true, status: streamResp.status, data: { ...parsed.data, summary: streamedSummary } })
-            continue
-          }
-
-          if (parsed.event === 'summary_delta') {
-            streamedSummary += parsed.data.content || ''
-            setCachedSummary(streamedSummary)
-            setResp(prev => {
-              const baseData = prev?.data || metaData || {}
-              return { ok: true, status: streamResp.status, data: { ...baseData, summary: streamedSummary } }
-            })
-            continue
-          }
-
-          if (parsed.event === 'done') {
-            streamedSummary = parsed.data.summary || streamedSummary
-            setCachedSummary(streamedSummary)
-            setResp(prev => {
-              const baseData = prev?.data || metaData || {}
-              return { ok: true, status: streamResp.status, data: { ...baseData, summary: streamedSummary } }
-            })
-            continue
-          }
-
-          if (parsed.event === 'saved') {
-            setActiveInterpretationId(parsed.data.interpretation_id)
-            continue
-          }
-
-          if (parsed.event === 'error') {
-            throw new Error(parsed.data.detail || 'Streaming fehlgeschlagen')
-          }
-        }
-
-        if (done) break
-      }
-
-      try{
-        const cached = chartCacheRef.current.get(cacheKey)
-        if (cached) {
-          if (!hasCurrentGraphic) {
-            displayChartBlob(cached.blob)
-          }
-          activeChartCacheKeyRef.current = cacheKey
-          setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
-        } else if (hasCurrentGraphic) {
-          activeChartCacheKeyRef.current = cacheKey
-          setCachedSummary(streamedSummary || 'Kein Summary vorhanden')
-        } else {
-          console.debug('[Mondknoten] fetchMondknoten graphic start', { cacheKey, payload })
-          try {
-            try { if (graphicAbortRef.current) graphicAbortRef.current.abort() } catch(e){}
-            const controller = new AbortController()
-            graphicAbortRef.current = controller
-            const graphicResp = await postWithSignal(`/nodes/graphic?width=${reqSize}&height=${reqSize}`, payload, controller.signal)
-            if (!graphicResp.ok) {
-              throw new Error(`Graphic request failed (${graphicResp.status})`)
-            }
-            const blob = await graphicResp.blob()
-            const summaryText = streamedSummary || 'Kein Summary vorhanden'
-            chartCacheRef.current.set(cacheKey, { blob })
-            setCachedSummary(summaryText)
-            const currentKey = computeCacheKey(currentPayload, reqSize)
-            if (currentKey === cacheKey) {
-              console.debug('[Mondknoten] fetchMondknoten display', { cacheKey })
-              displayChartBlob(blob)
-              activeChartCacheKeyRef.current = cacheKey
-            } else {
-              console.debug('[Mondknoten] fetchMondknoten dropped display (stale)', { cacheKey, currentKey })
-            }
-            graphicAbortRef.current = null
-          } catch (imgErr) {
-            if (imgErr.name === 'AbortError') {
-              console.debug('[Mondknoten] fetchMondknoten aborted')
-            } else {
-              throw imgErr
-            }
-          }
-        }
-      }catch(imgErr){
-        setImageError(imgErr.message || 'Graphic konnte nicht geladen werden')
-      }
-    }catch(e){
-      setResp({ ok:false, error: e.message })
-    }finally{
-      setLoading(false)
-      setImageLoading(false)
-    }
-  }
-
+  // ---------------------------------------------------------------------------
+  // Derived values for JSX rendering
+  // ---------------------------------------------------------------------------
   const baseSummary = resp && (resp.data && (resp.data.summary || resp.data.summary_html))
     ? (resp.data.summary || resp.data.summary_html)
     : 'Kein Summary vorhanden'
@@ -470,6 +374,9 @@ export default function Mondknoten(){
   const summaryContent = cachedSummary || baseSummary
   const summaryText = summaryError ? '' : (loading && !cachedSummary && !resp?.data?.summary ? '' : summaryContent)
 
+  // ---------------------------------------------------------------------------
+  // JSX render
+  // ---------------------------------------------------------------------------
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -624,7 +531,7 @@ export default function Mondknoten(){
           )}
           <div style={{marginTop:8, display:'flex', flexWrap:'wrap', gap:8, alignItems:'center'}}>
             <button
-              onClick={fetchMondknoten}
+              onClick={handleInterpret}
               disabled={loading || (activeInterpretationId ? (!profile?.is_poweruser || !currentFollowup.trim() || followups.length >= 10) : false)}
             >
               {loading ? <LoadingSpinner /> : (activeInterpretationId ? 'Auswertung vertiefen' : 'Mondknoten interpretieren')}
@@ -658,7 +565,7 @@ export default function Mondknoten(){
             {imageLoading && <LoadingSpinner message="Mondknoten wird gerendert…" />}
             {imageError && <ErrorMessage message={imageError} />}
             {chartImage && !imageLoading && (
-              <img src={chartImage} alt="Mondknoten Diagramm" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'cover' }} />
+              <img src={chartImage} alt="Mondknoten Diagramm" style={{ width: '100%', display: 'block', borderRadius: 8, maxHeight: 750, objectFit: 'contain' }} />
             )}
             {!chartImage && !imageLoading && !imageError && (
               <div style={{ color: '#577' }}>Klicke auf «Mondknoten interpretieren», um das Chart rechts neben dem Formular anzuzeigen und eine Auswertung zu erhalten.</div>

@@ -41,7 +41,7 @@ def get_env_settings(exclude_keys: Optional[set] = None) -> dict:
     exclude = exclude_keys or set()
     raw = _read_env_file()
     if DEBUG:
-        sensitive_keys = {'SECRET_KEY', 'API_KEY', 'DB_PASSWORD', 'TURNSTILE_SECRET_KEY', 'TURNSTILE_VERIFY_URL'}
+        sensitive_keys = {'SECRET_KEY', 'API_KEY', 'MISTRAL_API_KEY', 'DB_PASSWORD', 'TURNSTILE_SECRET_KEY', 'TURNSTILE_VERIFY_URL'}
         redacted = {k: '***REDACTED***' if k in sensitive_keys else v for k, v in raw.items()}
         logger.debug(f"Env settings loaded: {redacted}")
     settings = {}
@@ -82,6 +82,20 @@ DEBUG = _parse_bool(get_env_setting("DEBUG"), False)
 SECRET_KEY = get_env_setting("SECRET_KEY")
 API_KEY = get_env_setting("API_KEY")
 EPHE_PATH = get_env_setting("EPHEMERIS_PATH")
+DISABLE_AI = _parse_bool(get_env_setting("DISABLE_AI"), False)
+
+# Provider selection (per D-04)
+CHAT_PROVIDER = get_env_setting("CHAT_PROVIDER") or "perplexity"
+
+# Mistral AI configuration (per D-11) — added alongside existing PERPLEXITY_* vars
+MISTRAL_API_KEY = get_env_setting("MISTRAL_API_KEY")
+MISTRAL_CACHE_TTL = int(get_env_setting("MISTRAL_CACHE_TTL") or 7 * 24 * 3600)
+MISTRAL_CACHE_MAXSIZE = int(get_env_setting("MISTRAL_CACHE_MAXSIZE") or 256)
+
+logger.info(
+    "Chat provider configured: %s (set CHAT_PROVIDER env var to change)",
+    CHAT_PROVIDER,
+)
 
 def init_swisseph_path() -> None:
     """Initialize Swiss Ephemeris search path.

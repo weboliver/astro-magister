@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional
 
 from sqlalchemy import func as sqlfunc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.models.interpretations import UserInterpretation, UserInterpretationMessage
 from app.schemas.interpretations import InterpretationCreate, MessageCreate
@@ -49,6 +49,8 @@ def create_interpretation(
             .filter(
                 UserInterpretation.user_id == user_id,
                 UserInterpretation.context_type == payload.context_type,
+                UserInterpretation.user_persons_id == payload.user_persons_id,
+                UserInterpretation.user_person_id_2 == payload.user_person_id_2,
                 UserInterpretation.interp_year == payload.interp_year,
                 UserInterpretation.interp_month == payload.interp_month,
                 UserInterpretation.interp_day == payload.interp_day,
@@ -70,7 +72,9 @@ def create_interpretation(
     interp = UserInterpretation(
         user_id=user_id,
         user_persons_id=payload.user_persons_id,
+        user_person_id_2=payload.user_person_id_2,
         context_type=payload.context_type,
+        comparison_mode=payload.comparison_mode,
         model=payload.model,
         interp_year=payload.interp_year,
         interp_month=payload.interp_month,
@@ -109,6 +113,10 @@ def get_interpretation(
     """Lädt eine Session; gibt None zurück wenn nicht gefunden oder falscher Eigentümer."""
     return (
         db.query(UserInterpretation)
+        .options(
+            joinedload(UserInterpretation.user_person),
+            joinedload(UserInterpretation.user_person_2),
+        )
         .filter(
             UserInterpretation.id == interpretation_id,
             UserInterpretation.user_id == user_id,
@@ -127,7 +135,14 @@ def list_interpretations(
     offset: int = 0,
 ) -> List[UserInterpretation]:
     """Gibt paginierte Sessions des Nutzers zurück, neueste zuerst."""
-    q = db.query(UserInterpretation).filter(UserInterpretation.user_id == user_id)
+    q = (
+        db.query(UserInterpretation)
+        .options(
+            joinedload(UserInterpretation.user_person),
+            joinedload(UserInterpretation.user_person_2),
+        )
+        .filter(UserInterpretation.user_id == user_id)
+    )
     if context_type is not None:
         q = q.filter(UserInterpretation.context_type == context_type)
     if user_persons_id is not None:
@@ -143,7 +158,7 @@ def list_interpretations(
 
 
 def delete_interpretation(db: Session, user_id: int, interpretation_id: int) -> bool:
-    """Löscht eine Session (inkl. Nachrichten via DB-CASCADE). Gibt False zurück wenn nicht gefunden."""
+    """Löscht eine Session (inkl. Nachrichten via DB-CASCADE)."""
     interp = get_interpretation(db, user_id, interpretation_id)
     if interp is None:
         return False
@@ -243,13 +258,15 @@ def save_or_append_stream_result(
     location_longitude: Optional[float] = None,
     transit_location_latitude: Optional[float] = None,
     transit_location_longitude: Optional[float] = None,
+    user_person_id_2: Optional[int] = None,
+    comparison_mode: Optional[str] = None,
 ) -> int:
     """Speichert einen Stream-Treffer entweder als neue Session oder hängt ihn an eine bestehende an.
 
-    - interpretation_id gesetzt + Session gefunden → nächste position berechnen, drei Nachrichten anhängen.
-    - interpretation_id nicht gesetzt oder Session nicht gefunden → neue Session mit position=1 anlegen.
+    Für Synastrie (context_type="synastry"): Eine EINZIGE Session mit beiden Personen-
+    Referenzen (user_persons_id + user_person_id_2).
 
-    Gibt die interpretation_id zurück.
+    Gibt die interpretation_id der Session zurück.
     """
     _assert_person_ownership(user_id, user_persons_id)
 
@@ -266,7 +283,9 @@ def save_or_append_stream_result(
     from app.schemas.interpretations import InterpretationCreate, MessageCreate
     ic = InterpretationCreate(
         user_persons_id=user_persons_id,
+        user_person_id_2=user_person_id_2,
         context_type=context_type,
+        comparison_mode=comparison_mode,
         model=model,
         interp_year=interp_year,
         interp_month=interp_month,
@@ -284,4 +303,7 @@ def save_or_append_stream_result(
         ],
     )
     saved = create_interpretation(db, user_id, ic)
+
+    # Synastrie: BEIDE Personen werden in einer einzigen Session gespeichert.
+
     return saved.id

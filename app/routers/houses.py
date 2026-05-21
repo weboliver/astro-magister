@@ -9,7 +9,8 @@ from app.static.texte import get_general_anweisung
 from app.static.zodiac_names import get_zodiac_name
 from app.schemas.datetime_models import DateTimeRequest, HousesResponse
 from pytz import timezone as pytz_timezone
-from app.services.perplexity import PerplexityClient, _make_cache_key, _cache_set, append_additional_question
+from app.services.providers import get_chat_provider
+from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
 from app.routers.auth import _get_user_from_request, require_authenticated_user
 from app.services.auth_security import build_ai_rate_limit_error_detail, check_ai_rate_limit, get_client_ip, log_auth_event
@@ -158,7 +159,7 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
         StreamingResponse with SSE events for houses and AI summary.
     """
     cached_summary = None
-    perplexity_client = None
+    provider = None
     try:
         result = _build_houses_response(payload)
         response_data = result.model_dump()
@@ -166,8 +167,8 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
         if summary_prompt:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_houses(request, payload)
-            perplexity_client = PerplexityClient(role_type=role_name)
-            cached_summary = perplexity_client.get_cached_summary(summary_prompt, HOUSES_SYSTEM_PROMPT)
+            provider = get_chat_provider(role_type=role_name)
+            cached_summary = provider.get_cached(summary_prompt, HOUSES_SYSTEM_PROMPT)
             if cached_summary is None:
                 rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:houses')
                 if not rate_limit.allowed:
@@ -216,7 +217,7 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="houses",
-                            model=perplexity_client.model,
+                            model=provider.model_name,
                             interp_year=payload.year,
                             interp_month=payload.month,
                             interp_day=payload.day,
@@ -233,7 +234,7 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
             return
 
         try:
-            async for chunk in perplexity_client.send_summary_stream(
+            async for chunk in provider.stream_completion(
                 summary=summary_prompt,
                 system_prompt=HOUSES_SYSTEM_PROMPT,
             ):
@@ -244,22 +245,20 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
                 try:
                     logger.debug("No streamed chunks received, invoking synchronous fallback for houses")
                     text = await asyncio.to_thread(
-                        perplexity_client.send_summary_text,
+                        provider.chat_completion,
                         summary_prompt,
                         HOUSES_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
                     logger.debug("Fallback returned length=%d", len(text))
                 except Exception:
-                    logger.exception("Synchronous fallback to send_summary_text failed for houses")
+                    logger.exception("Synchronous fallback to chat_completion failed for houses")
 
             full_summary = "".join(summary_parts)
             try:
-                resolved_prompt = perplexity_client._resolve_system_prompt(HOUSES_SYSTEM_PROMPT)
-                key = _make_cache_key(summary_prompt, resolved_prompt, perplexity_client.model)
-                _cache_set(key, full_summary)
+                provider.cache_result(summary_prompt, HOUSES_SYSTEM_PROMPT, full_summary)
             except Exception:
-                logger.exception("Failed to set Perplexity cache for houses")
+                logger.exception("Failed to set cache for houses")
 
             yield _sse_event("done", {"summary": full_summary})
             try:
@@ -274,7 +273,7 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="houses",
-                        model=perplexity_client.model,
+                        model=provider.model_name,
                         interp_year=payload.year,
                         interp_month=payload.month,
                         interp_day=payload.day,

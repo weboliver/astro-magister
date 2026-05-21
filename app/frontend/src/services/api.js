@@ -188,3 +188,32 @@ async function refreshAccessToken(){
   })()
   return refreshPromise
 }
+
+export async function streamSynastry(personAId, personBId, comparisonMode, additionalQuestion, interpretationId) {
+  const payload = {
+    person_a_id: personAId,
+    person_b_id: personBId,
+    comparison_mode: comparisonMode,
+  }
+  if (additionalQuestion) payload.additional_question = additionalQuestion
+  if (interpretationId) payload.interpretation_id = interpretationId
+
+  return postStream('/synastry/stream', payload)
+}
+
+export async function fetchSynastryGraphic(personAId, personBId, comparisonMode, width = 750, height = 750) {
+  const resp = await post(`/synastry/graphic?width=${width}&height=${height}`, {
+    person_a_id: personAId,
+    person_b_id: personBId,
+    comparison_mode: comparisonMode,
+  })
+  if (!resp.ok) throw new Error('Graphic fetch failed')
+  return resp.blob()
+}
+
+export async function listInterpretations(contextType, userPersonsId = null) {
+  const params = new URLSearchParams()
+  params.append('context_type', contextType)
+  if (userPersonsId != null) params.append('user_persons_id', userPersonsId.toString())
+  return get(`/interpretations?${params.toString()}`)
+}

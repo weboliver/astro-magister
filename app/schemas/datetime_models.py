@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 class JuldayRequest(BaseModel):
     """Request to convert datetime to Julian Day."""
@@ -202,3 +202,19 @@ class PositionResponse(BaseModel):
     city: Optional[str] = Field(None, description="City name")
     latitude: Optional[float] = Field(None, description="Latitude in decimal degrees")
     longitude: Optional[float] = Field(None, description="Longitude in decimal degrees")
+
+
+class SynastryRequest(BaseModel):
+    """Request schema for synastry (two-person comparison) interpretation and chart rendering.
+
+    Sends person IDs only — backend fetches birth data from user_persons table by ID.
+    comparison_mode controls which chart drawing operation is used (click_hh = House-House, click_rr = Radix-Radix).
+    """
+    person_a_id: Optional[int] = Field(None, description="Person A's user_persons.id (None = logged-in user's own profile)")
+    person_b_id: Optional[int] = Field(None, description="Person B's user_persons.id (None = logged-in user's own profile)")
+    comparison_mode: Literal["hh", "rr"] = Field(
+        default="hh",
+        description="Comparison chart type: 'hh' = Häuservergleich (House-House), 'rr' = Radixvergleich (Radix-Radix)"
+    )
+    interpretation_id: Optional[int] = Field(None, description="ID of existing interpretation session for follow-up")
+    additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question")

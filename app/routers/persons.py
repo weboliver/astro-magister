@@ -17,6 +17,7 @@ class PersonBase(BaseModel):
     residence_city: Optional[str] = None
     residence_latitude: Optional[float] = None
     residence_longitude: Optional[float] = None
+    residence_timezone: Optional[str] = None
     birth_year: Optional[int] = None
     birth_month: Optional[int] = None
     birth_day: Optional[int] = None
@@ -28,6 +29,7 @@ class PersonBase(BaseModel):
     birth_city: Optional[str] = None
     birth_latitude: Optional[float] = None
     birth_longitude: Optional[float] = None
+    birth_timezone: Optional[str] = None
 
 
 class PersonIn(PersonBase):

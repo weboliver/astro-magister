@@ -24,6 +24,7 @@ fastapi>=0.110.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 httpx>=0.25.0  # required for FastAPI TestClient
+mistralai>=1.0.0  # Mistral AI chat completions SDK
 timezonefinder>=6.0.0
 
 # Caching helper for TTL + max-size eviction

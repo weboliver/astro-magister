@@ -31,6 +31,7 @@ const createEmptyPersonForm = () => ({
   residence_city: '',
   residence_latitude: null,
   residence_longitude: null,
+  residence_timezone: '',
   birth_year: null,
   birth_month: null,
   birth_day: null,
@@ -42,6 +43,7 @@ const createEmptyPersonForm = () => ({
   birth_city: '',
   birth_latitude: null,
   birth_longitude: null,
+  birth_timezone: '',
 })
 
 const buildDateTimeString = (record, prefix = 'birth') => {
@@ -106,6 +108,41 @@ const MAX_PERSON_PAGES = 10
 const MAX_PERSONS = PERSONS_PAGE_SIZE * MAX_PERSON_PAGES
 const SETTINGS_FORM_MAX_WIDTH = 340
 const SETTINGS_SEARCH_MAX_WIDTH = 640
+
+const TIMEZONES = [
+  'UTC', 'Europe/Berlin', 'Europe/Vienna', 'Europe/Zurich', 'Europe/London',
+  'Europe/Paris', 'Europe/Rome', 'Europe/Madrid', 'Europe/Amsterdam',
+  'Europe/Brussels', 'Europe/Stockholm', 'Europe/Warsaw', 'Europe/Athens',
+  'Europe/Lisbon', 'Europe/Moscow', 'Europe/Istanbul',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Toronto', 'America/Mexico_City', 'America/Sao_Paulo',
+  'America/Argentina/Buenos_Aires',
+  'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore',
+  'Asia/Bangkok', 'Asia/Seoul', 'Asia/Jerusalem',
+  'Australia/Sydney', 'Pacific/Auckland', 'Africa/Cairo', 'Africa/Johannesburg',
+]
+
+const COUNTRY_TZ = {
+  DE: 'Europe/Berlin', AT: 'Europe/Vienna', CH: 'Europe/Zurich',
+  GB: 'Europe/London', FR: 'Europe/Paris', IT: 'Europe/Rome',
+  ES: 'Europe/Madrid', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels',
+  DK: 'Europe/Copenhagen', SE: 'Europe/Stockholm', NO: 'Europe/Oslo',
+  PL: 'Europe/Warsaw', CZ: 'Europe/Prague', HU: 'Europe/Budapest',
+  RO: 'Europe/Bucharest', BG: 'Europe/Sofia', GR: 'Europe/Athens',
+  PT: 'Europe/Lisbon', IE: 'Europe/Dublin', FI: 'Europe/Helsinki',
+  US: 'America/New_York', CA: 'America/Toronto', MX: 'America/Mexico_City',
+  BR: 'America/Sao_Paulo', AR: 'America/Argentina/Buenos_Aires',
+  JP: 'Asia/Tokyo', CN: 'Asia/Shanghai', IN: 'Asia/Kolkata',
+  AU: 'Australia/Sydney', NZ: 'Pacific/Auckland',
+  ZA: 'Africa/Johannesburg', EG: 'Africa/Cairo', AE: 'Asia/Dubai',
+  SG: 'Asia/Singapore', TH: 'Asia/Bangkok', KR: 'Asia/Seoul',
+  RU: 'Europe/Moscow', TR: 'Europe/Istanbul', IL: 'Asia/Jerusalem',
+}
+
+function autoTimezone(countryCode) {
+  if (!countryCode) return ''
+  return COUNTRY_TZ[countryCode.toUpperCase()] || ''
+}
 
 const fetchCityPosition = async (city, countryCode, regionCode) => {
   if (!city) return null
@@ -310,7 +347,7 @@ export default function Settings(){
       return
     }
     setPersonMsg(editingPersonId ? 'Person aktualisiert' : 'Person gespeichert')
-    resetPersonForm()
+    if (!editingPersonId) resetPersonForm()
     await loadPersons()
     await refreshPersons()
   }
@@ -371,6 +408,7 @@ export default function Settings(){
       residence_city: person.residence_city || '',
       residence_latitude: person.residence_latitude ?? null,
       residence_longitude: person.residence_longitude ?? null,
+      residence_timezone: person.residence_timezone || '',
       birth_year: person.birth_year ?? null,
       birth_month: person.birth_month ?? null,
       birth_day: person.birth_day ?? null,
@@ -382,6 +420,7 @@ export default function Settings(){
       birth_city: person.birth_city || '',
       birth_latitude: person.birth_latitude ?? null,
       birth_longitude: person.birth_longitude ?? null,
+      birth_timezone: person.birth_timezone || '',
     })
     const personDateValue = buildDateTimeString(person, 'birth')
     setPersonDatetimeLocal(personDateValue)
@@ -408,6 +447,7 @@ export default function Settings(){
 
   async function onPersonCountryChange(code){
     setPersonField('birth_country', code)
+    setPersonField('birth_timezone', autoTimezone(code))
     setPersonRegions([])
     setPersonCities([])
     setPersonBirthCityFilter('')
@@ -442,6 +482,7 @@ export default function Settings(){
 
   async function onPersonResidenceCountryChange(code){
     setPersonField('residence_country', code)
+    setPersonField('residence_timezone', autoTimezone(code))
     setPersonResRegions([])
     setPersonResCities([])
     setPersonResidenceCityFilter('')
@@ -685,6 +726,7 @@ export default function Settings(){
 
   async function onCountryChange(code){
     setField('birth_country', code)
+    setField('birth_timezone', autoTimezone(code))
     setRegions([])
     setCities([])
     setBirthCityFilter('')
@@ -806,7 +848,10 @@ export default function Settings(){
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id)
+                if (tab.id === TAB_PERSON_FORM) resetPersonForm()
+              }}
               className={isActive ? 'admin-tab admin-tab-active' : 'admin-tab'}
             >
               {tab.label}
@@ -846,7 +891,7 @@ export default function Settings(){
               <div style={fieldWrapperStyle}>
                 <label style={labelStyle}>Land</label>
                 <select style={selectControlStyle} value={profile.residence_country || ''} 
-                  onChange={e=>{ setField('residence_country', e.target.value); setResRegions([]); setResCities([]); setField('residence_region', null); setField('residence_city', null); if (e.target.value) { get(`/locations/regions?country=${e.target.value}`).then(r=>r.ok?r.json().then(j=>setResRegions(j)):null).catch(()=>{}) } }}>
+                  onChange={e=>{ setField('residence_country', e.target.value); setField('residence_timezone', autoTimezone(e.target.value)); setResRegions([]); setResCities([]); setField('residence_region', null); setField('residence_city', null); if (e.target.value) { get(`/locations/regions?country=${e.target.value}`).then(r=>r.ok?r.json().then(j=>setResRegions(j)):null).catch(()=>{}) } }}>
                   <option value="">-- bitte wählen --</option>
                   {countries.map(c=> <option key={c.code} value={c.code}>{getCountryLabel(c)}</option>)}
                 </select>
@@ -878,6 +923,13 @@ export default function Settings(){
               <div style={fieldWrapperStyle}>
                 <label style={labelStyle}>Längengrad</label>
                 <input style={fieldControlStyle} value={profile.residence_longitude || ''} onChange={e=>setField('residence_longitude', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Längengrad wird nach Auswahl der Stadt gesetzt." />
+              </div>
+              <div style={fieldWrapperStyle}>
+                <label style={labelStyle}>Zeitzone</label>
+                <select style={selectControlStyle} value={profile.residence_timezone || ''} onChange={e=>setField('residence_timezone', e.target.value)}>
+                  <option value="">-- automatisch --</option>
+                  {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                </select>
               </div>
               <div className="settings-actions" style={{marginTop:8}}><button className="admin-primary-button" type="submit">Speichern</button></div>
             </form>
@@ -944,6 +996,13 @@ export default function Settings(){
                 <label style={labelStyle}>Längengrad</label>
                 <input style={fieldControlStyle} value={profile.birth_longitude || ''} onChange={e=>setField('birth_longitude', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Längengrad wird nach Auswahl der Stadt gesetzt." />
               </div>
+              <div style={fieldWrapperStyle}>
+                <label style={labelStyle}>Zeitzone</label>
+                <select style={selectControlStyle} value={profile.birth_timezone || ''} onChange={e=>setField('birth_timezone', e.target.value)}>
+                  <option value="">-- automatisch --</option>
+                  {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                </select>
+              </div>
               <div className="settings-actions" style={{marginTop:8}}><button className="admin-primary-button" type="submit">Speichern</button></div>
             </form>
           </section>
@@ -999,6 +1058,13 @@ export default function Settings(){
                     <div style={fieldWrapperStyle}>
                       <label style={labelStyle}>Längengrad</label>
                       <input style={fieldControlStyle} value={personForm.residence_longitude || ''} onChange={e=>setPersonField('residence_longitude', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Längengrad wird nach Auswahl der Stadt gesetzt." />
+                    </div>
+                    <div style={fieldWrapperStyle}>
+                      <label style={labelStyle}>Zeitzone</label>
+                      <select style={selectControlStyle} value={personForm.residence_timezone || ''} onChange={e=>setPersonField('residence_timezone', e.target.value)}>
+                        <option value="">-- automatisch --</option>
+                        {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                      </select>
                     </div>
                     <div style={fieldWrapperStyle}>
                       <label style={labelStyle}>Geburtstag (Datum & Uhrzeit)</label>
@@ -1059,6 +1125,13 @@ export default function Settings(){
                     <div style={fieldWrapperStyle}>
                       <label style={labelStyle}>Längengrad</label>
                       <input style={fieldControlStyle} value={personForm.birth_longitude || ''} onChange={e=>setPersonField('birth_longitude', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Breitengrad wird nach Auswahl der Stadt gesetzt." />
+                    </div>
+                    <div style={fieldWrapperStyle}>
+                      <label style={labelStyle}>Zeitzone</label>
+                      <select style={selectControlStyle} value={personForm.birth_timezone || ''} onChange={e=>setPersonField('birth_timezone', e.target.value)}>
+                        <option value="">-- automatisch --</option>
+                        {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                      </select>
                     </div>
                     <div className="settings-actions" style={{marginTop:8}}>
                       <button className="admin-primary-button" type="submit" disabled={!canAddPerson}>{editingPersonId ? 'Aktualisieren' : 'Person speichern'}</button>

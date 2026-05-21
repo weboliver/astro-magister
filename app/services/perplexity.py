@@ -21,6 +21,18 @@ import httpx
 
 from app import config as app_config
 
+# ABC compliance (Phase 21)
+from app.services.providers import ChatProvider
+from app.services.providers._cache import (
+    CacheBackend, LocalCacheBackend,
+    make_cache_key, cache_get, cache_set, cache_delete,
+    create_provider_cache,
+    get_cache_overview as _shared_get_cache_overview,
+    delete_cache_entry as _shared_delete_cache_entry,
+    clear_cache as _shared_clear_cache,
+    _suffix_prefix_overlap as _suffix_prefix_overlap,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -120,233 +132,6 @@ def append_additional_question(summary: Optional[str], additional_question: Opti
     )
 
 
-class _CacheBackend:
-    def get(self, key: str) -> Optional[str]:
-        raise NotImplementedError
-
-    def set(self, key: str, text: str) -> None:
-        raise NotImplementedError
-
-    def inspect_entries(self, limit: int) -> list[dict[str, Any]]:
-        raise NotImplementedError
-
-    def delete(self, key: str) -> int:
-        raise NotImplementedError
-
-    def clear(self) -> int:
-        raise NotImplementedError
-
-
-class _LocalCacheBackend(_CacheBackend):
-    def __init__(self, max_entries: int, ttl_seconds: int) -> None:
-        self._max_entries = max_entries
-        self._ttl_seconds = ttl_seconds
-        self._lock = RLock()
-        self._cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
-
-    def get(self, key: str) -> Optional[str]:
-        now = monotonic()
-        with self._lock:
-            self._prune_expired_locked(now)
-            entry = self._cache.get(key)
-            if entry is None:
-                return None
-
-            expires_at, text = entry
-            if expires_at <= now:
-                self._cache.pop(key, None)
-                return None
-
-            self._cache.move_to_end(key)
-            return text
-
-    def set(self, key: str, text: str) -> None:
-        now = monotonic()
-        with self._lock:
-            self._prune_expired_locked(now)
-            self._cache[key] = (now + self._ttl_seconds, text)
-            self._cache.move_to_end(key)
-
-            while len(self._cache) > self._max_entries:
-                self._cache.popitem(last=False)
-
-    def inspect_entries(self, limit: int) -> list[dict[str, Any]]:
-        now = monotonic()
-        with self._lock:
-            self._prune_expired_locked(now)
-            entries = list(self._cache.items())[-limit:]
-
-        serialized: list[dict[str, Any]] = []
-        for key, (expires_at, text) in reversed(entries):
-            serialized.append(
-                {
-                    "key": key,
-                    "value": text,
-                    "ttl_seconds": max(0, int(expires_at - now)),
-                    "source": "local",
-                }
-            )
-        return serialized
-
-    def delete(self, key: str) -> int:
-        with self._lock:
-            return 1 if self._cache.pop(key, None) is not None else 0
-
-    def clear(self) -> int:
-        with self._lock:
-            deleted = len(self._cache)
-            self._cache.clear()
-            return deleted
-
-    def _prune_expired_locked(self, now: float) -> None:
-        expired_keys = [cache_key for cache_key, (expires_at, _) in self._cache.items() if expires_at <= now]
-        for expired_key in expired_keys:
-            self._cache.pop(expired_key, None)
-
-
-class _RedisCacheBackend(_CacheBackend):
-    def __init__(self, redis_url: str, prefix: str, ttl_seconds: int) -> None:
-        redis_module = import_module("redis")
-        self._prefix = prefix
-        self._ttl_seconds = ttl_seconds
-        self._client = redis_module.Redis.from_url(
-            redis_url,
-            decode_responses=True,
-            socket_connect_timeout=1,
-            socket_timeout=1,
-        )
-
-    def get(self, key: str) -> Optional[str]:
-        value = self._client.get(self._redis_key(key))
-        return value if value else None
-
-    def set(self, key: str, text: str) -> None:
-        self._client.set(self._redis_key(key), text, ex=self._ttl_seconds)
-
-    def inspect_entries(self, limit: int) -> list[dict[str, Any]]:
-        pattern = self._redis_key("*")
-        keys = list(self._client.scan_iter(match=pattern, count=min(max(limit, 10), 1000)))
-        keys = sorted(keys)[:limit]
-        if not keys:
-            return []
-
-        values = self._client.mget(keys)
-        serialized: list[dict[str, Any]] = []
-        for redis_key, value in zip(keys, values):
-            serialized.append(
-                {
-                    "key": redis_key.removeprefix(f"{self._prefix}:"),
-                    "value": value,
-                    "ttl_seconds": self._client.ttl(redis_key),
-                    "source": "redis",
-                }
-            )
-        return serialized
-
-    def delete(self, key: str) -> int:
-        return int(self._client.delete(self._redis_key(key)))
-
-    def clear(self) -> int:
-        keys = list(self._client.scan_iter(match=self._redis_key("*"), count=1000))
-        if not keys:
-            return 0
-        return int(self._client.delete(*keys))
-
-    def ping(self) -> bool:
-        return bool(self._client.ping())
-
-    def _redis_key(self, key: str) -> str:
-        return f"{self._prefix}:{key}"
-
-
-class _FallbackCacheBackend(_CacheBackend):
-    def __init__(self, primary: Optional[_CacheBackend], fallback: _CacheBackend) -> None:
-        self._primary = primary
-        self._fallback = fallback
-        self._primary_failed = False
-
-    def get(self, key: str) -> Optional[str]:
-        if self._primary is not None:
-            try:
-                value = self._primary.get(key)
-                if value is not None:
-                    return value
-            except Exception:
-                self._log_primary_failure("read")
-
-        return self._fallback.get(key)
-
-    def set(self, key: str, text: str) -> None:
-        if self._primary is not None:
-            try:
-                self._primary.set(key, text)
-                return
-            except Exception:
-                self._log_primary_failure("write")
-
-        self._fallback.set(key, text)
-
-    def inspect_entries(self, limit: int) -> list[dict[str, Any]]:
-        if self._primary is not None:
-            try:
-                entries = self._primary.inspect_entries(limit)
-                if entries:
-                    return entries
-            except Exception:
-                self._log_primary_failure("inspect")
-
-        return self._fallback.inspect_entries(limit)
-
-    def delete(self, key: str) -> int:
-        deleted = 0
-        if self._primary is not None:
-            try:
-                deleted = max(deleted, self._primary.delete(key))
-            except Exception:
-                self._log_primary_failure("delete")
-        try:
-            deleted = max(deleted, self._fallback.delete(key))
-        except Exception:
-            logger.exception("Perplexity fallback cache delete error")
-        return deleted
-
-    def clear(self) -> int:
-        deleted = 0
-        if self._primary is not None:
-            try:
-                deleted = max(deleted, self._primary.clear())
-            except Exception:
-                self._log_primary_failure("clear")
-        try:
-            deleted = max(deleted, self._fallback.clear())
-        except Exception:
-            logger.exception("Perplexity fallback cache clear error")
-        return deleted
-
-    def _log_primary_failure(self, operation: str) -> None:
-        if self._primary_failed:
-            return
-        self._primary_failed = True
-        logger.warning("Perplexity Redis-Cache nicht verfügbar, nutze lokalen Fallback-Cache für %s", operation)
-
-
-def _suffix_prefix_overlap(text: str, marker: str) -> int:
-    """Calculate suffix/prefix overlap between text and marker.
-
-    Args:
-        text: Text to check.
-        marker: Marker string.
-
-    Returns:
-        Maximum overlap length.
-    """
-    max_overlap = min(len(text), len(marker) - 1)
-    for size in range(max_overlap, 0, -1):
-        if text.endswith(marker[:size]):
-            return size
-    return 0
-
-
 class _ThinkStreamFilter:
     def __init__(self) -> None:
         self._buffer = ""
@@ -397,7 +182,7 @@ class _ThinkStreamFilter:
         return remainder
 
 
-class PerplexityClient:
+class PerplexityClient(ChatProvider):
     """Client für die Perplexity Chat Completions API.
 
     Parameters
@@ -434,6 +219,13 @@ class PerplexityClient:
         # print(f"PerplexityClient initialized with role_type={self.role_type} und tokens={self.tokens} und model={self.model}")
         if not self.api_key:
             logger.warning("Perplexity API key ist nicht gesetzt (API_KEY). Anfragen werden fehlschlagen.")
+        # Reference module-level cache for shared cache operations
+        self._cache = _CACHE
+
+    @property
+    def model_name(self) -> str:
+        """Resolved model identifier (per D-07)."""
+        return self.model
 
     # Initialisiere die System-Prompts für verschiedene Anwendungsfälle
     def get_system_prompt_role_values(self, prompt_type: str) -> str:
@@ -523,6 +315,16 @@ class PerplexityClient:
             "Halte dich strikt an diese Struktur. Keine Meta-Kommentare. Keine Quellenangaben.\n"\
         )
 
+        SYNASTRY_SYSTEM_PROMPT = (
+            f"{nur_woertlich}\n"
+            "Schreibe am Anfang die Überschrift: Partnerhoroskop Interpretation\n"
+            f"Schreibe danach eine detailierte Erläuterung der Beziehungsaspekte als Bullet Liste {self.text_type} {self.token_count}\n"
+            "Beschreibe sowohl die harmonischen als auch die herausfordernden Aspekte der Beziehung.\n"
+            "Gehe auf die Häuserüberlagerungen ein: Welche Lebensbereiche der Partner werden durch die Planeten des anderen aktiviert?\n"
+            f"Füge am Ende eine psychologische Gesamtschau der Partnerschaftsdynamik aus Sicht der Huber-Astrologie an.\n"
+            f"{allgemeine_deutung}\n"
+        )
+
         self.system_prompt["horoskop"] = HOROSCOPE_SYSTEM_PROMPT
         self.system_prompt["mondknoten"] = NODE_SYSTEM_PROMPT
         self.system_prompt["houses"] = HOUSES_SYSTEM_PROMPT
@@ -530,12 +332,17 @@ class PerplexityClient:
         self.system_prompt["solar_return"] = SOLAR_RETURN_SYSTEM_PROMPT
         self.system_prompt["age_points"] = AGE_POINTS_SYSTEM_PROMPT
         self.system_prompt["entry"] = ENTRY_GENERATION_SYSTEM_PROMPT
+        self.system_prompt["synastrie"] = SYNASTRY_SYSTEM_PROMPT
 
     def system_prompt_for_summary(self, type_of_prompt: str) -> str:
         # Implementiere die Logik zur Generierung des System-Prompts basierend auf dem Typ
         if type_of_prompt not in self.system_prompt:
             raise ValueError(f"Unbekannter Typ für System-Prompt: {type_of_prompt}")
         return self.system_prompt[type_of_prompt]
+
+    def resolve_system_prompt(self, prompt_key_or_text: Optional[str]) -> Optional[str]:
+        """Resolve a system prompt key (e.g., 'horoskop') to full text, or pass through raw text."""
+        return self._resolve_system_prompt(prompt_key_or_text)
 
     def _resolve_system_prompt(self, system_prompt: Optional[str]) -> Optional[str]:
         """Resolve a system_prompt parameter which may be either a key (e.g. 'horoskop')
@@ -587,18 +394,20 @@ class PerplexityClient:
             return resp.json()
 
     def get_cached_summary(self, summary: str, system_prompt: Optional[str] = None) -> Optional[str]:
+        if app_config.DISABLE_AI:
+            return None
         resolved = self._resolve_system_prompt(system_prompt)
         if resolved is None:
             resolved = self.system_prompt_for_summary("horoskop")
 
-        key = _make_cache_key(summary, resolved, self.model)
-        cached = _cache_get(key)
+        key = make_cache_key(summary, resolved, self.model)
+        cached = cache_get(self._cache, key)
         if cached is None:
             return None
 
         if _looks_like_prompt_echo(summary, cached):
             logger.warning("Verwerfe verunreinigten Perplexity-Cache-Eintrag, der den Prompt spiegelt")
-            _cache_delete(key)
+            cache_delete(self._cache, key)
             return None
 
         return cached
@@ -610,6 +419,10 @@ class PerplexityClient:
         stream_mode: str = "full",
     ) -> AsyncIterator[str]:
         """Sendet eine Summary an Perplexity und liefert Text-Chunks aus dem SSE-Stream."""
+        if app_config.DISABLE_AI:
+            placeholder = "\n\n---\n\n**KI-Interpretation ist derzeit deaktiviert.**\n*(DISABLE_AI ist gesetzt — keine Perplexity-Anfragen werden gesendet.)*\n\n---\n\n"
+            yield placeholder
+            return
         resolved = self._resolve_system_prompt(system_prompt)
         if resolved is None:
             resolved = self.system_prompt_for_summary("horoskop")
@@ -715,6 +528,11 @@ class PerplexityClient:
                     for chunk in buffered_chunks:
                         yield chunk
 
+    async def stream_completion(self, summary: str, system_prompt: Optional[str] = None) -> AsyncIterator[str]:
+        """ABC-compliant streaming method. Delegates to send_summary_stream."""
+        async for chunk in self.send_summary_stream(summary=summary, system_prompt=system_prompt):
+            yield chunk
+
     def send_summary_text(
         self,
         summary: str,
@@ -723,10 +541,12 @@ class PerplexityClient:
         retry_on_prompt_echo: bool = True,
     ) -> str:
         """Wie send_summary(), gibt aber nur den reinen Antworttext zurück."""
+        if app_config.DISABLE_AI:
+            return "\n\n---\n\n**KI-Interpretation ist derzeit deaktiviert.**\n*(DISABLE_AI ist gesetzt — keine Perplexity-Anfragen werden gesendet.)*\n\n---\n\n"
         system_prompt = self._resolve_system_prompt(system_prompt)
         if system_prompt is None:
             system_prompt = self.system_prompt_for_summary("horoskop")
-        key = _make_cache_key(summary, system_prompt, self.model)
+        key = make_cache_key(summary, system_prompt, self.model)
         if use_cache:
             cached = self.get_cached_summary(summary, system_prompt)
             if cached is not None:
@@ -750,52 +570,34 @@ class PerplexityClient:
             raise ValueError("Perplexity hat den Prompt statt einer Interpretation zurückgegeben")
 
         try:
-            _cache_set(key, text)
+            cache_set(self._cache, key, text)
         except Exception:
             pass
 
         return text
 
+    def chat_completion(self, summary: str, system_prompt: Optional[str] = None) -> str:
+        """ABC-compliant synchronous completion. Delegates to send_summary_text."""
+        return self.send_summary_text(summary=summary, system_prompt=system_prompt)
 
-_CACHE_MAX = int(app_config.get_env_setting("PERPLEXITY_CACHE_MAX") or 256)
-_CACHE_TTL = int(app_config.get_env_setting("PERPLEXITY_CACHE_TTL") or 7 * 24 * 3600)
-_CACHE_BACKEND = (app_config.get_env_setting("PERPLEXITY_CACHE_BACKEND") or "local").strip().lower()
-_CACHE_PREFIX = (app_config.get_env_setting("PERPLEXITY_CACHE_PREFIX") or "perplexity").strip() or "perplexity"
-_REDIS_URL = (app_config.get_env_setting("REDIS_URL") or "").strip()
+    def get_cached(self, summary: str, system_prompt: Optional[str] = None) -> Optional[str]:
+        """ABC-compliant cached lookup."""
+        return self.get_cached_summary(summary=summary, system_prompt=system_prompt)
 
-
-def _build_cache_backend() -> _CacheBackend:
-    """Build and configure the cache backend based on settings.
-
-    Returns:
-        Configured _CacheBackend instance (local or Redis).
-    """
-    fallback = _LocalCacheBackend(max_entries=_CACHE_MAX, ttl_seconds=_CACHE_TTL)
-    if _CACHE_BACKEND != "redis":
-        logger.info("Perplexity verwendet lokalen Cache-Backend: %s", _CACHE_BACKEND)
-        return fallback
-
-    try:
-        import_module("redis")
-    except Exception:
-        logger.warning("Redis-Paket nicht installiert, nutze lokalen Perplexity-Cache")
-        return fallback
-
-    if not _REDIS_URL:
-        logger.warning("REDIS_URL fehlt, nutze lokalen Perplexity-Cache")
-        return fallback
-
-    try:
-        primary = _RedisCacheBackend(redis_url=_REDIS_URL, prefix=_CACHE_PREFIX, ttl_seconds=_CACHE_TTL)
-        primary.ping()
-        logger.info("Perplexity verwendet Redis-Cache unter %s", _REDIS_URL)
-        return _FallbackCacheBackend(primary=primary, fallback=fallback)
-    except Exception:
-        logger.warning("Redis-Cache Initialisierung fehlgeschlagen, nutze lokalen Perplexity-Cache")
-        return fallback
+    def cache_result(self, summary: str, system_prompt: Optional[str], text: str) -> None:
+        """Store completion in provider's cache namespace."""
+        resolved = self.resolve_system_prompt(system_prompt)
+        key = make_cache_key(summary, resolved, self.model)
+        cache_set(self._cache, key, text)
 
 
-_CACHE = _build_cache_backend()
+_CACHE = create_provider_cache(
+    prefix=(app_config.get_env_setting("PERPLEXITY_CACHE_PREFIX") or "perplexity").strip() or "perplexity",
+    max_entries=int(app_config.get_env_setting("PERPLEXITY_CACHE_MAX") or 256),
+    ttl_seconds=int(app_config.get_env_setting("PERPLEXITY_CACHE_TTL") or 7 * 24 * 3600),
+    redis_url=(app_config.get_env_setting("REDIS_URL") or "").strip() or None,
+    cache_backend_type=(app_config.get_env_setting("PERPLEXITY_CACHE_BACKEND") or "local").strip().lower(),
+)
 
 
 def get_cache_overview(
@@ -803,157 +605,42 @@ def get_cache_overview(
     include_values: bool = True,
     value_max_length: int = 2000,
 ) -> Dict[str, Any]:
-    """Get overview of cache contents.
-
-    Args:
-        limit: Maximum number of entries to return.
-        include_values: Whether to include entry values.
-        value_max_length: Maximum length of value to include.
-
-    Returns:
-        Dictionary with cache overview and entries.
-    """
-    try:
-        raw_entries = _CACHE.inspect_entries(limit)
-    except Exception:
-        logger.exception("Perplexity cache inspect error")
-        raw_entries = []
-
-    entries = [_serialize_cache_entry(entry, include_values, value_max_length) for entry in raw_entries]
-    backend_name = type(_CACHE).__name__.removeprefix("_").removesuffix("Backend")
-    return {
-        "backend": backend_name.lower(),
-        "configured_backend": _CACHE_BACKEND,
-        "redis_url_configured": bool(_REDIS_URL),
-        "cache_prefix": _CACHE_PREFIX,
-        "default_ttl_seconds": _CACHE_TTL,
-        "entry_count": len(entries),
-        "entries": entries,
-    }
+    """Get overview of cache contents (backward-compatible wrapper)."""
+    return _shared_get_cache_overview(_CACHE, limit=limit, include_values=include_values, value_max_length=value_max_length)
 
 
 def delete_cache_entry(key: str) -> Dict[str, Any]:
-    """Delete a single cache entry.
-
-    Args:
-        key: Cache key to delete.
-
-    Returns:
-        Dictionary with deletion result.
-    """
-    deleted = _CACHE.delete(key)
-    return {
-        "scope": "single",
-        "key": key,
-        "deleted_count": deleted,
-    }
+    """Delete a single cache entry (backward-compatible wrapper)."""
+    return _shared_delete_cache_entry(_CACHE, key)
 
 
 def clear_cache() -> Dict[str, Any]:
-    """Clear all cache entries.
-
-    Returns:
-        Dictionary with clear result.
-    """
-    deleted = _CACHE.clear()
-    return {
-        "scope": "all",
-        "deleted_count": deleted,
-    }
+    """Clear all cache entries (backward-compatible wrapper)."""
+    return _shared_clear_cache(_CACHE)
 
 
-def _serialize_cache_entry(entry: Dict[str, Any], include_values: bool, value_max_length: int) -> Dict[str, Any]:
-    """Serialize a cache entry for API response.
 
-    Args:
-        entry: Raw cache entry.
-        include_values: Whether to include value content.
-        value_max_length: Maximum length of value to include.
-
-    Returns:
-        Serialized entry dictionary.
-    """
-    value = entry.get("value")
-    normalized = {
-        "key": entry.get("key"),
-        "source": entry.get("source"),
-        "ttl_seconds": entry.get("ttl_seconds"),
-        "value_length": len(value) if isinstance(value, str) else None,
-    }
-    if include_values and isinstance(value, str):
-        normalized["value"] = value[:value_max_length]
-        normalized["value_truncated"] = len(value) > value_max_length
-    return normalized
-
-
-def _make_cache_key(summary: str, system_prompt: Optional[str], model: str) -> str:
-    """Create a cache key from summary, system prompt, and model.
-
-    Args:
-        summary: Summary text.
-        system_prompt: Optional system prompt.
-        model: Model identifier.
-
-    Returns:
-        SHA256 hex digest cache key.
-    """
-    hasher = hashlib.sha256()
-    hasher.update(summary.encode("utf-8"))
-    if system_prompt:
-        hasher.update(b"\n--SYSTEM--\n")
-        hasher.update(system_prompt.encode("utf-8"))
-    hasher.update(b"\n--MODEL--\n")
-    hasher.update(model.encode("utf-8"))
-    return hasher.hexdigest()
+# ---------------------------------------------------------------------------
+# Backward-compatible module-level wrappers for router imports
+# ---------------------------------------------------------------------------
+# _make_cache_key has same signature as shared make_cache_key
+_make_cache_key = make_cache_key
 
 
 def _cache_get(key: str) -> Optional[str]:
-    """Get cached response by key.
-
-    Args:
-        key: Cache key.
-
-    Returns:
-        Cached text or None if not found.
-    """
-    try:
-        value = _CACHE.get(key)
-        if value is None:
-            # logger.debug("Perplexity cache miss for key %s", key[:16])
-            return None
-
-        # logger.debug("Perplexity cache hit for key %s", key[:16])
-        return value
-    except Exception:
-        logger.exception("Perplexity cache get error")
-        return None
+    """Get cached response by key (backward-compatible wrapper)."""
+    return cache_get(_CACHE, key)
 
 
 def _cache_set(key: str, text: str) -> None:
-    """Store text in cache with key.
-
-    Args:
-        key: Cache key.
-        text: Text to cache.
-    """
-    try:
-        _CACHE.set(key, text)
-    except Exception:
-        logger.exception("Error setting perplexity cache")
-        return
+    """Store text in cache with key (backward-compatible wrapper)."""
+    cache_set(_CACHE, key, text)
 
 
 def _cache_delete(key: str) -> None:
-    """Delete cached entry by key.
+    """Delete cached entry by key (backward-compatible wrapper)."""
+    cache_delete(_CACHE, key)
 
-    Args:
-        key: Cache key to delete.
-    """
-    try:
-        _CACHE.delete(key)
-    except Exception:
-        logger.exception("Error deleting perplexity cache entry")
-        return
 
 
 
