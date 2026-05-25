@@ -64,6 +64,17 @@ class ChatProvider(ABC):
         """
         ...
 
+    @abstractmethod
+    async def stream_messages(
+        self, messages: list[dict[str, str]]
+    ) -> AsyncIterator[str]:
+        """Stream completion from a pre-built message list.
+
+        Used for followup questions where the full conversation
+        history must be sent (not just summary + system_prompt).
+        """
+        ...
+
     @property
     @abstractmethod
     def model_name(self) -> str:

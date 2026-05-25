@@ -145,6 +145,8 @@ def _calculate_synastry_response(
     birth_data_b: dict,
     comparison_mode: str,
     additional_question: str | None,
+    person_a_name: str | None = None,
+    person_b_name: str | None = None,
 ) -> dict:
     """Calculate synastry comparison data for both persons.
 
@@ -271,14 +273,19 @@ def _calculate_synastry_response(
     planets_b_str = "; ".join([f"{p['planet_name']} in {p['sign']} {p['sign_degree']} (Haus {p['house'] or 'unbekannt'})" for p in planet_entries_b])
     aspects_str = "; ".join(aspects_list) if aspects_list else "keine"
 
+    label_a = (person_a_name or "Person A").strip()
+    label_a = label_a[0].upper() + label_a[1:] if label_a else "Person A"
+    label_b = (person_b_name or "Person B").strip()
+    label_b = label_b[0].upper() + label_b[1:] if label_b else "Person B"
+
     summary_prompt = f"""Huber Astrologische Psychologie — Partnerhoroskop (Synastrie).
 
 Interpretiere die Beziehung zwischen zwei Personen: {mode_label}.
 
-Person A — Geburtsdatum: {birth_a}
+{label_a} — Geburtsdatum: {birth_a}
 Planeten: {planets_a_str}
 
-Person B — Geburtsdatum: {birth_b}
+{label_b} — Geburtsdatum: {birth_b}
 Planeten: {planets_b_str}
 
 Interplanetare Aspekte (Beziehungsaspekte): {aspects_str}
@@ -346,6 +353,8 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
             birth_data_b,
             payload.comparison_mode,
             getattr(payload, 'additional_question', None),
+            getattr(payload, 'person_a_name', None),
+            getattr(payload, 'person_b_name', None),
         )
     except Exception as e:
         logger.exception("Error calculating synastry")
@@ -487,6 +496,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
                             user_persons_id=payload.person_a_id,
                             user_person_id_2=payload.person_b_id,
                             context_type="synastry",
+                            comparison_mode=payload.comparison_mode,
                             model=provider.model_name,
                             interp_year=birth_data_a['year'],
                             interp_month=birth_data_a['month'],

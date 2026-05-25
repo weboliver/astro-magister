@@ -59,16 +59,16 @@ export default function WikiPageShortcut({ pageName, originPage = '', originLabe
         display: 'inline-flex',
         alignItems: 'center',
         gap: 10,
-        background: 'linear-gradient(135deg, #ecfeff 0%, #ccfbf1 100%)',
-        border: '1px solid #5eead4',
+        background: 'rgba(var(--admin-accent-r), var(--admin-accent-g), var(--admin-accent-b), 0.12)',
+        border: '1px solid var(--admin-accent)',
         borderRadius: 999,
         padding: '8px 14px',
         cursor: 'pointer',
-        color: '#115e59',
+        color: 'var(--admin-accent)',
         fontSize: 15,
         fontWeight: 700,
         lineHeight: 1,
-        boxShadow: '0 6px 18px rgba(15, 118, 110, 0.12)',
+        boxShadow: 'var(--admin-shadow)',
       }}
       title={`Wiki-Eintrag für ${pageName} öffnen`}
       aria-label={`Wiki-Eintrag für ${pageName} öffnen`}

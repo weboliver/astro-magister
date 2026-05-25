@@ -28,15 +28,15 @@ const markdownComponents = {
   ul: ({ node, ...props }) => <ul style={{ margin: '0 0 12px', paddingLeft: 22, lineHeight: 1.6 }} {...props} />,
   ol: ({ node, ...props }) => <ol style={{ margin: '0 0 12px', paddingLeft: 22, lineHeight: 1.6 }} {...props} />,
   li: ({ node, ...props }) => <li style={{ marginBottom: 6 }} {...props} />,
-  strong: ({ node, ...props }) => <strong style={{ fontWeight: 700, color: '#132238' }} {...props} />,
-  em: ({ node, ...props }) => <em style={{ color: '#38506b' }} {...props} />,
+  strong: ({ node, ...props }) => <strong style={{ fontWeight: 700, color: 'var(--admin-ink)' }} {...props} />,
+  em: ({ node, ...props }) => <em style={{ color: 'var(--admin-ink)' }} {...props} />,
   blockquote: ({ node, ...props }) => (
-    <blockquote style={{ margin: '16px 0', padding: '8px 14px', borderLeft: '4px solid #9fb4c7', background: '#f3f7fb', color: '#31485f' }} {...props} />
+    <blockquote style={{ margin: '16px 0', padding: '8px 14px', borderLeft: '4px solid var(--admin-accent-soft)', background: 'var(--admin-panel-strong)', color: 'var(--admin-ink)' }} {...props} />
   ),
   code: ({ inline, node, ...props }) =>
     inline
-      ? <code style={{ background: '#eef3f8', padding: '1px 5px', borderRadius: 4, fontSize: '0.92em' }} {...props} />
-      : <code style={{ display: 'block', background: '#eef3f8', padding: 12, borderRadius: 8, overflowX: 'auto' }} {...props} />,
+      ? <code style={{ background: 'var(--admin-accent-soft)', padding: '1px 5px', borderRadius: 4, fontSize: '0.92em' }} {...props} />
+      : <code style={{ display: 'block', background: 'var(--admin-accent-soft)', padding: 12, borderRadius: 8, overflowX: 'auto' }} {...props} />,
 }
 
 const PUBLIC_DIRECT_PAGE_NAMES = new Set(['login', 'impressum', 'kontakt', 'datenschutz'])
@@ -487,22 +487,22 @@ export default function Wiki({
     if (!relatedEntries.length) return null
 
     return (
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #dde1e7' }}>
-        <h4 style={{ margin: '0 0 10px', fontSize: '1rem', color: '#132238' }}>Weitere Beiträge</h4>
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--admin-line)' }}>
+        <h4 style={{ margin: '0 0 10px', fontSize: '1rem', color: 'var(--admin-ink)' }}>Weitere Beiträge</h4>
         <div style={{ display: 'grid', gap: 10 }}>
           {relatedEntries.map((relatedEntry) => (
             <button
               key={`wiki-related-${entryId}-${relatedEntry.entry_id}`}
               type="button"
               onClick={() => navigateToRelatedEntry(relatedEntry)}
-              style={{ padding: '12px 14px', borderRadius: 10, background: '#f6f8fb', border: '1px solid #dde1e7', textAlign: 'left', cursor: 'pointer' }}
+              style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--admin-panel)', border: '1px solid var(--admin-line)', textAlign: 'left', cursor: 'pointer' }}
             >
-              <div style={{ fontWeight: 700, color: '#132238', marginBottom: relatedEntry.entry_short ? 6 : 0 }}>{relatedEntry.entry_name}</div>
+              <div style={{ fontWeight: 700, color: 'var(--admin-ink)', marginBottom: relatedEntry.entry_short ? 6 : 0 }}>{relatedEntry.entry_name}</div>
               {relatedEntry.entry_short ? (
-                <div style={{ color: '#4b5d71', lineHeight: 1.5 }}>{relatedEntry.entry_short}</div>
+                <div style={{ color: 'var(--admin-ink)', lineHeight: 1.5 }}>{relatedEntry.entry_short}</div>
               ) : null}
-              <div style={{ marginTop: 10, color: '#0f766e', fontWeight: 700, textDecoration: 'underline' }}>
-                Zum Beitrag
+                <div style={{ marginTop: 10, color: 'var(--admin-accent)', fontWeight: 700, textDecoration: 'underline' }}>
+                  Zum Beitrag
               </div>
             </button>
           ))}
@@ -554,20 +554,20 @@ export default function Wiki({
 
       {!hasDirectPage ? (
       <div style={{ display: 'grid', gap: 10, marginBottom: 18, marginLeft: 0, padding: 0 }}>
-        <div style={{ display: 'flex', marginLeft: 0, padding: 0, flexWrap: 'wrap', alignItems: 'center', gap: 0, color: '#11243d' }}>
+        <div style={{ display: 'flex', marginLeft: 0, padding: 0, flexWrap: 'wrap', alignItems: 'center', gap: 0, color: 'var(--admin-ink)' }}>
           {sections.map((section) => {
             const isActive = String(selectedSectionId) === String(section.section_id)
             const nextSectionCategories = categories.filter((category) => Number(category.section_id) === Number(section.section_id) && wikiSectionIds.has(Number(category.section_id)))
             return (
               <React.Fragment key={`wiki-section-${section.section_id}`}>
-                <span style={{ margin: '5px', color: '#9aa7b4', fontSize: 20 }}>{section === sections[0] ? '' : '|'}</span>
+                <span style={{ margin: '5px', color: 'var(--admin-line)', fontSize: 20 }}>{section === sections[0] ? '' : '|'}</span>
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedSectionId(String(section.section_id))
                     setSelectedCategoryId(nextSectionCategories[0] ? String(nextSectionCategories[0].category_id) : '')
                   }}
-                  style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 20, fontWeight: isActive ? 800 : 600, color: isActive ? '#0f766e' : '#38506b' }}
+                  style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 20, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--admin-accent)' : 'var(--admin-ink)' }}
                 >
                   {section.section_name}
                 </button>
@@ -577,16 +577,16 @@ export default function Wiki({
         </div>
 
         {selectedSectionId ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0, color: '#11243d' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0, color: 'var(--admin-ink)' }}>
             {filteredCategories.map((category) => {
               const isActive = String(selectedCategoryId) === String(category.category_id)
               return (
                 <React.Fragment key={`wiki-category-${category.category_id}`}>
-                  <span style={{ margin: '5px', color: '#b4bcc5', fontSize: 18 }}>{category === filteredCategories[0] ? '' : '|'}</span>
+                  <span style={{ margin: '5px', color: 'var(--admin-line)', fontSize: 18 }}>{category === filteredCategories[0] ? '' : '|'}</span>
                   <button
                     type="button"
                     onClick={() => setSelectedCategoryId(String(category.category_id))}
-                    style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, fontWeight: isActive ? 800 : 600, color: isActive ? '#0f766e' : '#4b5d71' }}
+                    style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--admin-accent)' : 'var(--admin-ink)' }}
                   >
                     {category.category_name}
                   </button>
@@ -605,7 +605,7 @@ export default function Wiki({
             <button
               type="button"
               onClick={navigateToLogin}
-              style={{ marginLeft: 8, padding: 0, border: 'none', background: 'transparent', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700 }}
+              style={{ marginLeft: 8, padding: 0, border: 'none', background: 'transparent', color: 'var(--admin-accent)', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700 }}
             >
               Zum Login
             </button>
@@ -643,11 +643,11 @@ export default function Wiki({
                       <h3>{entry.entry_name}</h3>
                       <span>{isExpanded ? 'Verbergen' : 'Details'}</span>
                     </header>
-                    <p style={{ margin: 0, color: '#4b5d71' }}>{entry.entry_short || 'Kein Kurztext'}</p>
+                    <p style={{ margin: 0, color: 'var(--admin-ink)' }}>{entry.entry_short || 'Kein Kurztext'}</p>
                   </button>
 
                   {isExpanded ? (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #dde1e7' }}>
+                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--admin-line)' }}>
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                         {entry.entry_content || 'Kein Inhalt vorhanden.'}
                       </ReactMarkdown>

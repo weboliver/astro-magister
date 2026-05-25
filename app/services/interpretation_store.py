@@ -51,6 +51,7 @@ def create_interpretation(
                 UserInterpretation.context_type == payload.context_type,
                 UserInterpretation.user_persons_id == payload.user_persons_id,
                 UserInterpretation.user_person_id_2 == payload.user_person_id_2,
+                UserInterpretation.comparison_mode == payload.comparison_mode,
                 UserInterpretation.interp_year == payload.interp_year,
                 UserInterpretation.interp_month == payload.interp_month,
                 UserInterpretation.interp_day == payload.interp_day,

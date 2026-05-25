@@ -23,14 +23,14 @@ export default function SynastrieControls({
     <div>
       {/* Comparison mode dropdown */}
       <div style={{ marginBottom: 20 }}>
-        <label style={{ fontSize: 14, fontWeight: 600 }}>Vergleichsmodus</label>
+        <label style={{ fontSize: 14, fontWeight: 600, display: 'block', marginBottom: 20 }}>Vergleichsmodus</label>
         <select
           value={comparisonMode}
           onChange={e => onComparisonModeChange(e.target.value)}
           disabled={isStreaming}
           style={{
             width: '100%',
-            maxWidth: 530,
+            maxWidth: 300,
             padding: '4px 8px',
             borderRadius: 6,
             border: '1px solid #cbd5f5',
@@ -43,7 +43,7 @@ export default function SynastrieControls({
           <option value="rr">Radixvergleich</option>
         </select>
         {isStreaming && (
-          <span style={{ color: '#888', fontSize: 12 }}>
+          <span style={{ color: '#888', fontSize: 12 ,  display: 'block', marginTop: 4 }}>
             Moduswechsel während der Analyse nicht möglich
           </span>
         )}

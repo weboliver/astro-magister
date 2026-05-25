@@ -95,9 +95,15 @@ class MistralClient(ChatProvider):
         else:
             self._max_tokens = 8192
 
+        # PerplexityClient compat attributes (used in interpretations.py)
+        self.timeout = 120
+
         # Initialize system prompts (reuse PerplexityClient's prompt structure)
         self.system_prompt = {}
         self._init_system_prompts()
+
+        # Public tokens attr — PerplexityClient compat (used in interpretations.py)
+        self.tokens = self._max_tokens
 
         # Share module-level cache across all instances (like PerplexityClient)
         self._cache = _MISTRAL_CACHE
@@ -373,6 +379,44 @@ class MistralClient(ChatProvider):
                         continue
                 logger.exception("Mistral stream error")
                 # Build a clean user-facing error
+                error_msg = _format_mistral_error(e)
+                yield f"\n\n---\n\n**Fehler:** {error_msg}\n\n---\n\n"
+                return
+
+    async def stream_messages(self, messages: List[Dict[str, str]]) -> AsyncIterator[str]:
+        """ABC-compliant: stream completion from a pre-built message list.
+
+        Used by interpretations.py followup endpoint for conversation history.
+        """
+        if app_config.DISABLE_AI:
+            yield (
+                "\n\n---\n\n**KI-Interpretation ist derzeit deaktiviert.**\n"
+                "*(DISABLE_AI ist gesetzt — keine Mistral-Anfragen werden gesendet.)*\n\n---\n\n"
+            )
+            return
+
+        client = self._get_sdk_client()
+        for attempt in range(3):
+            try:
+                stream = await client.chat.stream_async(
+                    model=self._model,
+                    messages=messages,
+                    max_tokens=self._max_tokens,
+                )
+                async for chunk in stream:
+                    delta = chunk.data.choices[0].delta.content
+                    if delta:
+                        yield delta
+                return
+            except Exception as e:
+                error_str = str(e).lower()
+                if "429" in error_str or "capacity" in error_str or "rate" in error_str:
+                    if attempt < 2:
+                        delay = 2 ** attempt
+                        logger.warning("Mistral rate limited, retrying in %ds (attempt %d/3)", delay, attempt + 2)
+                        await asyncio.sleep(delay)
+                        continue
+                logger.exception("Mistral stream_messages error")
                 error_msg = _format_mistral_error(e)
                 yield f"\n\n---\n\n**Fehler:** {error_msg}\n\n---\n\n"
                 return

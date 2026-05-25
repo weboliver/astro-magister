@@ -409,6 +409,12 @@ async def verify_turnstile_token(token: Optional[str], remote_ip: str) -> bool:
     Returns:
         True if token is valid, False otherwise.
     """
+    from app.config import BYPASS_CAPTCHA
+
+    if BYPASS_CAPTCHA:
+        logger.info("Turnstile bypassed — BYPASS_CAPTCHA is enabled")
+        return True
+
     if _is_placeholder_secret(TURNSTILE_SECRET_KEY):
         logger.warning("Turnstile validation bypass attempted - placeholder secret in use")
         return False

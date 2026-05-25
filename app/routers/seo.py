@@ -21,7 +21,9 @@ async def sitemap(request: Request):
     Returns:
         Response with XML sitemap content.
     """
+    import re
     base_url = app_config.get_env_setting('BASE_URL') or str(request.base_url).rstrip('/')
+    base_url = re.sub(r'^https?://astro-magister\.de(?=[:/]|$)', 'https://www.astro-magister.de', base_url)
 
     session = get_session()
     try:

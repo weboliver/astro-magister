@@ -1,5 +1,11 @@
 server {
     listen 80;
+    server_name astro-magister.de;
+    return 301 https://www.astro-magister.de$request_uri;
+}
+
+server {
+    listen 80;
     server_name __SERVER_NAME__;
 
     client_max_body_size 20m;
@@ -11,6 +17,15 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name astro-magister.de;
+    ssl_certificate __SSL_CERT_PATH__;
+    ssl_certificate_key __SSL_KEY_PATH__;
+    return 301 https://www.astro-magister.de$request_uri;
 }
 
 server {
@@ -34,6 +49,15 @@ server {
         include /etc/nginx/includes/geoip2-api-guard.conf;
         limit_req zone=api burst=20 nodelay;
         rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://api:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /theme/ {
         proxy_pass http://api:8000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

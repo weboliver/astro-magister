@@ -21,6 +21,15 @@ As the api and the frontend ist guarding Source Code Changes there is no need to
 - ❌ `astronex/**` — Do NOT edit unless explicitly instructed
 - ❌ `astronex/drawing/**` — Do NOT edit (affects desktop app)
 
+
+## Git: Protected Branches
+
+**`master` is protected.** Do not push or merge to master directly. The user handles remote merges manually. Local feature branches are for development only.
+
+Do not create git tags without user confirmation.
+
+## Before Testing Vite check if .env is ready for testing
+
 ---
 
 *Created: 2026-05-19*

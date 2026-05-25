@@ -218,3 +218,5 @@ class SynastryRequest(BaseModel):
     )
     interpretation_id: Optional[int] = Field(None, description="ID of existing interpretation session for follow-up")
     additional_question: Optional[str] = Field(None, max_length=255, description="Optional follow-up question")
+    person_a_name: Optional[str] = Field(None, max_length=200, description="Display name of Person A")
+    person_b_name: Optional[str] = Field(None, max_length=200, description="Display name of Person B")

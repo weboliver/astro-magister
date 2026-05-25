@@ -9,31 +9,39 @@
  * @hook useAuth - Accesses profile from authentication context
  * @hook usePersonSelection - Accesses selected person for calculations
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import PersonSelector from '../components/PersonSelector'
-import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useAuth } from '../contexts/AuthContext'
+import { getSignIndex } from '../theme/ThemeApplier'
+import { zodiacNames } from '../theme/zodiacColors'
 import { get } from '../services/api'
 
 const quickLinks = [
   { title: 'Horoskop', page: 'horoscope', description: 'Erkunde dein Geburtshoroskop mit Häusern und Aspekten.' },
   { title: 'Mondknoten', page: 'mondknoten', description: 'Mondknoten-Horoskop und ihre Bewegungen.' },
-  { title: 'Synastrie', page: 'synastrie', description: 'Partnervergleich — zwei Horoskope im Vergleich.' },
   { title: 'Häuser', page: 'houses', description: 'Ein Blick auf die Hausverteilungen.' },
   { title: 'Transite', page: 'transits', description: 'Transite zur Deutung aktueller Einflüsse.' },
   { title: 'Solar Jahr', page: 'solar', description: 'Sonnenrückkehr-Chart für das nächste Lebensjahr.' },
   { title: 'Alterspunkte', page: 'agepoints', description: 'Zeitliche Punkte und Lebensabschnitte.' },
+  { title: 'Synastrie', page: 'synastrie', description: 'Partnervergleich — zwei Horoskope im Vergleich.' },
 ]
 
 export default function Dashboard({ user }){
   const { profile } = useAuth()
-  const { selectedPerson } = usePersonSelection()
   const [publicLoginEntries, setPublicLoginEntries] = useState([])
   const [publicLoginLoading, setPublicLoginLoading] = useState(false)
   const [publicLoginError, setPublicLoginError] = useState('')
-  const activeName = selectedPerson ? selectedPerson.name : user?.username
   const needsProfileSetup = !profile?.birth_year
+
+  const todaySign = useMemo(() => {
+    const now = new Date()
+    const idx = getSignIndex(now)
+    const d = now.getDate().toString().padStart(2, '0')
+    const m = (now.getMonth() + 1).toString().padStart(2, '0')
+    const y = now.getFullYear()
+    return { date: `${d}.${m}.${y}`, signIndex: idx, signName: zodiacNames[idx] }
+  }, [])
 
   const handleNavigate = (page) => {
     window.dispatchEvent(new CustomEvent('astronexNavigate', { detail: { page } }))
@@ -78,7 +86,31 @@ export default function Dashboard({ user }){
 
   return (
     <div>
-      <h2>Startseite</h2>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+        {user && !needsProfileSetup && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 10,
+            background: 'rgba(var(--admin-accent-r), var(--admin-accent-g), var(--admin-accent-b), 0.1)',
+            border: '1px solid rgba(var(--admin-accent-r), var(--admin-accent-g), var(--admin-accent-b), 0.2)',
+            borderRadius: 16,
+            padding: '8px 16px',
+            whiteSpace: 'nowrap',
+          }}>
+            <img
+              src={`/theme/glyph/sign/${todaySign.signIndex}`}
+              alt={todaySign.signName}
+              width={28}
+              height={28}
+              style={{ display: 'block', marginBottom: 4 }}
+            />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--admin-ink)' }}>
+              {todaySign.date} &mdash; {todaySign.signName}
+            </span>
+          </div>
+        )}
+      </div>
       {user ? (
         needsProfileSetup ? (
           <p>
@@ -93,10 +125,9 @@ export default function Dashboard({ user }){
         ) : (
           <>
             <PersonSelector label="Person für Berechnungen" helperText="Wähle eine gespeicherte Person oder nutze dein Profil" />
-            <p>Person: <b>{activeName?` ${activeName}`:''}</b> wurde ausgewählt für Berechnungen.</p>
             <section aria-label="Schnellzugriff auf Module">
               <div className="dashboard-grid-header">
-                <h3>Schnellzugriff</h3>
+                <h3>Dashboard</h3>
               </div>
               <div className="dashboard-grid">
                 {quickLinks.map((link)=> (

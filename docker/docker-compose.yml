@@ -61,6 +61,8 @@ services:
       SEED_LOCATIONS: "1"
       MIGRATE_IF_EMPTY_ONLY: "1"
       FORCE_MIGRATIONS: "0"
+      SEED_E2E_USER: "${SEED_E2E_USER:-0}"
+      BYPASS_CAPTCHA: "${BYPASS_CAPTCHA:-false}"
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: /workspace
       WATCHFILES_FORCE_POLLING: "true"
@@ -101,6 +103,7 @@ services:
     environment:
       CHOKIDAR_USEPOLLING: "true"
       VITE_PROXY_TARGET: http://api:8000
+      VITE_TURNSTILE_SITE_KEY: "${VITE_TURNSTILE_SITE_KEY:-}"
     command: >
       /bin/sh -c "
       npm install &&

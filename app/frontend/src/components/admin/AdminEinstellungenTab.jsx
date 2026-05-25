@@ -1,171 +1,41 @@
-import React, { useEffect, useState } from 'react'
-import { get, put, post } from '../../services/api'
+import React, { useState } from 'react'
+import AdminProviderConfigTab from './AdminProviderConfigTab'
+import AdminBuildWikiTab from './AdminBuildWikiTab'
+import AdminThemeTab from './AdminThemeTab'
+
+const subtabs = [
+  { id: 'provider', label: 'Chat-Provider' },
+  { id: 'wiki', label: 'Build Wiki' },
+  { id: 'theme', label: 'Theme' }
+]
 
 export default function AdminEinstellungenTab(){
-  const [providers, setProviders] = useState([])
-  const [selectedProvider, setSelectedProvider] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [currentProvider, setCurrentProvider] = useState('')
-  const [buildState, setBuildState] = useState('idle')
-  const [buildMessage, setBuildMessage] = useState('')
+  const [activeSubtab, setActiveSubtab] = useState('provider')
 
-  async function loadConfig(){
-    setLoading(true)
-    setError('')
-    setSuccess('')
-    try{
-      const response = await get('/auth/admin/provider-config')
-      if (!response.ok){
-        let detail = `Provider-Konfiguration konnte nicht geladen werden (${response.status})`
-        try{
-          const data = await response.json()
-          if (data?.detail) detail = data.detail
-        }catch(_){
-          const text = await response.text()
-          if (text) detail = text
-        }
-        throw new Error(detail)
-      }
-      const data = await response.json()
-      setProviders(data.available_providers || [])
-      setSelectedProvider(data.chat_provider || '')
-      setCurrentProvider(data.chat_provider || '')
-    }catch(err){
-      setError(err?.message || 'Provider-Konfiguration konnte nicht geladen werden. Bitte versuchen Sie es später erneut.')
-    }finally{
-      setLoading(false)
-    }
-  }
-
-  async function saveConfig(){
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try{
-      const response = await put('/auth/admin/provider-config', { chat_provider: selectedProvider })
-      if (!response.ok){
-        let detail = 'Unbekannter Fehler'
-        try{
-          const data = await response.json()
-          if (data?.detail) detail = data.detail
-        }catch(_){ /* use default */ }
-        throw new Error(detail)
-      }
-      const data = await response.json()
-      setCurrentProvider(data.chat_provider)
-      setSuccess('Provider-Einstellungen gespeichert.')
-    }catch(err){
-      setError(`Speichern fehlgeschlagen: ${err?.message || 'Unbekannter Fehler'}. Bitte versuchen Sie es erneut.`)
-    }finally{
-      setSaving(false)
-    }
-  }
-
-  async function buildWiki(){
-    setBuildState('building')
-    setBuildMessage('')
-    try{
-      const response = await post('/wiki/build')
-      if (!response.ok){
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.detail || `Build failed (${response.status})`)
-      }
-      setBuildState('ok')
-      setBuildMessage('Build erfolgreich — /astro-wiki/ ist aktuell.')
-    }catch(err){
-      setBuildState('error')
-      setBuildMessage(err?.message || 'Build fehlgeschlagen')
-    }
-  }
-
-  useEffect(() => {
-    loadConfig()
-  }, [])
-
-  function handleSelectChange(e){
-    setSelectedProvider(e.target.value)
-    setSuccess('')
-    setError('')
-  }
-
-  const isEmpty = !loading && providers.length === 0
-  const isSaving = saving
+  const activeSubtabContent = (() => {
+    if (activeSubtab === 'provider') return <AdminProviderConfigTab />
+    if (activeSubtab === 'wiki') return <AdminBuildWikiTab />
+    if (activeSubtab === 'theme') return <AdminThemeTab />
+    return null
+  })()
 
   return (
-    <section className="admin-panel" aria-label="Provider-Einstellungen">
-      <div className="admin-hero">
-        <div>
-          <p className="admin-eyebrow">Einstellungen</p>
-          <h2>Chat-Provider</h2>
-          <p>
-            Wählen Sie den KI-Provider für alle Chat-Interpretationen aus. Die Änderung wird sofort für alle neuen Anfragen wirksam.
-          </p>
-        </div>
-        {!isEmpty && (
+    <div>
+      <div className="admin-tabs" role="tablist" aria-label="Einstellungen Bereiche" style={{marginBottom: '16px'}}>
+        {subtabs.map((tab) => (
           <button
+            key={tab.id}
             type="button"
-            className="admin-primary-button"
-            onClick={saveConfig}
-            disabled={isSaving || loading}
+            role="tab"
+            aria-selected={activeSubtab === tab.id}
+            className={activeSubtab === tab.id ? 'admin-tab admin-tab-active' : 'admin-tab'}
+            onClick={() => setActiveSubtab(tab.id)}
           >
-            {isSaving ? 'Speichere...' : 'Speichern'}
+            {tab.label}
           </button>
-        )}
+        ))}
       </div>
-
-      {loading ? (
-        <p>Lade Provider-Konfiguration...</p>
-      ) : error ? (
-        <div className="admin-message admin-error">{error}</div>
-      ) : isEmpty ? (
-        <div className="admin-summary-grid">
-          <article className="admin-summary-card">
-            <h3>Keine Provider verfügbar</h3>
-            <p>Der Server hat keine konfigurierten KI-Provider zurückgegeben. Bitte kontaktieren Sie den Administrator.</p>
-          </article>
-        </div>
-      ) : (
-        <>
-          <div className="admin-field" style={{maxWidth: '320px'}}>
-            <label htmlFor="provider-select">Aktiver Provider</label>
-            <select
-              id="provider-select"
-              value={selectedProvider}
-              onChange={handleSelectChange}
-              disabled={isSaving}
-            >
-              {providers.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          {success ? (
-            <div className="admin-message admin-success">{success}</div>
-          ) : null}
-
-          <div className="admin-summary-grid" style={{marginTop: 24}}>
-            <article className="admin-summary-card">
-              <h3>Wiki Build</h3>
-              <p>Baut die statischen Astro-Seiten unter /astro-wiki/ — holt Daten vom API zur Build-Zeit.</p>
-              <button
-                type="button"
-                className="admin-primary-button"
-                style={{marginTop: 12}}
-                onClick={buildWiki}
-                disabled={buildState === 'building'}
-              >
-                {buildState === 'building' ? 'Baue...' : 'Build starten'}
-              </button>
-              {buildState === 'ok' && <p style={{color: '#0f766e', marginTop: 8}}>{buildMessage}</p>}
-              {buildState === 'error' && <p style={{color: '#dc2626', marginTop: 8}}>{buildMessage}</p>}
-            </article>
-          </div>
-        </>
-      )}
-    </section>
+      {activeSubtabContent}
+    </div>
   )
 }

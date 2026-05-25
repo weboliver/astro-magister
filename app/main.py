@@ -1,3 +1,5 @@
+import os as _os
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -26,13 +28,15 @@ from app import config as app_config
 from app.services.auth_security import _is_placeholder_secret
 from app.routers.date_time import router as date_time_router
 from app.routers.positions import router as positions_router
-from app.routers.houses import router as houses_router
+from app.routers.houses import router as houses_router, public_router as houses_public_router
 from app.routers.fixed_stars import router as fixed_stars_router
 from app.routers.solar import router as solar_router
 from app.routers.age_points import router as age_points_router, public_router as age_points_public_router
 from app.routers.horoscope import router as horoscope_router
 from app.routers.nodes import router as nodes_router
 from app.routers.synastry import router as synastry_router
+from app.routers.theme import router as theme_router, public_router as theme_public_router
+from app.routers.glyphs import router as glyphs_router
 from app.routers.transits import router as transits_router
 from app.routers.auth import router as auth_router
 from app.routers.locations import router as locations_router
@@ -80,6 +84,14 @@ async def lifespan(app: FastAPI):
         init_users_db()
     except Exception as e:
         LOGGER.warning(f"Database initialization failed: {e}")
+    # Refresh glyph cache with DB accent colors
+    try:
+        from app.routers.glyphs import refresh_glyph_cache
+        refresh_glyph_cache()
+        LOGGER.info("Glyph cache warmed with DB colors")
+    except Exception as e:
+        LOGGER.warning(f"Glyph cache refresh failed (non-fatal): {e}")
+
     # ensure country translations use German labels in the UI
     try:
         import astronex.countries as ac
@@ -154,6 +166,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(date_time_router)
 app.include_router(positions_router)
 app.include_router(houses_router)
+app.include_router(houses_public_router)
 app.include_router(fixed_stars_router)
 app.include_router(solar_router)
 app.include_router(age_points_router)
@@ -170,6 +183,9 @@ app.include_router(cache_router)
 app.include_router(wiki_router)
 app.include_router(wiki_public_router)
 app.include_router(seo_router)
+app.include_router(theme_router)
+app.include_router(theme_public_router)
+app.include_router(glyphs_router)
 app.include_router(interpretations_router)
 
 @app.get("/", tags=["root"])
@@ -181,4 +197,20 @@ def read_root():
 
 @app.get("/health", tags=["system"])
 def health_check():
-    return {"status": "ok", "timestamp": datetime.datetime.now().isoformat()}
+    font_ok = False
+    try:
+        from app.services.glyph_renderer import get_font_path
+        font_path = get_font_path()
+        font_ok = _os.path.exists(font_path) and _os.access(font_path, _os.R_OK)
+    except Exception:
+        pass
+
+    response = {
+        "status": "ok" if font_ok else "degraded",
+        "timestamp": datetime.datetime.now().isoformat(),
+    }
+    if not font_ok:
+        response["warnings"] = ["Astro-Nex.ttf font not accessible — glyph PNGs will not render"]
+    else:
+        response["font_accessible"] = True
+    return response

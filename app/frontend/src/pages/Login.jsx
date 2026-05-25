@@ -63,13 +63,13 @@ export default function Login({ onLogin, onShowRegister }){
       <h3>Login</h3>
       <form onSubmit={submit}>
         <div>
-          <label>Benutzer</label><br/>
-          <input value={username} onChange={e=>setUsername(e.target.value)} />
+          <label htmlFor="login-username">Benutzer</label><br/>
+          <input id="login-username" value={username} onChange={e=>setUsername(e.target.value)} />
         </div>
         <div>
-          <label>Passwort</label><br/>
+          <label htmlFor="login-password">Passwort</label><br/>
           <div style={{display:'flex',alignItems:'center'}}>
-            <input type={showPassword ? 'text' : 'password'} value={password} onChange={e=>setPassword(e.target.value)} />
+            <input id="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={e=>setPassword(e.target.value)} />
             <button
               type="button"
               onMouseDown={handleShowPress}

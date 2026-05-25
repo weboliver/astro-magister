@@ -121,3 +121,7 @@ docker/certs/
 
 # Database backups
 backups/
+
+.opencode/
+
+/static/glyphs/

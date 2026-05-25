@@ -387,7 +387,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
                   </p>
                   {entry.slug ? (
                     <p style={{ margin: '0 0 4px 0', color: '#2d5a3d', fontSize: 12 }}>
-                      Slug: <code style={{ background: '#eef7f0', padding: '1px 4px', borderRadius: 3 }}>{entry.slug}</code>
+                      Slug: <code style={{ background: 'rgba(var(--admin-accent-r),var(--admin-accent-g),var(--admin-accent-b),.1)', padding: '1px 4px', borderRadius: 3 }}>{entry.slug}</code>
                     </p>
                   ) : (
                     <p style={{ margin: '0 0 4px 0', color: '#c00', fontSize: 12 }}>Kein Slug</p>
@@ -462,7 +462,7 @@ export default function AdminEntriesTab({ entryEditRequest }){
               <input
                 value={selectedEntry?.slug || ''}
                 readOnly
-                style={{ background: '#f0f4f8', color: '#2d5a3d', fontFamily: 'monospace', fontSize: 12 }}
+                style={{ background: 'rgba(var(--admin-accent-r),var(--admin-accent-g),var(--admin-accent-b),.1)', color: 'var(--admin-ink)', fontFamily: 'monospace', fontSize: 12 }}
                 title="Slug wird automatisch aus Name + ID generiert"
               />
             </label>

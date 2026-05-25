@@ -4,24 +4,25 @@
  * @description Root component that handles routing, authentication state, layout, and mobile navigation.
  *              Manages page routing, navbar visibility, and user session persistence across the application.
  */
-import React, { useState, useEffect } from 'react'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import Dashboard from './pages/Dashboard'
-import Settings from './pages/Settings'
-import Mondknoten from './pages/Mondknoten'
-import SolarReturn from './pages/SolarReturn'
-import AgePoints from './pages/AgePoints'
-import Horoscope from './pages/Horoscope'
-import Synastrie from './pages/Synastrie'
-import Transits from './pages/Transits'
-import Houses from './pages/Houses'
-import Admin from './pages/Admin'
-import Wiki from './pages/Wiki'
+import React, { useState, useEffect, lazy, Suspense } from 'react'
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Mondknoten = lazy(() => import('./pages/Mondknoten'))
+const SolarReturn = lazy(() => import('./pages/SolarReturn'))
+const AgePoints = lazy(() => import('./pages/AgePoints'))
+const Horoscope = lazy(() => import('./pages/Horoscope'))
+const Synastrie = lazy(() => import('./pages/Synastrie'))
+const Transits = lazy(() => import('./pages/Transits'))
+const Houses = lazy(() => import('./pages/Houses'))
+const Admin = lazy(() => import('./pages/Admin'))
+const Wiki = lazy(() => import('./pages/Wiki'))
 import { useAuth } from './contexts/AuthContext'
 import { SynastrySelectionProvider } from './contexts/SynastrySelectionContext'
 import { clearStoredSession } from './services/api'
 import { useSeoMeta } from './hooks/useSeoMeta'
+import { applyTheme, getSignIndex, loadSavedTheme } from './theme/ThemeApplier'
 
 const MOBILE_MENU_BREAKPOINT = 850
 const TOP_NAV_MIN_WIDTH = 200
@@ -107,6 +108,7 @@ export default function App(){
   const [menuOpen, setMenuOpen] = useState(false)
   const needsProfileSetup = !!user && !profile?.birth_year
   const isAdmin = profile?.isadmin === true
+  const [signIndex, setSignIndex] = useState(() => getSignIndex())
 
   const currentPageMeta = PAGE_META[page] || PAGE_META.dashboard
   useSeoMeta(currentPageMeta.title, currentPageMeta.description)
@@ -231,6 +233,18 @@ export default function App(){
     applyNavigation('dashboard', {}, { replaceHistory: true })
   }, [page, needsProfileSetup])
 
+  useEffect(() => {
+    loadSavedTheme().then(() => {
+      const signIndex = getSignIndex()
+      applyTheme(signIndex)
+    })
+  }, [])
+
+  // Refresh sign index for glyph display when component mounts
+  useEffect(() => {
+    setSignIndex(getSignIndex())
+  }, [])
+
   function navigateTo(nextPage, nextState = {}){
     applyNavigation(nextPage, nextState)
   }
@@ -284,7 +298,11 @@ export default function App(){
     return null
   }
 
-  const pageContent = renderCurrentPage()
+  const pageContent = (
+    <Suspense fallback={<div className="app-page-loading">Laden…</div>}>
+      {renderCurrentPage()}
+    </Suspense>
+  )
   const selfStyledPage = SELF_STYLED_PAGES.has(page)
   const navItemClassName = 'app-nav-link'
   const navItemActiveClassName = 'app-nav-link app-nav-link-active'

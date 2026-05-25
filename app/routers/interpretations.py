@@ -345,53 +345,9 @@ async def followup_message(
             return
         summary_parts: list[str] = []
         try:
-            # Legacy direct Perplexity API call for history-based messages.
-            # The ChatProvider ABC does not expose a history-aware streaming method,
-            # so this endpoint bypasses the provider abstraction and calls the
-            # Perplexity API directly with the full message chain.
-            import httpx
-            # Note: PERPLEXITY_API_URL is Perplexity-specific. This legacy direct-API call
-            # should be removed when PerplexityClient is fully deprecated.
-            from app.services.perplexity import PERPLEXITY_API_URL
-
-            headers_http = {
-                "Authorization": f"Bearer {provider.api_key}",
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-            }
-            api_payload = {
-                "model": model_name,
-                "messages": history,
-                "stream": True,
-                "disable_search": True,
-                "max_tokens": provider.tokens,
-            }
-
-            async with httpx.AsyncClient(timeout=provider.timeout) as client:
-                async with client.stream(
-                    "POST", PERPLEXITY_API_URL, json=api_payload, headers=headers_http
-                ) as resp:
-                    resp.raise_for_status()
-                    async for line in resp.aiter_lines():
-                        if not line or not line.startswith("data:"):
-                            continue
-                        data = line[5:].strip()
-                        if not data or data == "[DONE]":
-                            if data == "[DONE]":
-                                break
-                            continue
-                        try:
-                            event = json.loads(data)
-                        except json.JSONDecodeError:
-                            continue
-                        choices = event.get("choices") or []
-                        if not choices:
-                            continue
-                        delta = choices[0].get("delta") or {}
-                        content = delta.get("content")
-                        if content:
-                            summary_parts.append(content)
-                            yield _sse_event("summary_delta", {"content": content})
+            async for chunk in provider.stream_messages(history):
+                summary_parts.append(chunk)
+                yield _sse_event("summary_delta", {"content": chunk})
 
             full_answer = "".join(summary_parts)
 

@@ -83,6 +83,7 @@ SECRET_KEY = get_env_setting("SECRET_KEY")
 API_KEY = get_env_setting("API_KEY")
 EPHE_PATH = get_env_setting("EPHEMERIS_PATH")
 DISABLE_AI = _parse_bool(get_env_setting("DISABLE_AI"), False)
+BYPASS_CAPTCHA = _parse_bool(get_env_setting("BYPASS_CAPTCHA"), False)
 
 # Provider selection (per D-04)
 CHAT_PROVIDER = get_env_setting("CHAT_PROVIDER") or "perplexity"

@@ -528,6 +528,45 @@ class PerplexityClient(ChatProvider):
                     for chunk in buffered_chunks:
                         yield chunk
 
+    async def stream_messages(self, messages: List[Dict[str, str]]) -> AsyncIterator[str]:
+        """ABC-compliant: stream completion from a pre-built message list.
+
+        Used by interpretations.py followup endpoint for conversation history.
+        Bypasses cache (followups are unique per conversation path).
+        """
+        if app_config.DISABLE_AI:
+            yield "\n\n---\n\n**KI-Interpretation ist derzeit deaktiviert.**\n*(DISABLE_AI ist gesetzt — keine Perplexity-Anfragen werden gesendet.)*\n\n---\n\n"
+            return
+
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "disable_search": True,
+            "max_tokens": self.tokens,
+        }
+        headers = self._build_headers(accept="text/event-stream")
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream("POST", PERPLEXITY_API_URL, json=payload, headers=headers) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    content = delta.get("content")
+                    if content:
+                        yield content
+
     async def stream_completion(self, summary: str, system_prompt: Optional[str] = None) -> AsyncIterator[str]:
         """ABC-compliant streaming method. Delegates to send_summary_stream."""
         async for chunk in self.send_summary_stream(summary=summary, system_prompt=system_prompt):

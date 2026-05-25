@@ -94,13 +94,13 @@ export default function Register({ onRegistered, onCancel }){
       <h3>Benutzer erstellen</h3>
       <form onSubmit={submit}>
         <div>
-          <label>Benutzer</label><br/>
-          <input value={username} onChange={e=>setUsername(e.target.value)} />
+          <label htmlFor="register-username">Benutzer</label><br/>
+          <input id="register-username" value={username} onChange={e=>setUsername(e.target.value)} />
         </div>
         <div>
-          <label>Passwort</label><br/>
+          <label htmlFor="register-password">Passwort</label><br/>
           <div style={{display:'flex',alignItems:'center'}}>
-            <input type={showPassword ? 'text' : 'password'} value={password} onChange={e=>setPassword(e.target.value)} />
+            <input id="register-password" type={showPassword ? 'text' : 'password'} value={password} onChange={e=>setPassword(e.target.value)} />
             <button
               type="button"
               onMouseDown={handleShowPasswordPress}
@@ -116,9 +116,9 @@ export default function Register({ onRegistered, onCancel }){
           </div>
         </div>
         <div>
-          <label>Passwort erneut eingeben</label><br/>
+          <label htmlFor="register-confirm-password">Passwort erneut eingeben</label><br/>
           <div style={{display:'flex',alignItems:'center'}}>
-            <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} />
+            <input id="register-confirm-password" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} />
             <button
               type="button"
               onMouseDown={handleShowConfirmPress}

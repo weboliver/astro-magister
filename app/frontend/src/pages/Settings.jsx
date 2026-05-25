@@ -123,17 +123,16 @@ const TIMEZONES = [
 ]
 
 const COUNTRY_TZ = {
-  DE: 'Europe/Berlin', AT: 'Europe/Vienna', CH: 'Europe/Zurich',
-  GB: 'Europe/London', FR: 'Europe/Paris', IT: 'Europe/Rome',
-  ES: 'Europe/Madrid', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels',
+  GM: 'Europe/Berlin', AU: 'Europe/Vienna', SZ: 'Europe/Zurich',
+  FR: 'Europe/Paris', IT: 'Europe/Rome', SP: 'Europe/Madrid',
+  NL: 'Europe/Amsterdam', BE: 'Europe/Brussels',
   DK: 'Europe/Copenhagen', SE: 'Europe/Stockholm', NO: 'Europe/Oslo',
   PL: 'Europe/Warsaw', CZ: 'Europe/Prague', HU: 'Europe/Budapest',
   RO: 'Europe/Bucharest', BG: 'Europe/Sofia', GR: 'Europe/Athens',
   PT: 'Europe/Lisbon', IE: 'Europe/Dublin', FI: 'Europe/Helsinki',
-  US: 'America/New_York', CA: 'America/Toronto', MX: 'America/Mexico_City',
-  BR: 'America/Sao_Paulo', AR: 'America/Argentina/Buenos_Aires',
+  GB: 'Europe/London', AS: 'Australia/Sydney', NZ: 'Pacific/Auckland',
   JP: 'Asia/Tokyo', CN: 'Asia/Shanghai', IN: 'Asia/Kolkata',
-  AU: 'Australia/Sydney', NZ: 'Pacific/Auckland',
+  BR: 'America/Sao_Paulo', AR: 'America/Argentina/Buenos_Aires',
   ZA: 'Africa/Johannesburg', EG: 'Africa/Cairo', AE: 'Asia/Dubai',
   SG: 'Asia/Singapore', TH: 'Asia/Bangkok', KR: 'Asia/Seoul',
   RU: 'Europe/Moscow', TR: 'Europe/Istanbul', IL: 'Asia/Jerusalem',
@@ -400,6 +399,8 @@ export default function Settings(){
   async function editPerson(person){
     setActiveTab(TAB_PERSON_FORM)
     setEditingPersonId(person.id)
+    const birthTz = person.birth_timezone || (person.birth_country ? autoTimezone(person.birth_country) : '')
+    const residenceTz = person.residence_timezone || (person.residence_country ? autoTimezone(person.residence_country) : '')
     setPersonForm({
       role_id: person.role_id ?? 1,
       name: person.name || '',
@@ -408,7 +409,7 @@ export default function Settings(){
       residence_city: person.residence_city || '',
       residence_latitude: person.residence_latitude ?? null,
       residence_longitude: person.residence_longitude ?? null,
-      residence_timezone: person.residence_timezone || '',
+      residence_timezone: residenceTz,
       birth_year: person.birth_year ?? null,
       birth_month: person.birth_month ?? null,
       birth_day: person.birth_day ?? null,
@@ -420,7 +421,7 @@ export default function Settings(){
       birth_city: person.birth_city || '',
       birth_latitude: person.birth_latitude ?? null,
       birth_longitude: person.birth_longitude ?? null,
-      birth_timezone: person.birth_timezone || '',
+      birth_timezone: birthTz,
     })
     const personDateValue = buildDateTimeString(person, 'birth')
     setPersonDatetimeLocal(personDateValue)
@@ -574,6 +575,12 @@ export default function Settings(){
         return
       }
       const data = await resp.json()
+      if (!data.birth_timezone && data.birth_country) {
+        data.birth_timezone = autoTimezone(data.birth_country)
+      }
+      if (!data.residence_timezone && data.residence_country) {
+        data.residence_timezone = autoTimezone(data.residence_country)
+      }
       setProfile({ role_id: data.role_id ?? 1, ...data })
       const profileDateValue = buildDateTimeString(data, 'birth')
       setDatetimeLocal(profileDateValue)
@@ -594,6 +601,7 @@ export default function Settings(){
             })
             if (!hasResidence && germany){
               setField('residence_country', germany.code)
+              setField('residence_timezone', autoTimezone(germany.code))
               try{
                 const rresp = await get(`/locations/regions?country=${germany.code}`)
                 if (rresp.ok){ const rlist = await rresp.json(); setResRegions(rlist) }
@@ -601,6 +609,7 @@ export default function Settings(){
             }
             if (!hasBirth && germany){
               setField('birth_country', germany.code)
+              setField('birth_timezone', autoTimezone(germany.code))
               try{
                 const rresp2 = await get(`/locations/regions?country=${germany.code}`)
                 if (rresp2.ok){ const rlist2 = await rresp2.json(); setRegions(rlist2) }
@@ -722,6 +731,7 @@ export default function Settings(){
     if (!resp.ok){ setMsg('Fehler beim Speichern'); return }
     await refreshProfile()
     setMsg('Profil gespeichert')
+    setTimeout(() => setMsg(''), 2000)
   }
 
   async function onCountryChange(code){
@@ -1015,25 +1025,25 @@ export default function Settings(){
           <div style={{width:'100%', maxWidth:SETTINGS_FORM_MAX_WIDTH}}>
             <form onSubmit={savePerson} className="settings-form" style={columnFormStyle}>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Rolle</label>
-                      <select style={selectControlStyle} value={personForm.role_id ?? 1} onChange={e=>setPersonField('role_id', normalizeRoleId(e.target.value))} disabled={!canManageRoleFields}>
+                      <label htmlFor="person-role" style={labelStyle}>Rolle</label>
+                      <select id="person-role" style={selectControlStyle} value={personForm.role_id ?? 1} onChange={e=>setPersonField('role_id', normalizeRoleId(e.target.value))} disabled={!canManageRoleFields}>
                         {roles.map(role => <option key={role.role_id} value={role.role_id}>{getRoleLabel(role)}</option>)}
                       </select>
                     </div>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Name</label>
-                      <input style={fieldControlStyle} value={personForm.name} onChange={e=>setPersonField('name', e.target.value)} />
+                      <label htmlFor="person-name" style={labelStyle}>Name</label>
+                      <input id="person-name" data-testid="person-name" style={fieldControlStyle} value={personForm.name} onChange={e=>setPersonField('name', e.target.value)} />
                     </div>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Wohnort - Land</label>
-                      <select style={selectControlStyle} value={personForm.residence_country || ''} onChange={e=>onPersonResidenceCountryChange(e.target.value)}>
+                      <label htmlFor="person-residence-country" style={labelStyle}>Wohnort - Land</label>
+                      <select id="person-residence-country" style={selectControlStyle} value={personForm.residence_country || ''} onChange={e=>onPersonResidenceCountryChange(e.target.value)}>
                         <option value="">-- bitte wählen --</option>
                         {countries.map(c=> <option key={c.code} value={c.code}>{getCountryLabel(c)}</option>)}
                       </select>
                     </div>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Wohnort - Bundesland</label>
-                      <select style={selectControlStyle} value={personForm.residence_region || ''} onChange={e=>onPersonResidenceRegionChange(e.target.value)} disabled={!personResRegions.length}>
+                      <label htmlFor="person-residence-region" style={labelStyle}>Wohnort - Bundesland</label>
+                      <select id="person-residence-region" style={selectControlStyle} value={personForm.residence_region || ''} onChange={e=>onPersonResidenceRegionChange(e.target.value)} disabled={!personResRegions.length}>
                         <option value="">-- bitte wählen --</option>
                         {personResRegions.map(r=> <option key={r.code} value={r.code}>{r.name}</option>)}
                       </select>
@@ -1066,12 +1076,14 @@ export default function Settings(){
                         {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
                       </select>
                     </div>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Geburtstag (Datum & Uhrzeit)</label>
+                    <div data-testid="person-birthdate" style={fieldWrapperStyle}>
+                      <label htmlFor="person-birthdate-input" style={labelStyle}>Geburtstag (Datum & Uhrzeit)</label>
                       {isNarrow ? (
                         <input
+                          id="person-birthdate-input"
                           type="datetime-local"
                           step="1"
+                          data-testid="person-birthdate-input"
                           style={fieldControlStyle}
                           value={toNativeDateTimeValue(personDatetimeLocal)}
                           onChange={e => onPersonDateTimeChange(fromNativeDateTimeValue(e.target.value))}
@@ -1092,22 +1104,22 @@ export default function Settings(){
                       )}
                     </div>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Geburtstag - Land</label>
-                      <select style={selectControlStyle} value={personForm.birth_country || ''} onChange={e=>onPersonCountryChange(e.target.value)}>
+                      <label htmlFor="person-birth-country" style={labelStyle}>Geburtstag - Land</label>
+                      <select id="person-birth-country" data-testid="person-birth-country" style={selectControlStyle} value={personForm.birth_country || ''} onChange={e=>onPersonCountryChange(e.target.value)}>
                         <option value="">-- bitte wählen --</option>
                         {countries.map(c=> <option key={c.code} value={c.code}>{getCountryLabel(c)}</option>)}
                       </select>
                     </div>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Geburtstag - Bundesland</label>
-                      <select style={selectControlStyle} value={personForm.birth_region || ''} onChange={e=>onPersonRegionChange(e.target.value)} disabled={!personRegions.length}>
+                      <label htmlFor="person-birth-region" style={labelStyle}>Geburtstag - Bundesland</label>
+                      <select id="person-birth-region" data-testid="person-birth-region" style={selectControlStyle} value={personForm.birth_region || ''} onChange={e=>onPersonRegionChange(e.target.value)} disabled={!personRegions.length}>
                         <option value="">-- bitte wählen --</option>
                         {personRegions.map(r=> <option key={r.code} value={r.code}>{r.name}</option>)}
                       </select>
                     </div>
                     <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Geburtstag - Stadt</label>
-                      <select style={selectControlStyle} value={personForm.birth_city || ''} onChange={e=>onPersonCitySelect(e.target.value)} disabled={!filteredPersonBirthCities.length}>
+                      <label htmlFor="person-birth-city" style={labelStyle}>Geburtstag - Stadt</label>
+                      <select id="person-birth-city" data-testid="person-birth-city" style={selectControlStyle} value={personForm.birth_city || ''} onChange={e=>onPersonCitySelect(e.target.value)} disabled={!filteredPersonBirthCities.length}>
                         <option value="">-- bitte wählen --</option>
                         {filteredPersonBirthCities.map(c=> <option key={`${c.code}-${c.city}`} value={c.city}>{c.city}</option>)}
                       </select>
@@ -1134,7 +1146,7 @@ export default function Settings(){
                       </select>
                     </div>
                     <div className="settings-actions" style={{marginTop:8}}>
-                      <button className="admin-primary-button" type="submit" disabled={!canAddPerson}>{editingPersonId ? 'Aktualisieren' : 'Person speichern'}</button>
+                      <button data-testid="person-save" className="admin-primary-button" type="submit" disabled={!canAddPerson}>{editingPersonId ? 'Aktualisieren' : 'Person speichern'}</button>
                       <button className="admin-secondary-button" type="button" style={{marginLeft:8}} onClick={resetPersonForm}>Neu</button>
                     </div>
                     {!canAddPerson && (
@@ -1144,7 +1156,7 @@ export default function Settings(){
                     )}
                   </form>
                 </div>
-          {personMsg ? <div className={personMessageClassName} style={{marginTop:12}}>{personMsg}</div> : null}
+          {personMsg ? <div data-testid="person-message" className={personMessageClassName} style={{marginTop:12}}>{personMsg}</div> : null}
         </section>
       )}
 

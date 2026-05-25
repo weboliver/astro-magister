@@ -2,9 +2,9 @@
 import Layout from '../layouts/Layout.astro'
 import { marked } from 'marked'
 
-const res = await fetch('http://api:8000/wiki/entries?q=Datenschutz&limit=1')
+const res = await fetch('http://api:8000/wiki/page-entries?page_name=Datenschutz')
 const entries = await res.json()
-const entry = entries.find(e => e.entry_name === 'Datenschutz' && e.ispublic)
+const entry = entries.find(e => e.ispublic)
 const contentHtml = marked.parse((entry?.entry_content || '').replace(/^# .+\n+/, '').trim())
 ---
 <Layout title="Datenschutz">

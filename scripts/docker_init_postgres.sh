@@ -36,6 +36,7 @@ SEED_LOCATIONS="${SEED_LOCATIONS:-1}"
 USERS_DB_PATH="${ASTRONEX_HOME:-$HOME/.astronex}/users.db"
 MIGRATE_IF_EMPTY_ONLY="${MIGRATE_IF_EMPTY_ONLY:-1}"
 FORCE_MIGRATIONS="${FORCE_MIGRATIONS:-0}"
+SEED_E2E_USER="${SEED_E2E_USER:-0}"
 
 table_row_count() {
   local table_name="$1"
@@ -149,6 +150,11 @@ if [[ "$SEED_LOCATIONS" == "1" ]]; then
   fi
 else
   echo "[init-postgres] skipping locations migration (SEED_LOCATIONS=$SEED_LOCATIONS)"
+fi
+
+if [ "$SEED_E2E_USER" = "1" ]; then
+    echo "[init-postgres] seeding E2E test user..."
+    "$PYTHON_BIN" scripts/seed_e2e_user.py
 fi
 
 echo "[init-postgres] done"

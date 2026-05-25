@@ -1,6 +1,71 @@
-import React from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useSynastrySelection } from '../contexts/SynastrySelectionContext'
+import { useAuth } from '../contexts/AuthContext'
+import { getSignIndex } from '../theme/ThemeApplier'
+import { zodiacNames } from '../theme/zodiacColors'
+
+function PersonSignGlyph({ persons, selectedPersonId }){
+  const { profile } = useAuth()
+  const [ascendantName, setAscendantName] = useState(null)
+
+  const info = useMemo(() => {
+    let name, signIdx, birth
+    if (selectedPersonId != null) {
+      const p = persons.find(p => p.id === selectedPersonId)
+      if (p && p.birth_year) {
+        name = p.name
+        signIdx = getSignIndex(new Date(p.birth_year, (p.birth_month || 1) - 1, p.birth_day || 1))
+        birth = { y: p.birth_year, m: p.birth_month, d: p.birth_day, h: p.birth_hour, min: p.birth_minute, sec: p.birth_second, tz: p.birth_timezone, lat: p.birth_latitude, lng: p.birth_longitude }
+      }
+    } else if (profile?.birth_year) {
+      name = profile.name || localStorage.getItem('username') || 'Profil'
+      signIdx = getSignIndex(new Date(profile.birth_year, (profile.birth_month || 1) - 1, profile.birth_day || 1))
+      birth = { y: profile.birth_year, m: profile.birth_month, d: profile.birth_day, h: profile.birth_hour, min: profile.birth_minute, sec: profile.birth_second, tz: profile.birth_timezone, lat: profile.birth_latitude, lng: profile.birth_longitude }
+    }
+    if (!name) return null
+    return { name, signIdx, signName: zodiacNames[signIdx], birth }
+  }, [persons, selectedPersonId, profile])
+
+  useEffect(() => {
+    setAscendantName(null)
+    if (!info?.birth) return
+    const b = info.birth
+    if (b.y == null || b.m == null || b.d == null) return
+    const params = new URLSearchParams({
+      birth_year: b.y,
+      birth_month: b.m || 1,
+      birth_day: b.d || 1,
+      birth_hour: b.h ?? 12,
+      birth_minute: b.min ?? 0,
+      birth_second: b.sec ?? 0,
+      birth_timezone: b.tz || 'UTC',
+      birth_latitude: b.lat ?? 0,
+      birth_longitude: b.lng ?? 0,
+    })
+    fetch(`/api/ascendant?${params}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.ascendant_sign_index != null) setAscendantName(zodiacNames[data.ascendant_sign_index]) })
+      .catch(() => {})
+  }, [info?.birth])
+
+  if (!info) return null
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+      <img
+        src={`/theme/glyph/sign/${info.signIdx}`}
+        alt="Sternzeichen"
+        width={28}
+        height={28}
+        style={{ flexShrink: 0, marginBottom: 5 }}
+      />
+      <span style={{ fontSize: 13, color: '#4b5d71' }}>
+        <b>{info.name}</b> Sternzeichen: {info.signName}{ascendantName ? `, Aszendent: ${ascendantName}` : ''}
+      </span>
+    </div>
+  )
+}
 
 /**
  * PersonSelectUI - Shared render component for the person selector dropdown.
@@ -33,6 +98,7 @@ function PersonSelectUI({ label, helperText, persons, selectedPersonId, selectPe
     <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, maxWidth: '100%' }}>
       <label style={{ fontSize: 14, fontWeight: 600, color: labelColor || undefined }}>{label}</label>
       <select
+        data-testid="person-selector"
         value={selectedPersonId ?? ''}
         onChange={handleChange}
         disabled={loading}
@@ -46,8 +112,8 @@ function PersonSelectUI({ label, helperText, persons, selectedPersonId, selectPe
       {!loading && persons.length === 0 && (
         <span style={{ color: '#556', fontSize: 12 }}>Noch keine Personen gespeichert.</span>
       )}
-      {helperText && (
-        <span style={{ color: '#556', fontSize: 12 }}>{helperText}</span>
+      {!loading && (
+        <PersonSignGlyph persons={persons} selectedPersonId={selectedPersonId} />
       )}
     </div>
   )

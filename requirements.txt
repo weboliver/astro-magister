@@ -31,6 +31,9 @@ timezonefinder>=6.0.0
 cachetools>=5.0.0
 redis>=5.0.0
 
+# Glyph-to-PNG rendering (Phase 32)
+Pillow>=10.0.0
+
 # Authentication
 passlib[bcrypt]>=1.7.4
 python-jose[cryptography]>=3.3.0

@@ -2,9 +2,9 @@
 import Layout from '../layouts/Layout.astro'
 import { marked } from 'marked'
 
-const res = await fetch('http://api:8000/wiki/entries?q=Kontakt&limit=1')
+const res = await fetch('http://api:8000/wiki/page-entries?page_name=Kontakt')
 const entries = await res.json()
-const entry = entries.find(e => e.entry_name === 'Kontakt' && e.ispublic)
+const entry = entries.find(e => e.ispublic)
 const contentHtml = marked.parse((entry?.entry_content || '').replace(/^# .+\n+/, '').trim())
 ---
 <Layout title="Kontakt">

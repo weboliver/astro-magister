@@ -8,8 +8,8 @@ async function fetchJSON(url) {
   return res.json()
 }
 
-const entry = await fetchJSON('http://api:8000/wiki/entries?q=Impressum&limit=1')
-const content = entry[0]?.entry_content || ''
+const entry = await fetchJSON('http://api:8000/wiki/page-entries?page_name=Impressum')
+const content = entry.find(e => e.ispublic)?.entry_content || ''
 const contentHtml = marked.parse(content.replace(/^# .+\n+/, '').trim())
 ---
 <Layout title="Impressum">
