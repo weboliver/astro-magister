@@ -37,6 +37,21 @@ export function useInterpretationPage({ graphicEndpoint, cacheKeyPrefix }) {
   const prevProfileIdRef = useRef(profile?.id)
   const { selectedPerson } = usePersonSelection()
 
+  useEffect(() => {
+    const source = selectedPerson || profile
+    if (source?.birth_year) {
+      setYear(source.birth_year)
+      setMonth(source.birth_month || 1)
+      setDay(source.birth_day || 1)
+      setHour(source.birth_hour ?? 12)
+      setMinute(source.birth_minute ?? 0)
+      setSecond(source.birth_second ?? 0)
+      if (source.birth_latitude != null) setLatitude(source.birth_latitude)
+      if (source.birth_longitude != null) setLongitude(source.birth_longitude)
+      if (source.birth_timezone) setTimezone(source.birth_timezone)
+    }
+  }, [selectedPerson, profile])
+
   const { startStream, isStreaming } = useInterpretationStream()
 
   const chartHooks = useChartCache({ graphicEndpointPath: graphicEndpoint, cacheKeyPrefix })

@@ -19,45 +19,9 @@ from app.services import interpretation_store as _istore
 from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 
 router = APIRouter(tags=["houses"], dependencies=[Depends(require_authenticated_user)])
-public_router = APIRouter(tags=["houses-public"])
 logger = logging.getLogger(__name__)
 
 HOUSES_SYSTEM_PROMPT = "houses"
-
-
-@public_router.get("/ascendant")
-def get_ascendant(
-    birth_year: int = Query(...),
-    birth_month: int = Query(...),
-    birth_day: int = Query(...),
-    birth_hour: float = Query(12.0),
-    birth_minute: float = Query(0),
-    birth_second: int = Query(0),
-    birth_timezone: str = Query("UTC"),
-    birth_latitude: float = Query(0.0),
-    birth_longitude: float = Query(0.0),
-):
-    """Public — compute ascendant sign from birth data via Swiss Ephemeris."""
-    from datetime import datetime
-
-    naive_dt = datetime(birth_year, birth_month, birth_day, int(birth_hour), int(birth_minute), birth_second)
-    try:
-        local_tz = pytz_timezone(birth_timezone)
-    except Exception:
-        local_tz = pytz_timezone("UTC")
-    try:
-        local_dt = local_tz.localize(naive_dt, is_dst=True)
-    except Exception:
-        local_dt = pytz_timezone("UTC").localize(naive_dt)
-    utc_dt = local_dt.astimezone(pytz_timezone("UTC"))
-    decimal_hour = utc_dt.hour + utc_dt.minute / 60.0 + utc_dt.second / 3600.0
-
-    jd = julday(birth_year, birth_month, birth_day, decimal_hour)
-    h = houses(jd, birth_latitude, birth_longitude)
-    if not h or len(h) < 1:
-        raise HTTPException(status_code=400, detail="Could not compute houses")
-    asc_sign_idx = int(h[0] / 30) % 12
-    return {"ascendant_sign_index": asc_sign_idx, "ascendant_sign": get_zodiac_name(asc_sign_idx)}
 
 
 def _resolve_role_name_for_houses(request: Request, payload: DateTimeRequest) -> str:
@@ -352,9 +316,11 @@ def get_houses_graphic(
 
     try:
         chart = build_chart_from_request(payload)
+        print(payload)
         png_bytes = draw_chart_png(
             request.app, chart, width, height, operation='draw_house'
         )
+        print(f"Generated houses graphic of size {len(png_bytes)} bytes")
         return Response(content=png_bytes, media_type="image/png")
     except HTTPException:
         raise

@@ -28,7 +28,8 @@ from app import config as app_config
 from app.services.auth_security import _is_placeholder_secret
 from app.routers.date_time import router as date_time_router
 from app.routers.positions import router as positions_router
-from app.routers.houses import router as houses_router, public_router as houses_public_router
+from app.routers.houses import router as houses_router
+from app.routers.ascendant import router as ascendant_router
 from app.routers.fixed_stars import router as fixed_stars_router
 from app.routers.solar import router as solar_router
 from app.routers.age_points import router as age_points_router, public_router as age_points_public_router
@@ -166,7 +167,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(date_time_router)
 app.include_router(positions_router)
 app.include_router(houses_router)
-app.include_router(houses_public_router)
+app.include_router(ascendant_router)
 app.include_router(fixed_stars_router)
 app.include_router(solar_router)
 app.include_router(age_points_router)

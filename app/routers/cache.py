@@ -3,7 +3,7 @@ import os
 
 from fastapi import APIRouter, Depends, Query
 
-from app.routers.auth import require_authenticated_user
+from app.routers.auth import require_admin_user
 from app.services.providers._cache import (
     CacheBackend,
     create_provider_cache,
@@ -127,7 +127,7 @@ def clear_cache() -> Dict[str, Any]:
     return {"scope": "all", "deleted_count": total}
 
 
-router = APIRouter(tags=["cache"], dependencies=[Depends(require_authenticated_user)])
+router = APIRouter(tags=["cache"], dependencies=[Depends(require_admin_user)])
 
 
 @router.get("/auth/cache/redis")

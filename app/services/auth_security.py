@@ -48,6 +48,12 @@ TURNSTILE_SECRET_KEY = (app_config.get_env_setting('TURNSTILE_SECRET_KEY') or ''
 TURNSTILE_VERIFY_URL = (app_config.get_env_setting('TURNSTILE_VERIFY_URL') or 'https://challenges.cloudflare.com/turnstile/v0/siteverify').strip()
 REDIS_URL = (app_config.get_env_setting('REDIS_URL') or '').strip()
 
+# Comma-separated list of trusted reverse-proxy IPs.
+# X-Forwarded-For is only trusted when the direct client is one of these.
+# Default: nginx container IP in the docker-compose internal network.
+_raw_trusted = app_config.get_env_setting('TRUSTED_PROXIES') or '172.28.0.15'
+TRUSTED_PROXIES: frozenset[str] = frozenset(ip.strip() for ip in _raw_trusted.split(',') if ip.strip())
+
 
 def _is_placeholder_secret(value: str) -> bool:
     """Check if a secret value is a placeholder/invalid.
@@ -178,17 +184,23 @@ def _get_store():
 def get_client_ip(request) -> str:
     """Extract client IP address from request.
 
+    X-Forwarded-For is only trusted when the direct connecting client
+    is a known reverse proxy (TRUSTED_PROXIES). Otherwise the direct
+    client IP is used, preventing header-spoofing attacks.
+
     Args:
         request: FastAPI Request object.
 
     Returns:
         Client IP address string.
     """
-    forwarded_for = request.headers.get('x-forwarded-for', '').split(',')[0].strip()
-    if forwarded_for:
-        return forwarded_for
     client = getattr(request, 'client', None)
-    return getattr(client, 'host', '') or 'unknown'
+    direct_ip = getattr(client, 'host', '') or ''
+    if direct_ip in TRUSTED_PROXIES:
+        forwarded_for = request.headers.get('x-forwarded-for', '').split(',')[0].strip()
+        if forwarded_for:
+            return forwarded_for
+    return direct_ip or 'unknown'
 
 
 def normalize_username(username: Optional[str]) -> str:

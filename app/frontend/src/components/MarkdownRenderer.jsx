@@ -31,6 +31,10 @@ const markdownComponents = {
 }
 
 export function MarkdownRenderer({ children, components = {} }) {
+  // SECURITY: Do NOT add rehype-raw here. Without it, react-markdown escapes
+  // all HTML tags as plain text, preventing XSS from user-supplied content
+  // (e.g. Zusatzfragen, AI responses). Adding rehype-raw would allow raw HTML
+  // rendering and introduce an XSS vulnerability.
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ ...markdownComponents, ...components }}>
       {children}

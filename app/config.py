@@ -80,6 +80,15 @@ def _parse_bool(value: Optional[str], default: bool) -> bool:
 
 DEBUG = _parse_bool(get_env_setting("DEBUG"), False)
 SECRET_KEY = get_env_setting("SECRET_KEY")
+
+if not SECRET_KEY or len(SECRET_KEY) < 32:
+    if not DEBUG:
+        raise ValueError(
+            "SECRET_KEY is missing or too short (minimum 32 characters). "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    logger.warning("SECRET_KEY is missing or too short — insecure, acceptable only in DEBUG mode")
+
 API_KEY = get_env_setting("API_KEY")
 EPHE_PATH = get_env_setting("EPHEMERIS_PATH")
 DISABLE_AI = _parse_bool(get_env_setting("DISABLE_AI"), False)

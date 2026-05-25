@@ -490,10 +490,13 @@ def logout(request: Request, response: Response, user=Depends(require_authentica
     Returns:
         Dict with status 'ok'.
     """
-    # AUTH-04: Invalidate access token immediately
+    # AUTH-04: Invalidate access token immediately (header or cookie)
     auth_header = request.headers.get('authorization', '')
     if auth_header.startswith('Bearer '):
         token = auth_header[7:]
+    else:
+        token = request.cookies.get(ACCESS_COOKIE_NAME)
+    if token:
         try:
             data = jwt.decode(
                 token,
@@ -503,7 +506,7 @@ def logout(request: Request, response: Response, user=Depends(require_authentica
             )
             token_jti = data.get('jti')
             if token_jti:
-                blacklist_token(token_jti, expires_in_seconds=3600)
+                blacklist_token(token_jti, expires_in_seconds=app_config.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
         except JWTError:
             pass
     auth_service.revoke_user_refresh_tokens(user['id'])

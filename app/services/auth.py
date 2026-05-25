@@ -1022,11 +1022,21 @@ async def get_user_by_id_async(user_id: int) -> Optional[User]:
 async def issue_access_token(user: User) -> str:
     """Issue a JWT access token for a user (async).
 
+    Builds the token manually to include a `jti` claim required for blacklisting.
+
     Args:
         user: User object to issue token for.
 
     Returns:
         JWT token string.
     """
-    from app.services.fastapi_users import get_jwt_strategy
-    return await get_jwt_strategy().write_token(user)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=app_config.ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": str(user.id),
+        "aud": TOKEN_AUDIENCE,
+        "iat": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+        "jti": secrets.token_urlsafe(32),
+    }
+    return jwt.encode(payload, app_config.SECRET_KEY, algorithm=ALGORITHM)

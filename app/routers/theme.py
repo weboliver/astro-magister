@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.db.models.settings import AppSetting
 from app.db.session import get_session
@@ -97,88 +98,48 @@ _THEME_DEFAULTS = {
     },
 }
 
-# Required field names in each sign's palette
-_REQUIRED_FIELDS = {"accent", "panel", "accentSoft", "shadow"}
-
 # Hex color validation regex (6-char hex)
 import re as _re
 _HEX_COLOR_RE = _re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
+class SignPaletteIn(BaseModel):
+    accent: str
+    panel: str
+    accentSoft: str
+    shadow: str
+
+    @field_validator('accent', 'panel', 'accentSoft')
+    @classmethod
+    def must_be_hex_color(cls, v: str) -> str:
+        if not _HEX_COLOR_RE.match(v):
+            raise ValueError(f"must be a valid 6-digit hex color (e.g. #FF5733), got: {v!r}")
+        return v
+
+
+class ThemeSettingsIn(BaseModel):
+    theme: dict[str, SignPaletteIn]
+    enabled: bool = True
+
+    @model_validator(mode='after')
+    def validate_twelve_signs(self) -> 'ThemeSettingsIn':
+        keys = set(self.theme.keys())
+        expected = {str(i) for i in range(12)}
+        if keys != expected:
+            missing = sorted(expected - keys)
+            extra = sorted(keys - expected)
+            msg = "theme must contain exactly signs 0-11"
+            if missing:
+                msg += f"; missing: {missing}"
+            if extra:
+                msg += f"; unexpected keys: {extra}"
+            raise ValueError(msg)
+        return self
+
+
 def _get_default_theme():
     """Return a deep copy of the default 12-sign theme."""
     return json.loads(json.dumps(_THEME_DEFAULTS))
-
-
-def _validate_theme_payload(data):
-    """Validate a theme dict.
-
-    Must have exactly 12 keys (0-11 or "0"-"11"), each with exactly 4
-    color fields. Raises HTTPException(422) on failure.
-
-    Accepts both int keys (direct Python dict) and string keys (from json.loads).
-    """
-    # Normalize keys to int
-    try:
-        normalized = {int(k): v for k, v in data.items()}
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=422,
-            detail="Theme-Daten müssen numerische Schlüssel (0-11) für jedes Sternzeichen enthalten.",
-        )
-
-    # Must have exactly 12 keys
-    if len(normalized) != 12:
-        raise HTTPException(
-            status_code=422,
-            detail="Theme muss exakt 12 Einträge enthalten (ein Eintrag pro Sternzeichen).",
-        )
-
-    # Check all 12 sign indices are present
-    for i in range(12):
-        if i not in normalized:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Sternzeichen {i} fehlt in den Theme-Daten.",
-            )
-
-    # Validate each sign's palette
-    for sign_idx, palette in normalized.items():
-        if not isinstance(palette, dict):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Sternzeichen {sign_idx}: Farbwerte müssen ein Objekt sein.",
-            )
-
-        if set(palette.keys()) != _REQUIRED_FIELDS:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Sternzeichen {sign_idx}: Farbobjekt muss exakt 4 Felder enthalten: "
-                    f"accent, panel, accentSoft, shadow."
-                ),
-            )
-
-        # Validate hex color fields
-        for field in ["accent", "panel", "accentSoft"]:
-            value = palette.get(field, "")
-            if not isinstance(value, str) or not _HEX_COLOR_RE.match(value):
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
-                        f"Sternzeichen {sign_idx}: '{field}' muss ein gültiger Hex-Farbcode "
-                        f"sein (z.B. #FF5733). Erhalten: {repr(value)}"
-                    ),
-                )
-
-        # shadow must be a string
-        if not isinstance(palette.get("shadow", ""), str):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Sternzeichen {sign_idx}: 'shadow' muss ein String sein.",
-            )
-
-    return normalized
 
 
 @router.get("/theme-settings")
@@ -217,23 +178,14 @@ def get_theme_settings(user=Depends(require_admin_user)):
 
 
 @router.put("/theme-settings")
-def update_theme_settings(payload: dict, user=Depends(require_admin_user)):
+def update_theme_settings(payload: ThemeSettingsIn, user=Depends(require_admin_user)):
     """Update zodiac theme settings (admin only).
 
     Archives the current theme before saving the new one.
-    Expects JSON body with 'theme' (12-sign dict) and 'enabled' (boolean).
+    Expects JSON body with 'theme' (12-sign dict, keys '0'-'11') and 'enabled' (boolean).
     """
-    theme_data = payload.get("theme")
-    if theme_data is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Request-Body muss ein 'theme'-Objekt enthalten.",
-        )
-
-    # Validate the theme payload (raises 422 on failure)
-    _validate_theme_payload(theme_data)
-
-    enabled = payload.get("enabled", True)
+    theme_data = {k: v.model_dump() for k, v in payload.theme.items()}
+    enabled = payload.enabled
     archived_with_timestamp = None
 
     session = get_session()
