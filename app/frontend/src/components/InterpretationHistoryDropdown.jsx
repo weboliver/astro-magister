@@ -2,20 +2,26 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useInterpretations } from '../hooks/useInterpretations'
 
 /**
- * Dropdown for selecting a past interpretation session above the optional question textarea.
- *
- * Props:
- *   contextType    – e.g. "planets" | "houses" | …
- *   userPersonsId  – person filter (null = own profile)
- *   onLoad(interp) – called with the full interpretation object when "Auswertung anzeigen" is clicked
- *   refreshToken   – increment to trigger a list refresh (e.g. after a new session was saved)
+ * InterpretationHistoryDropdown - Dropdown for selecting a past interpretation session above the optional question textarea
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.contextType - Context type for filtering interpretations (e.g. "planets" | "houses")
+ * @param {number|null} props.userPersonsId - Person filter (null = own profile)
+ * @param {Function} props.onLoad - Callback called with the full interpretation object when "Auswertung anzeigen" is clicked
+ * @param {Function} [props.onClear] - Optional callback when selection is cleared
+ * @param {number} [props.refreshToken] - Increment to trigger a list refresh (e.g. after a new session was saved)
+ * @param {boolean} [props.yearOnly=false] - If true, only display year in date format
+ * @param {number} [props.selectedInterpretationId] - Pre-selected interpretation ID
+ * @returns {JSX.Element|null} Rendered dropdown, or null if no interpretations exist
  */
 export default function InterpretationHistoryDropdown({
   contextType,
   userPersonsId,
   onLoad,
+  onClear,
   refreshToken,
   yearOnly = false,
+  selectedInterpretationId,
 }) {
   const { interpretations, loadingList, listInterpretations, loadInterpretation } = useInterpretations()
   const [selectedId, setSelectedId] = useState('')
@@ -34,6 +40,16 @@ export default function InterpretationHistoryDropdown({
     if (refreshToken !== undefined) refresh()
   }, [refreshToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-select when selectedInterpretationId is set and the item is in the list; reset when null
+  useEffect(() => {
+    if (!selectedInterpretationId) {
+      setSelectedId('')
+      return
+    }
+    const exists = interpretations.some((item) => item.id === selectedInterpretationId)
+    if (exists) setSelectedId(String(selectedInterpretationId))
+  }, [selectedInterpretationId, interpretations])
+
   const formatDate = (item) => {
     if (yearOnly) {
       return item.interp_year ? String(item.interp_year) : ''
@@ -47,6 +63,12 @@ export default function InterpretationHistoryDropdown({
 
   const formatLabel = (item) => {
     const date = formatDate(item)
+    if (item.context_type === 'synastry') {
+      const person1 = item.user_person_name || item.user_person?.name || 'Unbekannte Person'
+      const person2 = item.user_person_2_name || item.user_person_2?.name || 'Unbekannte Person'
+      const mode = item.comparison_mode === 'hh' ? 'Häuser' : 'Radix'
+      return `${date} · ${person1} + ${person2} (${mode})`
+    }
     let question = 'keine optionale Zusatzfrage'
     if (item.first_question && item.first_question.trim()) {
       const q = item.first_question.trim()
@@ -66,7 +88,14 @@ export default function InterpretationHistoryDropdown({
     }
   }
 
-  if (!loadingList && interpretations.length === 0) return null
+  if (!loadingList && interpretations.length === 0) {
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ display: 'block', marginBottom: 4 }}><b>Historie:</b></label>
+        <div style={{ fontSize: 12, color: '#888' }}>Noch keine Auswertungen vorhanden.</div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ marginBottom: 10 }}>
@@ -74,7 +103,11 @@ export default function InterpretationHistoryDropdown({
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <select
         value={selectedId}
-        onChange={(e) => setSelectedId(e.target.value)}
+        onChange={(e) => {
+          const val = e.target.value
+          setSelectedId(val)
+          if (!val && onClear) onClear()
+        }}
         style={{
           flex: 1,
           fontSize: 12,
