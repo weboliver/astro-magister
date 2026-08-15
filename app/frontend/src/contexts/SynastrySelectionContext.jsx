@@ -1,21 +1,18 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { get } from '../services/api'
 import { useAuth } from './AuthContext'
+import { usePersonSelection } from './PersonSelectionContext'
 
 /**
- * SynastrySelectionContext.jsx - Isolated dual-person selection context for Synastry pages
+ * SynastrySelectionContext.jsx - Dual-person selection context for Synastry pages
  * @module SynastrySelectionContext
- * @description React context managing TWO independent person selections (Person A and Person B)
- *              with dedicated localStorage keys. Completely isolated from the global PersonSelectionContext
- *              to prevent state collision when two PersonSelector components coexist on the same page.
- *
- *              localStorage keys:
- *                - Person A: 'astronex_synastry_person_a_id'
- *                - Person B: 'astronex_synastry_person_b_id'
- *              NEVER touches 'astronex_selected_person_id' (the global context's key).
+ * @description React context managing TWO person selections for the Synastry page:
+ *              Person A mirrors the GLOBAL PersonSelectionContext selection — the same
+ *              profile chosen everywhere else (Horoskop, Transite, ...). Changing Person A
+ *              on the Synastry page updates the global selection and vice versa.
+ *              Person B stays isolated with its own localStorage key
+ *              ('astronex_synastry_person_b_id') as the partner slot.
  */
 
-const LOCAL_STORAGE_KEY_A = 'astronex_synastry_person_a_id'
 const LOCAL_STORAGE_KEY_B = 'astronex_synastry_person_b_id'
 
 /**
@@ -26,14 +23,14 @@ const SynastrySelectionContext = createContext(null)
 
 export function SynastrySelectionProvider({ children }){
   const { profile } = useAuth()
-  const [persons, setPersons] = useState([])
-  const [selectedPersonAId, setSelectedPersonAId] = useState(() => {
-    if (typeof window === 'undefined') return null
-    const stored = window.localStorage.getItem(LOCAL_STORAGE_KEY_A)
-    if (!stored) return null
-    const parsed = Number(stored)
-    return Number.isNaN(parsed) ? null : parsed
-  })
+  const {
+    persons,
+    loading,
+    selectedPersonId: globalSelectedPersonId,
+    selectedPerson: globalSelectedPerson,
+    selectPersonId: globalSelectPersonId,
+    refreshPersons,
+  } = usePersonSelection()
   const [selectedPersonBId, setSelectedPersonBId] = useState(() => {
     if (typeof window === 'undefined') return null
     const stored = window.localStorage.getItem(LOCAL_STORAGE_KEY_B)
@@ -41,56 +38,25 @@ export function SynastrySelectionProvider({ children }){
     const parsed = Number(stored)
     return Number.isNaN(parsed) ? null : parsed
   })
-  const [loading, setLoading] = useState(false)
   const hasAuthenticatedRef = useRef(false)
 
-  const loadPersons = useCallback(async () => {
-    setLoading(true)
-    try{
-      const resp = await get('/auth/persons')
-      if (!resp.ok){
-        setPersons([])
-        return
+  useEffect(() => {
+    // Validate person B still exists in the list (person A is validated by PersonSelectionContext)
+    if (selectedPersonBId === null) return
+    if (persons.length === 0) return
+    if (!persons.some(person => person.id === selectedPersonBId)){
+      setSelectedPersonBId(null)
+      if (typeof window !== 'undefined'){
+        window.localStorage.removeItem(LOCAL_STORAGE_KEY_B)
       }
-      const list = await resp.json()
-      setPersons(list)
-      // Validate person A still exists in the list
-      setSelectedPersonAId(prev => {
-        if (prev === null) return prev
-        if (!list.some(person => person.id === prev)){
-          if (typeof window !== 'undefined'){
-            window.localStorage.removeItem(LOCAL_STORAGE_KEY_A)
-          }
-          return null
-        }
-        return prev
-      })
-      // Validate person B still exists in the list
-      setSelectedPersonBId(prev => {
-        if (prev === null) return prev
-        if (!list.some(person => person.id === prev)){
-          if (typeof window !== 'undefined'){
-            window.localStorage.removeItem(LOCAL_STORAGE_KEY_B)
-          }
-          return null
-        }
-        return prev
-      })
-    }catch(_){
-      setPersons([])
-    }finally{
-      setLoading(false)
     }
-  }, [])
+  }, [persons, selectedPersonBId])
 
   useEffect(() => {
     if (!profile){
       if (hasAuthenticatedRef.current){
-        setPersons([])
-        setSelectedPersonAId(null)
         setSelectedPersonBId(null)
         if (typeof window !== 'undefined'){
-          window.localStorage.removeItem(LOCAL_STORAGE_KEY_A)
           window.localStorage.removeItem(LOCAL_STORAGE_KEY_B)
         }
         hasAuthenticatedRef.current = false
@@ -98,18 +64,7 @@ export function SynastrySelectionProvider({ children }){
       return
     }
     hasAuthenticatedRef.current = true
-    loadPersons()
-  }, [profile, loadPersons])
-
-  const storeSelectionA = useCallback((id) => {
-    setSelectedPersonAId(id)
-    if (typeof window === 'undefined') return
-    if (id === null){
-      window.localStorage.removeItem(LOCAL_STORAGE_KEY_A)
-    } else {
-      window.localStorage.setItem(LOCAL_STORAGE_KEY_A, String(id))
-    }
-  }, [])
+  }, [profile])
 
   const storeSelectionB = useCallback((id) => {
     setSelectedPersonBId(id)
@@ -121,11 +76,6 @@ export function SynastrySelectionProvider({ children }){
     }
   }, [])
 
-  const selectedPersonA = useMemo(() => {
-    if (selectedPersonAId === null) return null
-    return persons.find(person => person.id === selectedPersonAId) || null
-  }, [persons, selectedPersonAId])
-
   const selectedPersonB = useMemo(() => {
     if (selectedPersonBId === null) return null
     return persons.find(person => person.id === selectedPersonBId) || null
@@ -135,12 +85,12 @@ export function SynastrySelectionProvider({ children }){
     <SynastrySelectionContext.Provider value={{
       persons,
       loading,
-      refreshPersons: loadPersons,
-      // Person A
-      selectedPersonAId,
-      selectedPersonA,
-      selectPersonAId: storeSelectionA,
-      // Person B
+      refreshPersons,
+      // Person A mirrors the global selection (same profile on every page)
+      selectedPersonAId: globalSelectedPersonId,
+      selectedPersonA: globalSelectedPerson,
+      selectPersonAId: globalSelectPersonId,
+      // Person B is the isolated partner slot
       selectedPersonBId,
       selectedPersonB,
       selectPersonBId: storeSelectionB,

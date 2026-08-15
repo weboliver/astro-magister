@@ -197,18 +197,17 @@ request_certificate() {
         "$@"
 }
 
-start_renew_loop() {
+start_renew_cron() {
     if [ -z "$DOMAIN_LIST" ] || [ -z "$LETSENCRYPT_EMAIL" ]; then
         return
     fi
 
-    (
-        while true; do
-            sleep 12h
-            certbot renew --webroot -w "$CERTBOT_WEBROOT" --quiet || true
-            nginx -s reload || true
-        done
-    ) &
+    mkdir -p /etc/crontabs
+    touch /var/log/certbot-renew.log
+    echo "17 3 * * * CERTBOT_WEBROOT=$CERTBOT_WEBROOT /usr/local/bin/certbot-renew.sh" > /etc/crontabs/root
+    chmod 600 /etc/crontabs/root
+
+    crond -b -L /var/log/crond.log
 }
 
 ACTIVE_SERVER_NAME="$SERVER_NAME"
@@ -252,6 +251,6 @@ else
 fi
 
 start_geoip_update_loop
-start_renew_loop
+start_renew_cron
 
 exec nginx -g 'daemon off;'

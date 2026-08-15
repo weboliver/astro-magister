@@ -13,8 +13,9 @@ COPY nginx.http.conf.template /etc/nginx/templates/nginx.http.conf.template
 COPY nginx.https.conf.template /etc/nginx/templates/nginx.https.conf.template
 COPY nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
 COPY update_geoip_db.sh /usr/local/bin/update_geoip_db.sh
+COPY certbot-renew.sh /usr/local/bin/certbot-renew.sh
 
-RUN chmod +x /usr/local/bin/nginx-entrypoint.sh /usr/local/bin/update_geoip_db.sh
+RUN chmod +x /usr/local/bin/nginx-entrypoint.sh /usr/local/bin/update_geoip_db.sh /usr/local/bin/certbot-renew.sh
 
 RUN set -eu; \
 	GEOIP2_ENABLED_NORMALIZED="$(printf '%s' "$GEOIP2_ENABLED" | tr '[:upper:]' '[:lower:]')"; \
