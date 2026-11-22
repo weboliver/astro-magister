@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Dict, List, NamedTuple, Optional
 import asyncio
 import json
 import logging
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 from app.services.ephemeris import julday, planets, houses
 from astronex.chart import zodnames, planames, Chart, aspnames, planclass, aspclass, orbs
@@ -17,7 +18,7 @@ from pytz import timezone as pytz_timezone
 from app.services.horoscope_graphics import build_chart_from_request, draw_chart_png
 from app.services.astro_env import ensure_astro_env
 from app.schemas.datetime_models import DateTimeRequest
-from app.static.texte import get_general_anweisung
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
@@ -171,7 +172,33 @@ def _planet_entries(jd, lat, lon):
     return out
 
 
-def _build_transits_response(req: TransitRequest, request: Request) -> TransitResponse:
+class TransitBundle(NamedTuple):
+    """Ergebnis **einer** Transit-Rechnung (WR-01, D-05).
+
+    Benannte Felder statt eines nackten Tupels: sieben positionsgleiche Werte ließen
+    `jd_birth`/`jd_transit` und die beiden Häuserlisten beim Entpacken still vertauschen.
+    Kein Pydantic-Modell und kein Feld in `TransitResponse` — der DTO-Vertrag bleibt
+    unverändert (D-05); die Adapter in `chart_data.py` konsumieren ausschließlich dieses
+    Bundle und rechnen keine Position und keine Häuserspitze ein zweites Mal.
+    """
+
+    response: TransitResponse
+    radix_entries: List[dict]
+    transit_entries: List[dict]
+    jd_birth: float
+    jd_transit: float
+    transit_houses: List
+    natal_houses: List
+
+
+def _build_transits_bundle(req: TransitRequest, request: Request) -> TransitBundle:
+    """Rechnet Radix und Transit genau einmal und gibt Antwort plus Zwischenstand zurück.
+
+    Die beiden Häuserlisten entstehen hier (wie bisher) und werden unverändert
+    mitgeliefert; `_planet_entries` behält Signatur und Aufrufer und holt `houses` je
+    Zeitpunkt einmal für die Häuserfelder der Planeten. Je Zeitpunkt kostet ein Bundle
+    damit genau einen `julday`, eine Planetenliste und zwei `houses`-Aufrufe.
+    """
     b = req.birthday
     t = req.transitdate
     env = ensure_astro_env(request.app)
@@ -456,17 +483,35 @@ def _build_transits_response(req: TransitRequest, request: Request) -> TransitRe
                 tsign = a.get('transit_sign') or ''
                 thouse = a.get('natal_house') or ''
                 thdeg = a.get('natal_house_degree') or ''
-                parts.append(f"{asp} {tname} in {tsign} with {nname} in house: {thouse} ({thdeg})")
-            summary = f"Huber Astrologische Psychologie.\n\nInterpretiere für Horoskop {birth_year}-{birth_month}-{birth_day}.\n\nTransite am: " + f"{t.year}-{t.month}-{t.day}:\n\n" + "\n".join(parts) + "\n\n" +\
-                        get_general_anweisung()
+                parts.append(f"{asp}: {tname} in {tsign} zu {nname} in Haus {thouse} ({thdeg})")
+            summary = f"Geburtsdatum: {birth_year}-{birth_month}-{birth_day}\n"
+            summary += f"Transite am: {t.year}-{t.month}-{t.day}\n\n" + "\n".join(parts)
     except Exception:
+        logger.exception("Daten-Prompt für die Transit-Auswertung konnte nicht gebaut werden")
         summary = None
 
-    return TransitResponse(
-        aspects=aspects,
-        grouped_aspects=grouped,
-        summary=append_additional_question(summary, getattr(req, 'additional_question', None)),
+    return TransitBundle(
+        response=TransitResponse(
+            aspects=aspects,
+            grouped_aspects=grouped,
+            summary=summary,
+        ),
+        radix_entries=natal,
+        transit_entries=transit,
+        jd_birth=jd_birth,
+        jd_transit=jd_transit,
+        transit_houses=transit_houses,
+        natal_houses=natal_houses,
     )
+
+
+def _build_transits_response(req: TransitRequest, request: Request) -> TransitResponse:
+    """Schlanker Wrapper für den öffentlichen Router (D-05: unverändertes DTO).
+
+    Rechnet über `_build_transits_bundle` und gibt nur die Antwort zurück; `/transits` und
+    `/transits/stream` sehen unverändert eine `TransitResponse`.
+    """
+    return _build_transits_bundle(req, request).response
 
 
 @router.post("/transits", response_model=TransitResponse)
@@ -496,17 +541,22 @@ async def transits_stream(req: TransitRequest, request: Request):
     """
     cached_summary = None
     provider = None
+    summary_prompt = ""
     try:
         result = _build_transits_response(req, request)
         response_data = result.model_dump()
-        summary_prompt = response_data.pop("summary")
-        if summary_prompt:
+        summary_data = response_data.pop("summary")
+        if summary_data:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_transits(request, req)
+            summary_prompt = prompts.summary_prompt("transits", summary_data, role_name)
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(req, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(summary_prompt, TRANSITS_SYSTEM_PROMPT)
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:transits')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='transits')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -531,7 +581,7 @@ async def transits_stream(req: TransitRequest, request: Request):
     async def event_stream():
         if not summary_prompt:
             yield _sse_event("meta", response_data)
-            yield _sse_event("done", {"summary": ""})
+            yield missing_chart_data_event("transits")
             return
 
         summary_parts = []

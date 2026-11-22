@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any, AsyncIterator, List
 from mistralai.client import Mistral
 
 from app import config as app_config
+from app.services import prompts
 from app.services.providers import ChatProvider
 from app.services.providers._cache import (
     CacheBackend,
@@ -123,145 +124,18 @@ class MistralClient(ChatProvider):
         return self._sdk_client
 
     # ---------------------------------------------------------------------------
-    # System prompts (structure copied from PerplexityClient)
+    # System prompts — einzige Quelle ist app.services.prompts (D-01)
     # ---------------------------------------------------------------------------
-    def get_system_prompt_role_values(self) -> tuple:
-        """Return role-specific prompt prefix and general interpretation rules.
-
-        The prompts are provider-agnostic — astrology interpretation rules
-        that work for any LLM through the ChatProvider ABC.
-        """
-        role_type = self.role_type
-        nur_woertlich = (
-            "Du bist Huber-Astrologie-Experte. Analysiere die folgenden Horoskopdaten nach Huber-Prinzipien.\n"
-            "Die Horoskopdaten wurden von einer auf Huber-Astrologie spezialisierten Software erstellt.\n"
-        )
-
-        allgemeine_deutung = (
-            "Schreibe ausschließlich auf Deutsch. Alle Begriffe (Planeten, Zeichen, Aspekte) auf Deutsch.\n"
-            "Halte dich strikt an diese Struktur. Keine Einleitungen, keine Meta-Kommentare.\n"
-            "Schreibe für Node immer Mondknoten\n"
-            "Alle Planeten, Sternzeichen und Aspekte immer auf deutsch\n"
-        )
-
-        if not role_type or role_type == "Laie":
-            nur_woertlich += (
-                "\nBerücksichtige bei der Interpretation und Darstellung, dass der Nutzer ein Laie ist "
-                "und erkläre die astrologischen Prinzipien und Fachbegriffe verständlich und anschaulich."
-            )
-        elif role_type == "Fortgeschritten":
-            nur_woertlich += (
-                "\nBerücksichtige bei der Interpretation und Darstellung, dass der Nutzer fortgeschrittene "
-                "astrologische Kenntnisse hat und erkläre die Deutungen mit angemessener Tiefe und Fachsprache."
-            )
-        elif role_type == "Experte":
-            nur_woertlich += (
-                "\nBerücksichtige bei der Interpretation und Darstellung, dass der Nutzer ein Experte ist "
-                "und liefere eine tiefgründige, fachlich anspruchsvolle Analyse mit Fokus auf psychologische "
-                "Dynamiken und Entwicklungspotentiale."
-            )
-        return nur_woertlich, allgemeine_deutung
-
     def _init_system_prompts(self) -> None:
-        """Initialize all 8 system prompt types in self.system_prompt dict."""
-        nur_woertlich, allgemeine_deutung = self.get_system_prompt_role_values()
-        role_type = self.role_type
-        text_type = "ausführlich" if role_type in {"Fortgeschritten", "Experte"} else "kurz"
-        token_count = "(je 50 - 75 tokens)" if text_type == "kurz" else "(je 75 - 100 tokens)"
+        """Baut das ``system_prompt``-Dict aus dem gemeinsamen Prompt-Modul (D-01).
 
-        if role_type == "Laie":
-            HOROSCOPE_SYSTEM_PROMPT = (
-                f"{nur_woertlich}\n"
-                "Schreibe am Anfang die Überschrift: Horoskop Interpretation - [Datum]\n"
-                "Überschrift 2: Sternzeichen und Aszendent danach kurze Erläuterung zum Sternzeichen und zum Aszendenten.\n"
-                "Zeige am Anfang die wichtigsten Erkenntnisse an. Liste danach in dieser Reihenfolge:"
-                "1. Häuserspitzen, als Bullet Liste mit Bedeutung (je 50-75 Tokens).\n"
-                "2. Planeten, als Bullet Liste mit Bedeutung (je 50-75 Tokens).\n"
-                "3. Aspekte, als Bullet Liste mit Bedeutung (je 50-75 Tokens).\n"
-                "Füge am Ende eine Zusammenfassung mit psychologischer Gesamtschau an.\n"
-                f"{allgemeine_deutung}\n"
-            )
-        else:
-            HOROSCOPE_SYSTEM_PROMPT = (
-                f"{nur_woertlich}\n"
-                "Schreibe am Anfang die Überschrift: Horoskop Interpretation - [Datum]\n"
-                "Überschrift 2: Sternzeichen und Aszendent danach kurze Erläuterung zum Sternzeichen und zum Aszendenten.\n"
-                "Zeige am Anfang die wichtigsten Erkenntnisse an. Liste danach in dieser Reihenfolge:"
-                "1. Häuserspitzen, als Bullet Liste mit Bedeutung ausführlich (je 75-100 Tokens).\n"
-                "2. Planeten, als Bullet Liste mit Bedeutung ausführlich (je 75-100 Tokens).\n"
-                "3. Aspekte, als Bullet Liste mit Bedeutung ausführlich (je 75-100 Tokens).\n"
-                "Füge am Ende eine Zusammenfassung / psychologische Gesamtschau an.\n"
-                f"{allgemeine_deutung}\n"
-            )
-
-        NODE_SYSTEM_PROMPT = (
-            f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Mondknoten Interpretation - [Datum]\n"
-            f"Schreibe danach eine detailierte Erläuterung zu den Mondknoten als Bullet Liste {text_type} {token_count}\n"
-            "Füge am Ende eine Zusammenfassung der Mondknotenpositionen an.\n"
-            f"{allgemeine_deutung}\n"
-        )
-        HOUSES_SYSTEM_PROMPT = (
-            f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Häuser Interpretation - [Datum]\n"
-            f"Schreibe danach eine detailierte Erläuterung zu den Häusern als Bullet Liste {text_type} {token_count}\n"
-            "Füge am Ende eine Zusammenfassung der Häuserpositionen an.\n"
-            f"{allgemeine_deutung}\n"
-        )
-        TRANSITS_SYSTEM_PROMPT = (
-            f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Transit Interpretation - [Datum]\n"
-            f"Schreibe danach die wichtigsten Transit-Aspekte als Bullet Liste {text_type} {token_count} auf "
-            "und erläutere danach deren psychologische Bedeutung.\n"
-            "Füge am Ende eine kurze Zusammenfassung der aktuellen Entwicklungsdynamik an.\n"
-            f"{allgemeine_deutung}\n"
-        )
-        SOLAR_RETURN_SYSTEM_PROMPT = (
-            f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Solar Jahr Interpretation - [Datum]\n"
-            f"Liste zuerst die wichtigsten Themen des Solar Jahrs auf und erläutere danach Planeten, Häuser "
-            f"und markante Aspekte als Bullet Liste {text_type} {token_count}.\n"
-            f"Füge am Ende eine kurze psychologische Gesamtschau für das Solar-Return-Jahr an.\n"
-            f"{allgemeine_deutung}\n"
-        )
-        AGE_POINTS_SYSTEM_PROMPT = (
-            f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Alterspunkt Interpretation - [Datum]\n"
-            f"Erläutere zuerst das Hauptthema des ausgewählten Alterspunkts, beziehe dann die relevanten "
-            f"Transite als Bullet Liste {text_type} {token_count} ein\n"
-            f"Schließe die Interpretation mit einer {text_type}en {token_count} psychologischen Gesamtschau "
-            f"bezüglich Alterspunkt und gleichzeitige Transite ab.\n"
-            f"{allgemeine_deutung}\n"
-        )
-        ENTRY_GENERATION_SYSTEM_PROMPT = (
-            "Du bist ein erfahrener Astrologie-Redakteur, spezialisiert auf die Erstellung von astrologischen "
-            "Inhalten für eine deutschsprachige Wiki-Huber-Astrologie Seite.\n"
-            "Deine Aufgabe ist es, basierend auf Titel, Bereich, Kategorie und vorhandenen Texten, einen "
-            "vollständigen, gut strukturierten und fachlich fundierten Beitrag zu erstellen oder zu verbessern.\n"
-            "Verwende immer Listen mit Bullet Points, um die Informationen klar und übersichtlich zu präsentieren.\n"
-            "Halte dich strikt an diese Struktur. Keine Meta-Kommentare. Keine Quellenangaben.\n"
-        )
-        SYNASTRY_SYSTEM_PROMPT = (
-            f"{nur_woertlich}\n"
-            "Schreibe am Anfang die Überschrift: Partnerhoroskop Interpretation\n"
-            f"Schreibe danach eine detailierte Erläuterung der Beziehungsaspekte als Bullet Liste "
-            f"{text_type} {token_count}\n"
-            "Beschreibe sowohl die harmonischen als auch die herausfordernden Aspekte der Beziehung.\n"
-            "Gehe auf die Häuserüberlagerungen ein: Welche Lebensbereiche der Partner werden durch die "
-            "Planeten des anderen aktiviert?\n"
-            f"Füge am Ende eine psychologische Gesamtschau der Partnerschaftsdynamik aus Sicht der "
-            f"Huber-Astrologie an.\n"
-            f"{allgemeine_deutung}\n"
-        )
-
-        self.system_prompt["horoskop"] = HOROSCOPE_SYSTEM_PROMPT
-        self.system_prompt["mondknoten"] = NODE_SYSTEM_PROMPT
-        self.system_prompt["houses"] = HOUSES_SYSTEM_PROMPT
-        self.system_prompt["transits"] = TRANSITS_SYSTEM_PROMPT
-        self.system_prompt["solar_return"] = SOLAR_RETURN_SYSTEM_PROMPT
-        self.system_prompt["age_points"] = AGE_POINTS_SYSTEM_PROMPT
-        self.system_prompt["entry"] = ENTRY_GENERATION_SYSTEM_PROMPT
-        self.system_prompt["synastrie"] = SYNASTRY_SYSTEM_PROMPT
+        Die parameterlose Signatur bleibt, weil der Paritätstest beide Clients
+        für dieselbe Stufe konstruiert.
+        """
+        stufe = self.role_type or "Laie"
+        self.system_prompt = {
+            key: prompts.system_prompt(key, stufe) for key in prompts.PROMPT_KEYS
+        }
 
     def system_prompt_for_type(self, type_of_prompt: str) -> str:
         """Return the full system prompt text for a given prompt type key."""

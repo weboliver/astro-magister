@@ -1,31 +1,127 @@
 ---
 import Layout from '../../layouts/Layout.astro'
+import { DEFAULT_COVER_URL } from '../../services/covers.js'
+import { ORGANIZATION_ID } from '../../../../frontend/src/services/canonical.js'
+import { relatedEntries } from '../../services/related.mjs'
 import { marked } from 'marked'
 
 export async function getStaticPaths() {
-  const res = await fetch('http://api:8000/wiki/entries?limit=100&wiki_active_only=true')
+  // Dieselbe Quelle wie die Übersicht: eine öffentliche Definition (D-13), ohne Deckel.
+  // Sichtbarkeit und Titelsperre sind serverseitig erledigt; der Build entscheidet nur
+  // noch, für welche Bereiche überhaupt Seiten entstehen.
+  const res = await fetch('http://api:8000/wiki/build-entries')
   if (!res.ok) throw new Error(`API error ${res.status}`)
   const entries = await res.json()
 
-  const hiddenTitles = new Set(['Datenschutz', 'Impressum', 'Kontakt'])
-  return entries
-    .filter(e => e.ispublic && e.slug && !hiddenTitles.has(e.entry_name))
-    .map(entry => ({
-      params: { slug: entry.slug },
-      props: { entry },
-    }))
+  // EINE Menge für Seiten, Übersicht und verwandte Links (D-18/D-20).
+  const buildSet = entries.filter(e => e.wiki_active === true && e.slug)
+
+  // D-11: Titel bleiben `{entry_name}`, solange der Name im Build eindeutig ist. Nur wo
+  // derselbe Name mehrfach vorkommt, wird die Kategorie angehängt — statt jeden Titel
+  // aufzublähen. Die Prüfung läuft hier, weil hier die vollständige Liste vorliegt.
+  const nameCounts = new Map()
+  for (const entry of buildSet) {
+    nameCounts.set(entry.entry_name, (nameCounts.get(entry.entry_name) || 0) + 1)
+  }
+  const titleFor = entry =>
+    nameCounts.get(entry.entry_name) > 1
+      ? `${entry.entry_name} – ${entry.category_name || 'Astrologie'}`
+      : entry.entry_name
+
+  return buildSet.map(entry => ({
+    params: { slug: entry.slug },
+    props: { entry, title: titleFor(entry), related: relatedEntries(buildSet, entry) },
+  }))
 }
 
-const { entry } = Astro.props
+const { entry, title, related } = Astro.props
+
+// Build-Pfad (`/wiki/<slug>/`) und öffentlicher Pfad (`/astro-wiki/<slug>/`) sind zwei
+// verschiedene Dinge (D-10). Das Canonical behauptet den öffentlichen Pfad, explizit
+// gebildet aus dem Slug der API — niemals aus `Astro.url.pathname`.
+const publicPath = `/astro-wiki/${entry.slug}/`
+const url = new URL(publicPath, Astro.site).toString()
+
+// D-12: `entry_short`, sonst ein aus Name und Kategorie gebildeter Satz. Der frühere
+// generische Rückfall war für alle Artikel identisch — eine Beschreibung ist nie leer.
+const description =
+  entry.entry_short ||
+  `${entry.entry_name} – ${entry.category_name || 'Astrologie'} im Astro-Magister Wiki.`
+
+// D-13: `image` als absolute URL — `DEFAULT_COVER_URL` ist ein relativer Pfad.
+const imageUrl = new URL(entry.cover_url || DEFAULT_COVER_URL, Astro.site).toString()
+
+// `created`/`updated` sind im Vertrag optional (auch wenn die Spalte NOT NULL ist):
+// `new Date(undefined).toISOString()` wirft `RangeError` und bräche den ganzen Build.
+// Deshalb werden die Datumsfelder bedingt gespreizt und nie als `null` ausgegeben.
+const published = entry.created ? new Date(entry.created).toISOString() : undefined
+const modifiedSource = entry.updated || entry.created
+const modified = modifiedSource ? new Date(modifiedSource).toISOString() : undefined
+
+// D-13/D-14: `Article` ohne `author` (es gibt keinen benennbaren Autor) und eine
+// dreistufige `BreadcrumbList`; jedes `ListItem` trägt `name` und `item`, weil Google
+// beides je Ebene verlangt. Kategorieseiten gibt es nicht, also keine vierte Ebene.
+const jsonLd = [
+  {
+    '@type': 'Article',
+    headline: entry.entry_name,
+    description,
+    url,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    ...(published ? { datePublished: published } : {}),
+    ...(modified ? { dateModified: modified } : {}),
+    inLanguage: 'de-DE',
+    publisher: { '@id': ORGANIZATION_ID },
+    image: imageUrl,
+  },
+  {
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Startseite',
+        item: new URL('/', Astro.site).toString(),
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Wiki',
+        item: new URL('/astro-wiki/', Astro.site).toString(),
+      },
+      { '@type': 'ListItem', position: 3, name: entry.entry_name, item: url },
+    ],
+  },
+]
+
 const rawContent = (entry.entry_content || '').replace(/^# .+\n+/, '').trim()
 const contentHtml = marked.parse(rawContent)
 ---
-<Layout title={entry.entry_name} description={entry.entry_short || ''}>
+<Layout title={title} description={description} canonicalPath={publicPath} jsonLd={jsonLd}>
   <div style="margin-bottom:12px">
     <a href="/astro-wiki/" style="color:var(--admin-accent);font-weight:600">← Wiki Übersicht</a>
   </div>
-  <article>
+  <article class="wiki-article">
     <h1 style="margin-bottom:20px">{entry.entry_name}</h1>
+    <img
+      class="wiki-cover-banner"
+      src={entry.cover_url || DEFAULT_COVER_URL}
+      alt={entry.cover_alt || ''}
+      width="400"
+      height="210"
+      loading="eager"
+      decoding="async"
+    />
     <div style="line-height:1.7" set:html={contentHtml} />
   </article>
+  {related.length > 0 && (
+    <section class="wiki-related" aria-label="Verwandte Einträge">
+      <h2>Verwandte Einträge</h2>
+      <ul>
+        {related.map(other => (
+          <li><a href={`/astro-wiki/${other.slug}/`}>{other.entry_name}</a></li>
+        ))}
+      </ul>
+    </section>
+  )}
 </Layout>

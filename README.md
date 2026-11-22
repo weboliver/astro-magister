@@ -103,7 +103,7 @@ export SWISS_EPHE_PATH="$PWD/astronex/resources"
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-API docs: http://localhost:8000/docs
+Note: interactive API docs are disabled — `app/main.py` creates the FastAPI app with `docs_url=None`, `redoc_url=None`, `openapi_url=None` (lines 114–116), so `/docs` returns 404.
 
 ### Frontend
 
@@ -115,11 +115,7 @@ npm run build         # production build
 npm run preview       # preview production build
 ```
 
-### Running tests
-
-```bash
-python -m pytest tests/ -v
-```
+Development — test suite, local gate and developer tooling — lives in the private repository this tree is mirrored from; this tree carries the product and its operating documentation. For the contribution workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -135,7 +131,7 @@ docker compose --env-file ../.env up --build
 Access points:
 - App: http://localhost/
 - API: http://localhost/api/
-- API docs: http://localhost/api/docs
+- API docs: not available — no `/docs` route exists (FastAPI docs are disabled in `app/main.py`), and the nginx `/api/` proxy to the API returns 404 for `/docs`
 
 ### Docker environment variables
 
@@ -144,12 +140,12 @@ Access points:
 | `DEBUG` | `false` | `true` uses Vite dev server on port 5173 |
 | `DATABASE_URL` | `postgresql+psycopg2://...` | PostgreSQL connection string |
 | `SEED_USERS` | `0` | Import users from `~/.astronex/users.db` on first start |
-| `SEED_LOCATIONS` | `0` | Import locations from `astronex/db/local.db` |
+| `SEED_LOCATIONS` | `1` | Import locations from `astronex/db/local.db` |
 | `MIGRATE_IF_EMPTY_ONLY` | `1` | Only run migrations when tables are empty |
 | `FORCE_MIGRATIONS` | `0` | Run migrations even on non-empty tables |
-| `GEOIP2_ENABLED` | `0` | Enable GeoIP2 blocking for `/api/` |
-| `GEOIP2_ALLOWED_COUNTRIES` | `DE,AT,CH` | Countries allowed through GeoIP2 |
-| `GEOIP2_LICENSE_KEY` | — | MaxMind download license key |
+| `NETWORK_NAME` | `astronex_internal` | Docker network name of the Compose stack |
+| `NETWORK_SUBNET` | `172.28.0.0/16` | Subnet — set a free range if it is already taken on the host |
+| `NETWORK_IP_PREFIX` | first three octets of `NETWORK_SUBNET` | Block for the static container IPs `.10`–`.15` (optional, derived automatically) |
 | `LETSENCRYPT_DOMAINS` | — | Domains for Let's Encrypt (e.g. `example.com,www.example.com`) |
 | `LETSENCRYPT_EMAIL` | — | Email for Let's Encrypt certificate renewal |
 | `LETSENCRYPT_STAGING` | `0` | Use Let's Encrypt staging environment |
@@ -176,16 +172,6 @@ docker compose up -d --build --force-recreate nginx
 ```
 
 Requires `DEBUG=true` and `DEV_HTTPS_HOSTS=yourserver.local localhost` in `.env`.
-
-### Upgrade GeoIP2 database
-
-```bash
-cd docker
-./update_geoip_db.sh
-# or rebuild nginx container:
-./build.sh --no-deps nginx
-docker compose --env-file ../.env exec nginx nginx -t
-```
 
 ### Make admin user (after docker setup)
 
@@ -236,7 +222,7 @@ curl -X POST 'http://localhost:8000/calc?planet_id=0' \
   -d '{"year":2000,"month":1,"day":1,"hour":12,"minute":0,"second":0}'
 ```
 
-Planet IDs: 0=Sun, 1=Moon, 2=Mercury, 3=Venus, 4=Mars, 5=Jupiter, 6=Saturn, 7=Uranus, 8=Neptune, 9=Pluto, 10=Chiron, 11=Lilith.
+Planet IDs: 0=Sun, 1=Moon, 2=Mercury, 3=Venus, 4=Mars, 5=Jupiter, 6=Saturn, 7=Uranus, 8=Neptune, 9=Pluto, 10=Node (mean lunar node), 11=Lilith, 12=Chiron.
 
 **POST /planets** — All planets
 
@@ -263,7 +249,7 @@ curl -X POST 'http://localhost:8000/houses?latitude=48.8566&longitude=2.3522' \
 ```bash
 curl -X POST http://localhost:8000/age-points \
   -H "Content-Type: application/json" \
-  -d '{"year":1990,"month":6,"day":15,"hour":10,"minute":30,"kind":"radix"}'
+  -d '{"year":1990,"month":6,"day":15,"hour":10,"minute":30,"kind":"radix"}`
 ```
 
 ### Fixed stars
@@ -303,19 +289,12 @@ curl -X POST http://localhost:8000/horoscope \
 ```bash
 curl -X POST http://localhost:8000/transits \
   -H "Content-Type: application/json" \
-  -d '{"birthday": {"year":1990,"month":6,"day":15,"hour":10,"minute":30,"second":0}, "birth_location": {"latitude":48.0,"longitude":11.0}, "transitdate": {"year":2026,"month":1,"day":26,"hour":12,"minute":0,"second":0}, "transit_location": {"latitude":48.0,"longitude":11.0}, "groupby":"aspect"}'
+  -d '{"birthday": {"year":1990,"month":6,"day":15,"hour":10,"minute":30,"second":0}, "birth_location": {"latitude":48.0,"longitude":11.0}, "transitdate": {"year":2026,"month":1,"day":26,"hour":12,"minute":0,"second":0}, "transit_location": {"latitude":48.0,"longitude":11.0}, "groupby":"aspect"}`
 ```
 
 ### Diagnostic
 
-**GET /ephepath** — Show Swiss Ephemeris path and sefstars.txt status
-
-```bash
-curl http://localhost:8000/ephepath
-# → {"ephe_path": "...", "sefstars_present": true}
-```
-
-### Health check
+**GET /ephepath** — Not available: no `/ephepath` route is registered in the backend API (`app/routers/` contains no such endpoint).
 
 **GET /health**
 
@@ -360,14 +339,10 @@ astronex/
 ├── scripts/
 │   └── docker_init_postgres.sh
 ├── alembic/                 # Database migration scripts
-├── tests/                  # Pytest test suite
-├── requirements.txt         # Python dependencies
-├── INSTALL.md               # (superseded — see this README)
-├── API_GUIDE.md             # (superseded — see /docs endpoint)
-└── DEVELOPMENT_MAP.md       # Developer reference (keep)
+└── requirements.txt         # Python dependencies
 ```
 
-For detailed developer overview, see [DEVELOPMENT_MAP.md](DEVELOPMENT_MAP.md).
+For the contribution workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -389,3 +364,49 @@ sudo systemctl start astronex.service
 - **Swiss Ephemeris**: AGPL-3.0 (LICENSE_SWISS_EPHE)
 
 Swiss Ephemeris documentation: https://github.com/aloistr/swisseph/blob/master/readme.md
+
+---
+
+## Features
+
+- **Huber-method astrology** — radix charts, primary directions (`astronex/directions.py`), zodiac calculations (`astronex/zodiac.py`), age points and solar returns.
+- **Swiss Ephemeris 2025 engine** — the `pysw`/`_pysw.so` C extension (built from `ext/ext64`) powers every calculation, on desktop and API alike.
+- **GTK3 desktop app** — `astronex/` with Cairo chart rendering (`astronex/drawing/`), multi-tab GUI (`astronex/gui/`), and print/PDF/PNG output (`astronex/surfaces/`).
+- **FastAPI REST API** — routers in `app/routers/` for date/time conversion, planet positions, houses, ascendant, fixed stars, nodes, synastry, transits, interpretations, auth, locations, timezone, persons, wiki, theme, glyphs, and more.
+- **React/Vite web frontend** — `app/frontend/` SPA (React 18 + Vite 7) with Playwright end-to-end tests.
+- **PostgreSQL + Redis** — SQLAlchemy models with Alembic migrations, seeded via `scripts/docker_init_postgres.sh`.
+- **Authentication & roles** — JWT auth via `fastapi-users`, bcrypt password hashing, admin/power-user roles.
+- **AI-assisted interpretations** — pluggable chat providers (`app/services/providers/`): Mistral and Perplexity, with Redis-backed caching.
+- **Built-in wiki** — categorized wiki entries with a dedicated `wiki-builder` container.
+- **Fixed star support** — optional `sefstars.txt` download enables fixed star calculations.
+- **Let's Encrypt HTTPS** — automated certificate issuance and renewal for the nginx reverse proxy.
+- **Localization** — desktop app ships `en`, `es`, `ca`, `de` translations (`astronex/locale/`).
+
+---
+
+## Architecture
+
+Astronex combines three frontends around one Swiss Ephemeris core, with the API and web frontend deployed together via Docker Compose:
+
+```
+                        ┌──────────────────────────────────────────────────┐
+                        │                docker compose                    │
+  Browser ────────────► │  nginx (80/443, Let's Encrypt)                   │
+                        │    │  static assets / reverse proxy              │
+                        │    ▼                                             │
+                        │  frontend (React/Vite, :5173)                    │
+                        │    │  dev proxy: one prefix /api/ ...            │
+                        │    ▼                                             │
+                        │  api (FastAPI/uvicorn, :8000)                    │
+                        │    │  routers → services → SQLAlchemy            │
+                        │    ▼                                             │
+                        │  db (PostgreSQL 16, host :5433)  ◄─  redis (7)   │
+                        └──────────────────────────────────────────────────┘
+
+  GTK desktop app (python nex.py) ──► pysw / _pysw.so (Swiss Ephemeris)
+```
+
+- **Desktop app** (`astronex/`) runs standalone: it talks to Swiss Ephemeris directly and stores charts in SQLite/PostgreSQL under `~/.astronex`.
+- **Backend** (`app/`) exposes the same calculations as a REST API. `app/main.py` registers routers, CORS, request logging, and a performance monitor; `app/routers/` handle HTTP; `app/services/` hold business logic and external integrations; `app/db/` provides SQLAlchemy models and request-scoped sessions.
+- **Frontend** (`app/frontend/`) is a React SPA routed with `react-router` 7. In development, Vite proxies exactly one prefix — everything under `/api/` — to the backend (`VITE_PROXY_TARGET`, default `http://localhost:8000`) and strips it. In production, Nginx serves the built assets and routes `/api/` to the API container.
+- **Infrastructure** (`docker/`) wires `db`, `redis`, `api`, `frontend`, `wiki-builder`, and `nginx` together. The API runs Alembic migrations on startup (respecting `MIGRATE_IF_EMPTY_ONLY`/`FORCE_MIGRATIONS`) and seeds users/locations when `SEED_USERS`/`SEED_LOCATIONS` are set.

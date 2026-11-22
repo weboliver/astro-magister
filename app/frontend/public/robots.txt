@@ -1,19 +1,9 @@
 User-agent: *
 Allow: /
 
-# API-Endpunkte – kein crawlbarer Inhalt
-Disallow: /auth/
-Disallow: /wiki/
-Disallow: /getPosition
-Disallow: /planets
-Disallow: /transits
-Disallow: /houses
-Disallow: /horoscope
-Disallow: /solar-return
-Disallow: /age-points
-Disallow: /interpretations
-Disallow: /persons
-Disallow: /timezone
-Disallow: /locations
+# Nur der API-Namensraum ist gesperrt: dort liegt kein crawlbarer Inhalt.
+# Kein Seitenpfad wird gesperrt — eine gesperrte Seite darf ihr noindex nie zeigen,
+# die Sperre würde die noindex-Anweisung aufheben (D-23, SEO-10).
+Disallow: /api/
 
 Sitemap: https://www.astro-magister.de/sitemap.xml

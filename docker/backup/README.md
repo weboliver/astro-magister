@@ -81,14 +81,20 @@ Use the automated restore script:
 
 # Restore to production database
 ./docker/backup/restore.sh --filename=backups/weekly/astronex-20260517-020000.sql.gz --target=production
+
+# Custom-format dump (pg_dump -Fc) from another machine
+./docker/backup/restore.sh --filename=backups/astronex_20261102_145050.dump --target=production
 ```
 
 **restore.sh features:**
 - File existence validation
 - File size check (>100 bytes)
-- Gzip format validation
+- Format detection: pg_dump custom archive (`.dump`, also gzipped) → `pg_restore`,
+  plain SQL (`.sql`, also gzipped) → `psql` — override with `--format=dump|sql`
+- `--no-owner --no-privileges` for `pg_restore`, so dumps from another machine/user restore cleanly
 - Auto-creates target database
-- Reports table count after restore
+- Reports table count and `alembic_version` after restore
+- After a production restore: `./docker/restart.sh api`
 
 For manual restore, see `RESTORE.md`.
 

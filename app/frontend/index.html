@@ -8,7 +8,11 @@
     <!-- SEO: Base meta -->
     <meta name="description" content="Astro-Magister ist ein Portal für astrologische Selbsterfahrung. Erforsche dein Horoskop, Planeten, Häuser, Transite, Alterspunkte und das astrologische Wiki." />
     <meta name="keywords" content="Astrologie, Horoskop, Planeten, Häuser, Transite, Alterspunkte, Solar Jahr, astrologische Deutung, Wiki Astrologie" />
-    <meta name="robots" content="index, follow" />
+    <!-- SEO: Die Crawler-Sichtbarkeit kommt ausschließlich aus dem nginx-Header
+         `X-Robots-Tag` (D-04). Ein statisches Meta-Tag `robots` behauptete für jede
+         App-Route „index, follow", während der Proxy pfadabhängig `noindex` sendet —
+         zwei widersprüchliche Signale im selben Dokument. Der Header ist die eine
+         Wahrheit, das Meta entfällt ersatzlos. -->
     <link rel="canonical" href="https://www.astro-magister.de/" />
 
     <!-- Open Graph -->
@@ -31,19 +35,24 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Astro-Magister",
-      "url": "https://www.astro-magister.de/",
-      "description": "Portal für astrologische Selbsterfahrung – Horoskop, Planeten, Häuser, Transite, Alterspunkte und Wiki.",
-      "inLanguage": "de-DE",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": {
-          "@type": "EntryPoint",
-          "urlTemplate": "https://www.astro-magister.de/"
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://www.astro-magister.de/#website",
+          "name": "Astro-Magister",
+          "url": "https://www.astro-magister.de/",
+          "description": "Portal für astrologische Selbsterfahrung – Horoskop, Planeten, Häuser, Transite, Alterspunkte und Wiki.",
+          "inLanguage": "de-DE",
+          "publisher": { "@id": "https://www.astro-magister.de/#organization" }
         },
-        "query-input": "required name=search_term_string"
-      }
+        {
+          "@type": "Organization",
+          "@id": "https://www.astro-magister.de/#organization",
+          "name": "Astro-Magister",
+          "url": "https://www.astro-magister.de/",
+          "description": "Portal für astrologische Selbsterfahrung."
+        }
+      ]
     }
     </script>
   </head>
@@ -88,24 +97,46 @@
           localStorage.setItem('zodiacThemeEnabled', 'true');
         }
 
-        var now = new Date();
-        var month = now.getMonth() + 1;
-        var day = now.getDate();
+        // Phase 41 (D-08/D-09, A-8): Der Merker `astronex_theme_sign` trägt das zuletzt angewandte
+        // personen- bzw. profilabgeleitete Zeichen. Er wird **vor** dem Datumsblock gelesen, sonst
+        // blitzte beim ersten Paint die Datumspalette auf. Ein gesperrter oder manipulierter
+        // Speicher darf das Skript nicht abbrechen; ein Wert außerhalb einer ganzen Zahl 0…11 gilt
+        // als „kein Merker" (T-41-10) — dann entscheidet wie bisher das Datum.
+        var storedSign = null;
+        try {
+          var rawSign = localStorage.getItem('astronex_theme_sign');
+          if (rawSign !== null) {
+            var parsedSign = parseInt(rawSign, 10);
+            if (isFinite(parsedSign) && parsedSign === Number(rawSign) && parsedSign >= 0 && parsedSign <= 11) {
+              storedSign = parsedSign;
+            }
+          }
+        } catch (e) { /* ignore storage errors */ }
+
         var signIndex = 0;
 
-        for (var i = 0; i < boundaries.length; i++) {
-          var b = boundaries[i];
-          var sm = b.start[0], sd = b.start[1];
-          var em = b.end[0], ed = b.end[1];
-          var inRange = false;
+        if (storedSign === null) {
+          var now = new Date();
+          var month = now.getMonth() + 1;
+          var day = now.getDate();
 
-          if (sm <= em) {
-            inRange = (month > sm || (month === sm && day >= sd)) && (month < em || (month === em && day <= ed));
-          } else {
-            inRange = (month > sm || (month === sm && day >= sd)) || (month < em || (month === em && day <= ed));
+          for (var i = 0; i < boundaries.length; i++) {
+            var b = boundaries[i];
+            var sm = b.start[0], sd = b.start[1];
+            var em = b.end[0], ed = b.end[1];
+            var inRange = false;
+
+            if (sm <= em) {
+              inRange = (month > sm || (month === sm && day >= sd)) && (month < em || (month === em && day <= ed));
+            } else {
+              inRange = (month > sm || (month === sm && day >= sd)) || (month < em || (month === em && day <= ed));
+            }
+
+            if (inRange) { signIndex = b.sign; break; }
           }
-
-          if (inRange) { signIndex = b.sign; break; }
+        } else {
+          // Ein personen-/profilabgeleitetes Zeichen gewinnt gegen das Datum.
+          signIndex = storedSign;
         }
 
         var p = palettes[signIndex];
@@ -138,7 +169,12 @@
           gradient = 'radial-gradient(circle at top right, rgba('+r+','+g+','+b+',0.7), transparent 28%),' +
             ' linear-gradient(180deg, ' + p.panel + ' 0%, #fefbfb 44%, ' + p.panel + ' 100%)';
         }
-        document.body.style.background = gradient;
+        // Der Verlauf geht als **Variable** auf `:root`, genau wie in `applyTheme()`
+        // (`ThemeApplier.js`), und wird von `body{background:var(--app-body-gradient, …)}`
+        // gelesen. Eine Inline-Deklaration auf `document.body` gewönne dagegen dauerhaft gegen
+        // jede Stylesheet-Regel — der Personenwechsel könnte den Seitenhintergrund zur Laufzeit
+        // nie mehr umfärben (WR-01). Anti-Flash bleibt: das Skript läuft vor dem ersten Paint.
+        root.setProperty('--app-body-gradient', gradient);
 
         // RGB components for accent-coloured tabs
         var acc = p.accent.replace('#','');

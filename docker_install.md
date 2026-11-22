@@ -103,7 +103,7 @@ Im Projektroot (`~/Projects/Python/astronex`):
 
 ```bash
 cd ~/Projects/Python/astronex
-docker compose up -d --build
+cd docker && docker compose --env-file ../.env up -d --build
 docker compose ps
 docker compose logs -f
 ```
@@ -112,7 +112,7 @@ docker compose logs -f
 
 - Wenn `docker.list` an falscher Stelle liegt: verschieben (siehe oben).
 - Permission-Fehler → prüfen, ob `$USER` Mitglied der `docker`-Gruppe ist.
-- Logs: `sudo journalctl -u docker -b` oder `docker compose logs -f`.
+- Logs: `sudo journalctl -u docker -b` oder `cd docker && docker compose logs -f`.
 - Bei Firewall/SELinux: Regeln für Containernetzwerk prüfen.
 
 ## Quellen

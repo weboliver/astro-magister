@@ -39,6 +39,7 @@ from app.routers.synastry import router as synastry_router
 from app.routers.theme import router as theme_router, public_router as theme_public_router
 from app.routers.glyphs import router as glyphs_router
 from app.routers.transits import router as transits_router
+from app.routers.chart_data import router as chart_data_router
 from app.routers.auth import router as auth_router
 from app.routers.locations import router as locations_router
 from app.routers.timezone import router as timezone_router
@@ -46,6 +47,7 @@ from app.routers.persons import router as persons_router
 from app.routers.cache import router as cache_router
 from app.routers.wiki import router as wiki_router, public_router as wiki_public_router
 from app.routers.seo import router as seo_router
+from app.routers.covers import router as covers_router
 from app.routers.interpretations import router as interpretations_router
 from app.services.performance import PerformanceMonitor
 from app.services.db_init import init_users_db
@@ -176,6 +178,7 @@ app.include_router(horoscope_router)
 app.include_router(nodes_router)
 app.include_router(synastry_router)
 app.include_router(transits_router)
+app.include_router(chart_data_router)
 app.include_router(auth_router)
 app.include_router(locations_router)
 app.include_router(timezone_router)
@@ -184,6 +187,7 @@ app.include_router(cache_router)
 app.include_router(wiki_router)
 app.include_router(wiki_public_router)
 app.include_router(seo_router)
+app.include_router(covers_router)
 app.include_router(theme_router)
 app.include_router(theme_public_router)
 app.include_router(glyphs_router)

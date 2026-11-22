@@ -227,6 +227,8 @@ export default function Horoscope() {
       chartFallbackMessage="Klicke auf «Horoskop interpretieren», um das Chart rechts neben dem Formular anzuzeigen und eine Auswertung zu erhalten."
       onInterpret={handleInterpret}
       state={state}
+      chartType="horoscope"
+      chartDataPayload={currentPayload}
     />
   )
 }

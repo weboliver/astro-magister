@@ -9,7 +9,7 @@ from app.services.ephemeris import julday, calc_ut, houses
 from app.static.zodiac_names import get_zodiac_name
 from app.static.aspect_names import get_aspect_english_by_index
 from app.services.planet_names import get_planet_name
-from app.static.texte import get_general_anweisung
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.db.session import get_session
@@ -27,6 +27,7 @@ from app.services.horoscope_graphics import build_chart_from_request, draw_chart
 import astronex.chart as chart_module
 from astronex.config import ORBS as CONFIG_ORBS
 
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["nodes"], dependencies=[Depends(require_authenticated_user)])
@@ -242,32 +243,13 @@ def _calculate_nodes_response(payload: DateTimeRequest) -> dict:
     planets_str = "; ".join([f"{p['planet_name']} in {p['sign']} {p['sign_degree']} (Haus {p['house'] or 'unbekannt'})" for p in mirrored_entries])
     aspects_str = "; ".join(aspects_list) if aspects_list else "keine"
 
-    summary_prompt = f"""Huber Astrologische Psychologie.
-
-Interpretiere das Mondknoten Horoskop: {birth}.
-
-Mondknoten (North Node): {rahu_sign} ({rahu_deg}) / Haus {rahu_house} ({rahu_house_deg})
-Südknoten (South Node): {ketu_sign} ({ketu_deg}) / Haus {ketu_house} ({ketu_house_deg})
-
-Planeten (gespiegelt): {planets_str}
-
-Aspekte (gespiegelt): {aspects_str}
-
-Der Mondknoten zeigt den Lebensweg und die karmischen Themen.
-Der Südknoten zeigt die Themen der Vergangenheit und des Loslassens.
-
-Erstelle eine detaillierte Interpretation:
-1. Die Position des Mondknotens in Zeichen und Haus - was bringt der Lebensweg?
-2. Die Position des Südnotens - welche Themen sollen transformiert werden?
-3. Die Achse Mondknoten-Südknoten und ihre Bedeutung für die persönliche Entwicklung
-4. Karmische und spirituelle Aspekte der Konstellation
-
-Erstelle eine Liste der wichtigsten astrologischen Themen.
-(Keine Meta Information, nur die Interpretation. Verwende eine klare und verständliche Sprache)
-
-{get_general_anweisung()}"""
-
-    summary_prompt = append_additional_question(summary_prompt, getattr(payload, 'additional_question', None))
+    summary_prompt = (
+        f"Geburtsdatum: {birth}\n"
+        f"Mondknoten (Nordknoten): {rahu_sign} ({rahu_deg}) / Haus {rahu_house} ({rahu_house_deg})\n"
+        f"Südknoten: {ketu_sign} ({ketu_deg}) / Haus {ketu_house} ({ketu_house_deg})\n"
+        f"Planeten (gespiegelt): {planets_str}\n"
+        f"Aspekte (gespiegelt): {aspects_str}\n"
+    )
 
     return {
         'julian_day': jd,
@@ -295,18 +277,25 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
     """
     cached_summary = None
     provider = None
+    summary_prompt = ""
     try:
         response_data = _calculate_nodes_response(payload)
         if response_data['summary_prompt']:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_nodes(request, payload)
+            summary_prompt = prompts.summary_prompt(
+                "mondknoten", response_data['summary_prompt'], role_name
+            )
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(
-                response_data['summary_prompt'],
+                summary_prompt,
                 NODES_SYSTEM_PROMPT,
             )
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:nodes')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='nodes')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -329,10 +318,10 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
         raise HTTPException(status_code=400, detail=f"Error calculating lunar nodes: {str(e)}")
 
     async def event_stream():
-        if not response_data['summary_prompt']:
+        if not summary_prompt:
             meta_payload = {key: value for key, value in response_data.items() if key != 'summary_prompt'}
             yield _sse_event("meta", meta_payload)
-            yield _sse_event("done", {"summary": ""})
+            yield missing_chart_data_event("nodes")
             return
 
         summary_parts = []
@@ -351,7 +340,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
                             user_id=user['id'],
                             interpretation_id=getattr(payload, 'interpretation_id', None),
                             user_question=getattr(payload, 'additional_question', None) or "",
-                            query_content=response_data['summary_prompt'] or "",
+                            query_content=summary_prompt or "",
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="nodes",
@@ -373,7 +362,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
 
         try:
             async for chunk in provider.stream_completion(
-                summary=response_data['summary_prompt'],
+                summary=summary_prompt,
                 system_prompt=NODES_SYSTEM_PROMPT,
             ):
                 summary_parts.append(chunk)
@@ -384,7 +373,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
                     logger.debug("No streamed chunks received, invoking synchronous fallback for nodes")
                     text = await asyncio.to_thread(
                         provider.chat_completion,
-                        response_data['summary_prompt'],
+                        summary_prompt,
                         NODES_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
@@ -395,7 +384,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
             full_summary = "".join(summary_parts)
             logger.debug("Assembled full nodes summary, length=%d", len(full_summary))
             try:
-                provider.cache_result(response_data['summary_prompt'], NODES_SYSTEM_PROMPT, full_summary)
+                provider.cache_result(summary_prompt, NODES_SYSTEM_PROMPT, full_summary)
                 logger.debug("Wrote full nodes summary to cache")
             except Exception:
                 logger.exception("Failed to set cache for nodes")
@@ -409,7 +398,7 @@ async def get_nodes_stream(payload: DateTimeRequest, request: Request):
                         user_id=user['id'],
                         interpretation_id=getattr(payload, 'interpretation_id', None),
                         user_question=getattr(payload, 'additional_question', None) or "",
-                        query_content=response_data['summary_prompt'] or "",
+                        query_content=summary_prompt or "",
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="nodes",

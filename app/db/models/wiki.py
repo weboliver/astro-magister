@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, func, text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import relationship
 
 from app.db.session import Base
@@ -55,8 +55,23 @@ class Entry(Base):
     entry_generate = Column(Boolean)
     entry_active = Column(Boolean, nullable=False, default=True, server_default=text('true'))
     entry_published = Column(Date)
+    # Article cover selection (Phase 39): glyph key plus two preset hex values. There is
+    # no hash column — the file name is derived on every read (D-07).
+    cover_glyph = Column(String(32))
+    cover_bg = Column(String(7))
+    cover_fg = Column(String(7))
+    # Homepage curation (HOME-04): the flag survives unpublishing (D-11), the order is
+    # stored densely as 1..n (D-09).
+    home_featured = Column(Boolean, nullable=False, default=False, server_default=text('false'))
+    home_order = Column(Integer)
     created = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # The name must match the index created by migration 20261101_cover_home, otherwise
+    # Base.metadata.create_all() would add a second, differently named index.
+    __table_args__ = (
+        Index('ix_entries_home_curated', 'home_featured', 'home_order'),
+    )
 
     def regenerate_slug(self):
         import re

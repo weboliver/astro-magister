@@ -1,15 +1,20 @@
+# BEGIN canonical-redirect -- Produktions-Redirect (Apex -> kanonischer Host).
+# Der Entrypoint entfernt diesen Block bei DEBUG=true, damit lokale Hosts
+# (z. B. astro-magister.local) nicht auf die Produktionsdomain umgeleitet werden.
+# Ziele kommen aus NGINX_CANONICAL_SOURCES / NGINX_CANONICAL_HOST (.env).
 server {
     listen 80;
-    server_name astro-magister.de;
+    server_name __CANONICAL_SOURCES__;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
 
     location / {
-        return 301 https://www.astro-magister.de$request_uri;
+        return 301 https://__CANONICAL_HOST__$request_uri;
     }
 }
+# END canonical-redirect
 
 server {
     listen 80;
@@ -26,14 +31,16 @@ server {
     }
 }
 
+# BEGIN canonical-redirect -- siehe HTTP-Block oben (im DEBUG-Modus entfernt).
 server {
     listen 443 ssl;
     http2 on;
-    server_name astro-magister.de;
+    server_name __CANONICAL_SOURCES__;
     ssl_certificate __SSL_CERT_PATH__;
     ssl_certificate_key __SSL_KEY_PATH__;
-    return 301 https://www.astro-magister.de$request_uri;
+    return 301 https://__CANONICAL_HOST__$request_uri;
 }
+# END canonical-redirect
 
 server {
     listen 443 ssl;
@@ -50,23 +57,88 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
 
+    # Phase 47 (HDR-01..03): Die DREI Neben-Server dieser Datei sind eigene Server-Kontexte und
+    # erben den Header-Satz des Haupt-Blocks NICHT — bewusst ausgenommen, nicht vergessen:
+    # nginx vererbt `add_header` nur INNERHALB eines server-Blocks, ein eigener Block startet mit
+    # einer leeren Header-Menge. Betroffen sind der canonical-redirect-Server (`listen 80`,
+    # __CANONICAL_SOURCES__), der reine HTTP-Redirect (`listen 80`, __SERVER_NAME__) und der
+    # HTTPS-canonical-Server (`listen 443 ssl`, __CANONICAL_SOURCES__). Die Begruendung traegt fuer
+    # alle drei: sie antworten ausschliesslich mit einem `return 301` — ein bodyloser Redirect ohne
+    # ausgeliefertes Dokument, dessen Inline-Skripte einen Nonce braeuchten.
+    # Der TLS-Unterschied wird ausdruecklich benannt: der HTTPS-canonical-Server hoert auf
+    # `listen 443 ssl` — dort IST TLS vorhanden, ein HSTS-Header waere also NICHT nutzlos. Er traegt
+    # ihn trotzdem nicht, weil der Satz an genau EINER Stelle gepflegt wird (diesem Haupt-Block,
+    # D-09 "eine Wahrheit pro Eigenschaft") und der Neben-Server nur einen bodylosen 301 liefert.
+    # Die Begruendung "HSTS auf einem 301 ohne TLS waere nutzlos" gilt ausschliesslich fuer die
+    # beiden `listen 80`-Bloecke und wird fuer den `listen 443 ssl`-Block NICHT behauptet.
+
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    location /api/ {
-        include /etc/nginx/includes/geoip2-api-guard.conf;
-        limit_req zone=api burst=20 nodelay;
+    # Suchmaschinen-Sichtbarkeit (SEO-06, D-01/D-02). Der Wert kommt aus der einen `map` in
+    # docker/nginx.conf. Er wird hier per `set` EINGEFROREN, weil `add_header` erst im
+    # Header-Filter ausgewertet wird — nach `try_files`, das $uri inzwischen auf den
+    # Dateipfad umgeschrieben hat (/astro-wiki/ -> /index.html, /astro-wiki/x/ -> /x/index.html).
+    # Eine direkt in `add_header` gelesene $uri-Map lieferte dem ganzen Wiki `noindex`.
+    set $robots_header $robots_tag;
+    add_header X-Robots-Tag $robots_header always;
+
+    # Phase 47 / HDR-01..03 / D-09: EINE Policy pro Template. Der Nonce ist $request_id —
+    # nginx erzeugt ihn pro Request, deshalb ist er zwischen Header und Body zeichengleich
+    # (gemessen: Header-Nonce == Body-Nonce). Die Policy wird im Enforce-Modus ausgeliefert
+    # (keine nur meldende Variante) und ist damit sofort scharf.
+    # 'self' deckt nach CSP3 auch die wss:-Variante des eigenen Origins — der Vite-HMR-WebSocket
+    # oeffnet unter dieser Policy ohne Verstoss (gemessen), deshalb KEIN WebSocket-Schema in
+    # connect-src. Permissions-Policy ist die breite Sperrliste aus D-05 (13 Features); ein neues
+    # Feature muss sie bewusst erweitern.
+    set $csp "default-src 'self'; script-src 'self' 'nonce-$request_id' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none';";
+    add_header Content-Security-Policy $csp always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+    add_header X-Frame-Options "DENY" always;
+
+    # Phase 47 / D-01: derselbe Nonce in JEDES <script>-Tag der HTML-Antwort. sub_filter wird von
+    # der Server-Ebene in alle HTML-Locations vererbt (auch in solche mit eigener add_header —
+    # die beiden Vererbungen sind unabhaengig, gemessen).
+    # `sub_filter_once off` ist Pflicht: mit dem Default `on` ersetzt nginx nur den ERSTEN Treffer
+    # (gemessen: 1 von 4 Wiki-Tags bekam den Nonce).
+    # `sub_filter` setzt nur auf UNKOMPRIMIERTEN Bodies — kaeme `gzip on;` in den http-Kontext,
+    # braeuchte es `gunzip on;` + `proxy_set_header Accept-Encoding "";`. Heute komprimiert nichts
+    # (gemessen), deshalb steht keine der beiden Zeilen hier.
+    # Das Muster ist textbasiert, nicht HTML-bewusst: ein "<script" im Fliesstext bekaeme ebenfalls
+    # ein nonce-Attribut (im Wiki-Build tritt das heute nicht auf). Der JSON-LD-Block traegt den
+    # Nonce mit, wird aber nicht ausgefuehrt — unkritisch.
+    # IN-11 (nachgemessen): derselbe Punkt als Betriebsregel — `sub_filter` steht auf SERVER-Ebene
+    # und vergibt den Nonce an JEDES "<script" in JEDER text/html-Antwort dieses Servers, auch an
+    # ein reflektiertes. Deshalb gilt: KEINE reflektierten Nutzerdaten in einer text/html-Antwort
+    # ausliefern — eine reflektierte Zeichenfolge "<script" bekaeme sonst automatisch einen
+    # GUELTIGEN Nonce und waere damit ausfuehrbar, die Policy wuerde genau dort stumpf, wofuer sie
+    # existiert. Heute ist die Eigenschaft latent: HTML kommt ausschliesslich aus dem statischen
+    # Wiki- bzw. SPA-Build (die API liefert nie text/html — docs_url/redoc_url/openapi_url sind
+    # None), und `proxy_buffering off` in `location ^~ /api/` laesst sub_filter dort nicht greifen.
+    # `sub_filter_types` steht hier bewusst NICHT: `text/html` ist der Default der Direktive, die
+    # explizite Zeile war ein No-op — und sie erzeugte beim Start die harmlose Warnung
+    # `duplicate MIME type "text/html"` (IN-12). Eine abweichende Typenliste, die geerbt werden
+    # muesste, existiert nicht (der http-Kontext in docker/nginx.conf setzt keine).
+    sub_filter_once off;
+    sub_filter '<script' '<script nonce="$request_id"';
+
+    # The ^~ modifier locks the API namespace against future regex locations.
+    # It is functionally inert today (the only regex location matches /astro-wiki/),
+    # so keep it: it is required by the Phase 37 roadmap constraint. Do not "clean up".
+    # Do NOT add any response-header directive here: this location inherits the COMPLETE
+    # server-level set since Phase 47 (HSTS, X-Robots-Tag and the security set). A single own
+    # add_header line would delete that whole inherited set (nginx replaces it, it does not merge).
+    location ^~ /api/ {
+        limit_req zone=api burst=50 nodelay;
         rewrite ^/api/(.*)$ /$1 break;
         proxy_pass http://api:8000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /theme/ {
-        proxy_pass http://api:8000;
-        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -83,8 +155,25 @@ server {
     }
 
     # Astro wiki index (overview page) — /astro-wiki/ → dist/index.html
+    # Phase 47 (D-02/D-08, HDR-02): HTML documents get `Cache-Control: private, no-cache` — the
+    # nonce is single-use, so the browser must revalidate and get a fresh one. That line makes
+    # this location one WITH an own add_header, which drops the whole server set; the set is
+    # therefore repeated completely (seven lines: security set + X-Robots-Tag + HSTS).
+    # `etag off` + `if_modified_since off` close the 304 trap: sub_filter strips the validators
+    # from the 200 answer, but nginx would still answer a conditional request with 304 and a
+    # FRESH nonce while the browser keeps the OLD body (measured: 3 blocked scripts, white page).
     location = /astro-wiki/ {
         root /workspace/app/wiki/dist;
+        etag off;
+        if_modified_since off;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "private, no-cache" always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files /index.html =500;
     }
 
@@ -93,43 +182,177 @@ server {
         return 301 https://$host/astro-wiki/;
     }
 
-    # Astro wiki static pages
+    # D-24: /astro-wiki/<slug> ohne Schraegstrich -> mit Schraegstrich (301). Das Ziel ist ein
+    # fester Pfad; $host erscheint ausschliesslich als Host-Anteil, $request_uri nie als Ziel
+    # (sonst waere es ein Open Redirect). Die Query bleibt ueber $is_args$args erhalten.
+    # Der Regex trifft /astro-wiki/_astro/... nicht (weitere Schraegstriche) und wird von den
+    # exakten =-Locations (/astro-wiki/, /astro-wiki/impressum/ …) ueberstimmt.
+    location ~ ^/astro-wiki/([^/]+)$ {
+        return 301 https://$host/astro-wiki/$1/$is_args$args;
+    }
+
+    # D-25: /houses -> / (301). Der clientseitige <Navigate replace> in
+    # app/frontend/src/routes.jsx:192 bleibt als zweite Verteidigungslinie stehen.
+    location = /houses {
+        return 301 https://$host/;
+    }
+
+    # Astro wiki static pages. Phase 47: same HTML treatment as the index above — repeated full
+    # set, `private, no-cache` and the 304 guard (short form of the reasoning at /astro-wiki/).
     location = /astro-wiki/impressum/ {
         root /workspace/app/wiki/dist;
+        etag off;
+        if_modified_since off;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "private, no-cache" always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files /impressum/index.html =404;
     }
     location = /astro-wiki/datenschutz/ {
         root /workspace/app/wiki/dist;
+        etag off;
+        if_modified_since off;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "private, no-cache" always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files /datenschutz/index.html =404;
     }
     location = /astro-wiki/kontakt/ {
         root /workspace/app/wiki/dist;
+        etag off;
+        if_modified_since off;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "private, no-cache" always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files /kontakt/index.html =404;
     }
 
     # Astro wiki entries — /astro-wiki/{slug}/ → dist/wiki/{slug}/index.html
+    # Phase 47: same HTML treatment (repeated set, `private, no-cache`, 304 guard).
     location ~ ^/astro-wiki/([^/]+)/$ {
         root /workspace/app/wiki/dist/wiki;
+        etag off;
+        if_modified_since off;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "private, no-cache" always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files /$1/index.html =404;
     }
 
+    # D-02: `add_header` in einer Location ersetzt die geerbte Menge vollstaendig — die
+    # Server-Header (HSTS, X-Robots-Tag, Sicherheitssatz) verschwinden hier also, sobald diese
+    # Location eine eigene add_header-Zeile hat. HSTS wird aus genau diesem Grund seit Phase 39
+    # wiederholt, X-Robots-Tag folgt demselben Muster (SEO-06); seit Phase 47 (HDR-02/D-08)
+    # wiederholt der Block den VOLLEN Satz — sieben Zeilen in diesem Template (Sicherheitssatz +
+    # X-Robots-Tag + HSTS), gemessen fehlte HSTS hier vorher ganz. Cache-Control bleibt bewusst
+    # ohne `always`: ein 404 soll nicht als immutable gepinnt werden.
+    # Phase 47 (WR-04, D-09): Cache-Control kommt aus GENAU EINER Zeile. Das fruehere
+    # `expires 1y;` emittierte zusaetzlich `Cache-Control: max-age=31536000`, sodass zwei
+    # Cache-Control-Header mit unterschiedlichen Direktiven auf denselben Antworten standen
+    # (gemessen; laut RFC 9111 nicht deterministisch auswertbar). Die `add_header`-Zeile traegt
+    # jetzt den vollstaendigen Wert (public, max-age, immutable) — kein `expires` mehr.
     location /_astro {
         alias /workspace/app/wiki/dist/_astro;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
     location /astro-wiki/_astro {
         alias /workspace/app/wiki/dist/_astro;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
-    # SPA (Vite dev server)
+    # Article covers (Phase 39): content-addressed WebP files under app/static/wiki-covers.
+    # This location declares add_header, so the server-level headers are no longer
+    # inherited — HSTS is therefore repeated here and in the named miss location (SEO-06).
+    # Since Phase 47 (HDR-02/D-08) the block repeats the COMPLETE set — seven lines in this
+    # template (security set + X-Robots-Tag + HSTS); nosniff is kept once, not duplicated.
+    # Cache-Control is deliberately set *without* `always`: nginx then attaches it only to
+    # 2xx/3xx answers, so a 404 (unknown hash) or a 5xx from the API is not pinned as
+    # immutable for a year by browsers and Cloudflare. No `expires` either (Phase 47, WR-04):
+    # `expires` would emit a second Cache-Control header; the add_header value above is the
+    # one truth for this property (D-09) — same in /_astro and /astro-wiki/_astro.
+    location /static/wiki-covers/ {
+        root /workspace/app;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        try_files $uri @cover_miss;
+    }
+
+    # Render-on-miss: the file was missing, the API renders it, writes it and answers.
+    # proxy_pass without a URI keeps /static/wiki-covers/<hash>.webp intact.
+    # Named locations do not inherit add_header either (measured) — the full set is repeated.
+    location @cover_miss {
+        limit_req zone=api burst=50 nodelay;
+        proxy_pass http://api:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    }
+
+    # SPA (Vite dev server). Phase 47 (D-02/R-01): this is a CATCH-ALL proxy — it serves the
+    # HTML documents AND every Vite module / hashed bundle. So `private, no-cache` must hang on
+    # the RESPONSE type (map $sent_http_content_type) and the suppressed conditional request on
+    # the REQUEST type (map $http_accept) — not on the location. A location-wide
+    # suppression would make every module and bundle un-revalidatable (full re-transfer on each
+    # navigation, and Cloudflare no longer caches `private`).
+    # 304 trap: the Upstream decides about 304 here, `etag off` does not help; the conditional
+    # request is therefore suppressed for document navigations only (measured elsewhere: a 304
+    # with a fresh nonce on an old body blocks 3 inline scripts).
+    # `proxy_hide_header Cache-Control` guarantees exactly one Cache-Control header per answer.
     location / {
-        include /etc/nginx/includes/geoip2-api-guard.conf;
         proxy_pass http://frontend:5173;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -138,12 +361,33 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header If-None-Match $spa_if_none_match;
+        proxy_set_header If-Modified-Since $spa_if_modified_since;
+        proxy_hide_header Cache-Control;
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Cache-Control $spa_cache_control always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     }
 
-    # 429 Handler
+    # 429 Handler. Phase 47 (HDR-02/D-08): the error response must carry the whole set too —
+    # `add_header` without `always` only applies to 2xx/3xx, so a 429 would go out without any
+    # security header (measured today: only `retry-after`). X-Robots-Tag is repeated as well,
+    # because the block replaces the inherited set completely.
     location @ratelimited {
         default_type application/json;
         return 429 '{"error": "Rate limit exceeded", "retry_after": 60}';
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), serial=(), hid=(), bluetooth=(), interest-cohort=()" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Robots-Tag $robots_header always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header Retry-After 60 always;
     }
 }

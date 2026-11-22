@@ -1,17 +1,26 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { get } from '../services/api'
 
 /**
- * WikiPageShortcut - Displays a button to navigate to a wiki page if it exists
+ * WikiPageShortcut - Button zum passenden Wiki-Eintrag, wenn es ihn gibt
  * @component
+ * @description Die Existenzprüfung läuft weiter über `page-entries`; der Button bleibt ein
+ *              `<button>`, weil das Prüfen keine Navigation ist. Der Klick navigiert aber echt auf
+ *              `/wiki/<slug>` statt ein Custom-Event zu senden; Einträge ohne Slug (nullable)
+ *              fallen auf `/wiki?artikel=<id>` zurück, statt den Button zu verlieren. `originPage`
+ *              und `originLabel` bleiben im Prop-Vertrag (Aufrufer in `InterpretationPage.jsx`),
+ *              tragen aber keinen Navigationszustand mehr — der steckt jetzt in der Adresse.
  * @param {Object} props - Component props
  * @param {string} props.pageName - Name of the wiki page to check and navigate to
- * @param {string} [props.originPage=''] - Origin page name for tracking navigation context
- * @param {string} [props.originLabel=''] - Origin label for display purposes
+ * @param {string} [props.originPage=''] - Origin page name (Vertrag bleibt, ungenutzt)
+ * @param {string} [props.originLabel=''] - Origin label (Vertrag bleibt, ungenutzt)
  * @returns {JSX.Element|null} Button to navigate to wiki page, or null if page doesn't exist
  */
-export default function WikiPageShortcut({ pageName, originPage = '', originLabel = '' }){
-  const [visible, setVisible] = useState(false)
+export default function WikiPageShortcut({ pageName }){
+  const navigate = useNavigate()
+  // Ziel des Sprungs: Slug, wenn vorhanden; sonst die ID (Slug ist in der DB nullable).
+  const [target, setTarget] = useState({ slug: '', entryId: 0 })
 
   useEffect(() => {
     let active = true
@@ -19,7 +28,7 @@ export default function WikiPageShortcut({ pageName, originPage = '', originLabe
     async function checkLink(){
       const normalizedPageName = String(pageName || '').trim()
       if (!normalizedPageName) {
-        if (active) setVisible(false)
+        if (active) setTarget({ slug: '', entryId: 0 })
         return
       }
 
@@ -28,9 +37,16 @@ export default function WikiPageShortcut({ pageName, originPage = '', originLabe
         const resp = await get(`/wiki/page-entries?${params.toString()}`)
         if (!resp.ok) throw new Error('Link nicht verfügbar')
         const data = await resp.json()
-        if (active) setVisible(Array.isArray(data) && data.length > 0)
+        if (!active) return
+        // Der erste Treffer ist das Navigationsziel: `/wiki/:slug`, ohne Slug `/wiki?artikel=<id>`.
+        const first = Array.isArray(data) ? data[0] : null
+        const entryId = Number(first?.entry_id)
+        setTarget({
+          slug: String(first?.slug || ''),
+          entryId: Number.isInteger(entryId) && entryId > 0 ? entryId : 0,
+        })
       }catch(_){
-        if (active) setVisible(false)
+        if (active) setTarget({ slug: '', entryId: 0 })
       }
     }
 
@@ -40,21 +56,13 @@ export default function WikiPageShortcut({ pageName, originPage = '', originLabe
     }
   }, [pageName])
 
-  if (!visible) return null
+  const { slug, entryId } = target
+  if (!slug && !entryId) return null
 
   return (
     <button
       type="button"
-      onClick={() => window.dispatchEvent(new CustomEvent('astronexNavigate', {
-        detail: {
-          page: 'wiki',
-          state: {
-            directPageName: pageName,
-            directOriginPage: originPage,
-            directOriginLabel: originLabel,
-          },
-        },
-      }))}
+      onClick={() => navigate(slug ? '/wiki/' + encodeURIComponent(slug) : '/wiki?artikel=' + entryId)}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -70,10 +78,11 @@ export default function WikiPageShortcut({ pageName, originPage = '', originLabe
         lineHeight: 1,
         boxShadow: 'var(--admin-shadow)',
       }}
-      title={`Wiki-Eintrag für ${pageName} öffnen`}
-      aria-label={`Wiki-Eintrag für ${pageName} öffnen`}
+      title={`Erläuterung zu ${pageName} öffnen`}
+      aria-label={`Erläuterung zu ${pageName} öffnen`}
     >
-      <span>Wiki</span>
+      {/* „Erläuterung" statt „Wiki": das Ziel ist eine Seiten-Erläuterung, kein Wiki-Artikel. */}
+      <span>Erläuterung</span>
       <span style={{ fontSize: 24, lineHeight: 1, fontWeight: 800 }}>→</span>
     </button>
   )

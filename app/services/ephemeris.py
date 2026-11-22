@@ -10,6 +10,7 @@ from pysw import (
     delta,
     fixstar,
     setpath,
+    clear_calc_cache,
 )
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "delta",
     "fixstar",
     "setpath",
+    "clear_calc_cache",
 ]
 
 
@@ -40,6 +42,10 @@ try:
         if c.exists() and c.is_dir():
             try:
                 setpath(str(c))
+                # G-50-01: the calculation cache is keyed on (jd, planet, epheflag) only —
+                # the path is not part of it and failures are cached too. Every path change
+                # therefore has to discard the cache, here right after the import-time setpath.
+                clear_calc_cache()
                 break
             except Exception as e:
                 logger.debug(f"Failed to set Swiss Ephemeris path to {c}: {e}")

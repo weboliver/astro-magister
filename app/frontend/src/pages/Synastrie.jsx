@@ -67,6 +67,23 @@ export default function Synastrie() {
     }
   }, [selectedPersonA, selectedPersonB, comparisonMode, profile])
 
+  // Eigener, schlanker Payload für das Chart-Daten-Kästchen (CHART-01): der Endpunkt liest die
+  // Geburtsdaten selbst aus `user_persons`. Der Modus gehört dazu, damit ein Wechsel zwischen
+  // Häuser- und Radixvergleich den Kasten schließt (D-06).
+  const synastryChartDataPayload = useMemo(() => ({
+    person_a_id: selectedPersonA?.id ?? null,
+    person_b_id: selectedPersonB?.id ?? null,
+    comparison_mode: comparisonMode,
+    person_a_name: currentPayload.person_a_name,
+    person_b_name: currentPayload.person_b_name,
+  }), [
+    selectedPersonA?.id,
+    selectedPersonB?.id,
+    comparisonMode,
+    currentPayload.person_a_name,
+    currentPayload.person_b_name,
+  ])
+
   useEffect(() => {
     if (selectedPersonA?.id && selectedPersonB?.id && selectedPersonA.id === selectedPersonB.id) {
       setSamePersonWarning(true)
@@ -120,6 +137,11 @@ export default function Synastrie() {
       setShowSummary(false)
       setFollowups([])
       setCurrentFollowup('')
+      // Ein Wechsel von Person oder Vergleichsmodus beginnt eine neue Auswertung. Ohne diesen
+      // Reset blieb activeInterpretationId gesetzt und der nächste Klick lief als Folgefrage
+      // (ohne Frage: Abbruch) — sichtbar blieb die alte Antwort.
+      setActiveInterpretationId(null)
+      setCachedSummary('')
     }
     try { if (previousUrl) URL.revokeObjectURL(previousUrl) } catch (_) { }
   }, [selectedPersonA?.id, selectedPersonB?.id, comparisonMode, profile?.id])
@@ -330,10 +352,12 @@ export default function Synastrie() {
       hidePersonSelector
       interpretDisabled={(!selectedPersonA && !profile?.birth_year) || (!selectedPersonB && !profile?.birth_year) || samePersonWarning}
       chartMarginTop={-285}
+      chartType="synastry"
+      chartDataPayload={synastryChartDataPayload}
       state={state}
     >
       <PersonSelector label="Person A" helperText="Erste Person für den Vergleich wählen" index="A" labelColor="#1a56db" />
-      <PersonSelector label="Person B" helperText="Zweite Person für den Vergleich wählen" index="B" labelColor="#9b1b30" excludeUserPersonId={profile?.id} hideOwnProfile />
+      <PersonSelector label="Person B" helperText="Zweite Person für den Vergleich wählen" index="B" labelColor="#9b1b30" hideOwnProfile />
       <SynastrieControls
         comparisonMode={comparisonMode}
         onComparisonModeChange={setComparisonMode}

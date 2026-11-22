@@ -24,6 +24,33 @@ def sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+# Text für den Fall, dass die Chartdaten für die KI nicht aufbereitet werden konnten.
+# Vorher endete der Stream dann mit `done` und leerer summary: der Nutzer sah die
+# Grafik, aber keine Interpretation und keinen Hinweis. Es wird in diesem Fall auch
+# keine Session gespeichert — Zusatzfragen ohne Chartdaten entstehen also nicht.
+MISSING_CHART_DATA_DETAIL = (
+    "Die Horoskopdaten für die KI-Auswertung konnten nicht aufbereitet werden. "
+    "Es wurde keine Interpretation erstellt und nichts gespeichert. "
+    "Bitte versuchen Sie es erneut; bleibt der Fehler bestehen, wenden Sie sich an den Support."
+)
+
+
+def missing_chart_data_event(context_type: str) -> str:
+    """SSE-`error`-Event für einen leeren Daten-Prompt — statt eines stillen `done` mit leerer summary.
+
+    Das Frontend (`streamInterpret`) wirft bei `error` und zeigt den Text über `onError` an;
+    das vorher gesendete `meta`-Event (Chart/Grafik) bleibt davon unberührt.
+
+    Args:
+        context_type: Auswertungsart für das Log (z. B. "horoscope").
+
+    Returns:
+        Formatiertes SSE-`error`-Event mit :data:`MISSING_CHART_DATA_DETAIL`.
+    """
+    logger.warning("Kein Daten-Prompt für die KI-Auswertung (context=%s) — error-Event statt leerer summary", context_type)
+    return sse_event("error", {"detail": MISSING_CHART_DATA_DETAIL})
+
+
 async def sse_stream_ai_interpretation(
     provider: "ChatProvider",
     summary_prompt: str,
@@ -59,7 +86,7 @@ async def sse_stream_ai_interpretation(
 
     if not summary_prompt:
         yield sse_event("meta", meta_fields)
-        yield sse_event("done", {"summary": ""})
+        yield missing_chart_data_event(context_type)
         return
 
     yield sse_event("meta", meta_fields)

@@ -4,6 +4,7 @@ import json
 import logging
 from app.services.ephemeris import julday, calc_ut, houses
 
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 from app import config as app_config
 from app.schemas.datetime_models import DateTimeRequest
@@ -22,7 +23,7 @@ from app.db.session import get_session
 from app.services import interpretation_store as _istore
 from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 from app.static.aspect_names import get_aspect_english_by_index
-from app.static.texte import get_general_anweisung
+from app.services import prompts
 from app.static.zodiac_names import get_zodiac_name
 import astronex.chart as chart_module
 from astronex.chart import Chart
@@ -262,7 +263,11 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
                 house_text = f"{house} ({house_deg})"
             else:
                 house_text = str(house)
-            if sign:
+            if not cusp_parts:
+                # Ohne Häuser (z. B. Polarbreite) kein "in house unknown" — die KI soll
+                # keine Hausstellung deuten, die es nicht gibt.
+                planet_parts.append(f"{pname} ({sign} {sign_deg})" if sign else str(pname))
+            elif sign:
                 planet_parts.append(f"{pname} in house {house_text} ({sign} {sign_deg})")
             else:
                 planet_parts.append(f"{pname} in house {house_text}")
@@ -280,17 +285,21 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
                 n2 = str(p2)
             aspect_parts.append(f"{n1} to {n2} / {label}")
 
-        summary_prompt = f"Huber Astrologische Psychologie.\n\nInterpretiere Horoskop: {birth} folgendermaßen.\n\n"
+        # Planeten und Aspekte hängen nicht an den Häusern: sie gehen immer mit. Früher
+        # standen sie im `if cusp_parts`-Block — lieferte die Häuserberechnung nichts
+        # (Polarbreiten: `houses()` gibt None), bekam die KI nur das Geburtsdatum.
+        summary_prompt = f"Geburtsdatum: {birth}\n"
         if cusp_parts:
-            summary_prompt += "Erstelle ein Liste aller Häuserspitzen mit Erklärung:\n\n"
-            summary_prompt += "; ".join(cusp_parts) + "\n\n"
-            summary_prompt += "Erstelle eine Liste aller Planeten im Haus mit Erklärung:\n\n"
-            summary_prompt += "; ".join(planet_parts)
-            summary_prompt += ".\n\nErstelle eine Liste aller Aspekte mit Erklärung:\n\n"
-            summary_prompt += "; ".join(aspect_parts)
-            summary_prompt += "\n\nErstelle eine Themenachsen Bündelung bzgl. der Häuserspitzen."
-            summary_prompt += "\n\n" + get_general_anweisung()
+            summary_prompt += "\nHäuserspitzen:\n" + "; ".join(cusp_parts) + "\n"
+        else:
+            summary_prompt += (
+                "\nHäuserspitzen: für diesen Geburtsort nicht berechenbar "
+                "(z. B. Polarbreite) — keine Häuser- und Hausstellungsdeutung.\n"
+            )
+        summary_prompt += "\nPlaneten:\n" + "; ".join(planet_parts) + "\n"
+        summary_prompt += "\nAspekte:\n" + "; ".join(aspect_parts) + "\n"
     except Exception:
+        logger.exception("Daten-Prompt für die Horoskop-Auswertung konnte nicht gebaut werden")
         summary_prompt = ""
 
     planet_models = []
@@ -327,7 +336,7 @@ def _build_horoscope_response_data(request: DateTimeRequest) -> dict:
         'planets': planet_models,
         'houses': list(houses_list) if houses_list else [None] * 12,
         'aspects': aspects,
-        'summary_prompt': append_additional_question(summary_prompt, getattr(request, 'additional_question', None)),
+        'summary_prompt': summary_prompt,
     }
 
 
@@ -358,15 +367,21 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
                     status_code=403,
                     detail='KI-Interpretation ist Mitgliedern mit Spenderstatus vorbehalten. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic',
                 )
+            summary_prompt = prompts.summary_prompt(
+                "horoskop", response_data['summary_prompt'], role_name
+            )
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(
-                summary=response_data['summary_prompt'],
+                summary=summary_prompt,
                 system_prompt="horoskop",
             )
             if cached_summary is not None:
                 summary = cached_summary
             else:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:horoscope')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='horoscope')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -383,7 +398,7 @@ def get_horoscope(payload: DateTimeRequest, request: Request):
                         headers={'Retry-After': str(rate_limit.retry_after_seconds)},
                     )
                 summary = provider.chat_completion(
-                    summary=response_data['summary_prompt'],
+                    summary=summary_prompt,
                     system_prompt="horoskop",
                 )
 
@@ -431,18 +446,25 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
     """
     cached_summary = None
     provider = None
+    summary_prompt = ""
     try:
         response_data = _build_horoscope_response_data(payload)
         if response_data['summary_prompt']:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_horoscope(request, payload)
+            summary_prompt = prompts.summary_prompt(
+                "horoskop", response_data['summary_prompt'], role_name
+            )
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(
-                summary=response_data['summary_prompt'],
+                summary=summary_prompt,
                 system_prompt=HOROSCOPE_SYSTEM_PROMPT,
             )
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:horoscope')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='horoscope')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -465,10 +487,10 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
         raise HTTPException(status_code=400, detail=f"Error calculating horoscope: {str(e)}")
 
     async def event_stream():
-        if not response_data['summary_prompt']:
+        if not summary_prompt:
             meta_payload = {key: value for key, value in response_data.items() if key != 'summary_prompt'}
             yield _sse_event("meta", meta_payload)
-            yield _sse_event("done", {"summary": ""})
+            yield missing_chart_data_event("horoscope")
             return
 
         summary_parts = []
@@ -487,7 +509,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                             user_id=user['id'],
                             interpretation_id=getattr(payload, 'interpretation_id', None),
                             user_question=getattr(payload, 'additional_question', None) or "",
-                            query_content=response_data['summary_prompt'] or "",
+                            query_content=summary_prompt or "",
                             assistant_content=cached_summary,
                             user_persons_id=getattr(payload, 'person_id', None),
                             context_type="horoscope",
@@ -509,7 +531,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
 
         try:
             async for chunk in provider.stream_completion(
-                summary=response_data['summary_prompt'],
+                summary=summary_prompt,
                 system_prompt=HOROSCOPE_SYSTEM_PROMPT,
             ):
                 summary_parts.append(chunk)
@@ -521,7 +543,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                     logger.debug("No streamed chunks received, invoking synchronous fallback")
                     text = await asyncio.to_thread(
                         provider.chat_completion,
-                        response_data['summary_prompt'],
+                        summary_prompt,
                         HOROSCOPE_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
@@ -532,7 +554,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
             full_summary = "".join(summary_parts)
             logger.debug("Assembled full summary, length=%d", len(full_summary))
             try:
-                provider.cache_result(response_data['summary_prompt'], HOROSCOPE_SYSTEM_PROMPT, full_summary)
+                provider.cache_result(summary_prompt, HOROSCOPE_SYSTEM_PROMPT, full_summary)
                 logger.debug("Wrote full summary to cache")
             except Exception:
                 logger.exception("Failed to set cache")
@@ -546,7 +568,7 @@ async def get_horoscope_stream(payload: DateTimeRequest, request: Request):
                         user_id=user['id'],
                         interpretation_id=getattr(payload, 'interpretation_id', None),
                         user_question=getattr(payload, 'additional_question', None) or "",
-                        query_content=response_data['summary_prompt'] or "",
+                        query_content=summary_prompt or "",
                         assistant_content=full_summary,
                         user_persons_id=getattr(payload, 'person_id', None),
                         context_type="horoscope",

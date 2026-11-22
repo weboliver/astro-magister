@@ -5,10 +5,10 @@ import json
 import logging
 from app.services.ephemeris import julday, houses
 from app.services.horoscope_graphics import build_chart_from_request, draw_chart_png
-from app.static.texte import get_general_anweisung
 from app.static.zodiac_names import get_zodiac_name
 from app.schemas.datetime_models import DateTimeRequest, HousesResponse
 from pytz import timezone as pytz_timezone
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
@@ -19,6 +19,7 @@ from app.services import interpretation_store as _istore
 from app.schemas.interpretations import InterpretationCreate, MessageCreate as InterpMessageCreate
 
 router = APIRouter(tags=["houses"], dependencies=[Depends(require_authenticated_user)])
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 
 HOUSES_SYSTEM_PROMPT = "houses"
@@ -110,9 +111,7 @@ def _build_houses_response(request: DateTimeRequest) -> HousesResponse:
         parts.append(f"{label} - {house_entry['sign']} ({house_entry['sign_degree']})")
 
     birth = f"{request.year:04d}-{request.month:02d}-{request.day:02d}"
-    summary_text = f"Huber Astrologische Psychologie.\n\nInterpretiere Häuser Horoskop: {birth}.\n\n"
-    summary_text += "Häuser:\n\n" + "\n".join(parts)
-    summary_text += "\n\n" + get_general_anweisung()
+    summary_text = f"Geburtsdatum: {birth}\n\nHäuser:\n" + "\n".join(parts)
 
     return HousesResponse(
         year=request.year,
@@ -123,7 +122,7 @@ def _build_houses_response(request: DateTimeRequest) -> HousesResponse:
         latitude=latitude,
         longitude=longitude,
         houses=house_entries,
-        summary=append_additional_question(summary_text, getattr(request, 'additional_question', None)),
+        summary=summary_text,
     )
 
 @router.post("/houses", response_model=HousesResponse)
@@ -134,7 +133,7 @@ def get_houses(request: DateTimeRequest):
         request: DateTimeRequest with birth date, time, latitude, longitude.
 
     Returns:
-        HousesResponse with house positions and AI summary.
+        HousesResponse with house positions and calculation data (no AI instruction).
 
     Raises:
         HTTPException: On calculation error.
@@ -160,17 +159,22 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
     """
     cached_summary = None
     provider = None
+    summary_prompt = ""
     try:
         result = _build_houses_response(payload)
         response_data = result.model_dump()
-        summary_prompt = response_data.pop("summary")
-        if summary_prompt:
+        summary_data = response_data.pop("summary")
+        if summary_data:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_houses(request, payload)
+            summary_prompt = prompts.summary_prompt("houses", summary_data, role_name)
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(summary_prompt, HOUSES_SYSTEM_PROMPT)
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:houses')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='houses')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -195,7 +199,7 @@ async def get_houses_stream(payload: DateTimeRequest, request: Request):
     async def event_stream():
         if not summary_prompt:
             yield _sse_event("meta", response_data)
-            yield _sse_event("done", {"summary": ""})
+            yield missing_chart_data_event("houses")
             return
 
         summary_parts = []

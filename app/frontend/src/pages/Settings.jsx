@@ -9,11 +9,13 @@
  * @hook usePersonSelection - Accesses refreshPersons function
  */
 import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
 import { post, get, put, del } from '../services/api'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.css'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
 import { useAuth } from '../contexts/AuthContext'
+import { safeNext } from '../routing/nextParam'
 
 const DEFAULT_ROLE_OPTIONS = [
   { role_id: 1, role_name: 'Laie' },
@@ -163,6 +165,11 @@ export default function Settings(){
 
   const { refreshPersons } = usePersonSelection()
   const { profile: authProfile, refreshProfile } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // `?hinweis=profil` kommt vom Guard (Profil ohne `birth_year`), `?next=` ist der Rückweg.
+  const showProfileHint = searchParams.get('hinweis') === 'profil'
+  const next = safeNext(searchParams.get('next'), '/')
   const [msg, setMsg] = useState('')
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
@@ -730,6 +737,9 @@ export default function Settings(){
     const resp = await put('/auth/profile', payload, true)
     if (!resp.ok){ setMsg('Fehler beim Speichern'); return }
     await refreshProfile()
+    // Erst wenn die Server-Session das vollständige Profil kennt, zurück auf die
+    // ursprüngliche Seite — sonst schickt der Guard sofort wieder auf /settings.
+    if (searchParams.get('next')) navigate(next, { replace: true })
     setMsg('Profil gespeichert')
     setTimeout(() => setMsg(''), 2000)
   }
@@ -872,18 +882,17 @@ export default function Settings(){
 
       <section className="admin-panel">
         <div className="admin-hero settings-hero">
-          <div>
-            <p className="admin-eyebrow">Profilverwaltung</p>
-            <h2>Profil</h2>
-            <p>
-              Pflege dein eigenes Profil, verwalte weitere Personen und halte dein Konto aktuell.
-            </p>
-          </div>
           <div className="settings-hero-meta">
             <span className="settings-hero-chip">Aktiver Bereich: {activeTabLabel}</span>
             <span className="settings-hero-chip">Personen: {persons.length} / {MAX_PERSONS}</span>
           </div>
         </div>
+
+        {showProfileHint ? (
+          <div className="admin-message" role="status" style={{marginBottom:12}}>
+            Bitte vervollständige dein Profil, um die Rechner zu nutzen.
+          </div>
+        ) : null}
 
         <div className="settings-tab-panel" style={tabPanelStyle}>
 
@@ -897,7 +906,7 @@ export default function Settings(){
                   {roles.map(role => <option key={role.role_id} value={role.role_id}>{getRoleLabel(role)}</option>)}
                 </select>
               </div>
-              <h4 style={{marginTop:0, marginBottom:0}}>Wohnort (Ort für Transite)</h4>
+              <h3 style={{marginTop:0, marginBottom:0}}>Wohnort (Ort für Transite)</h3>
               <div style={fieldWrapperStyle}>
                 <label style={labelStyle}>Land</label>
                 <select style={selectControlStyle} value={profile.residence_country || ''} 
@@ -945,7 +954,7 @@ export default function Settings(){
             </form>
           </section>
           <section className="settings-card" style={{margin:0}}>
-            <h4>Geburtstag (Ort)</h4>
+            <h3>Geburtstag (Ort)</h3>
             <form onSubmit={saveProfile} className="settings-form" style={columnFormStyle}>
               <div style={fieldWrapperStyle}>
                 <label style={labelStyle}>Datum & Uhrzeit</label>
@@ -1021,7 +1030,7 @@ export default function Settings(){
 
       {activeTab === TAB_PERSON_FORM && (
         <section className="settings-card" style={{margin:0}}>
-          <h4>{editingPersonId ? 'Person bearbeiten' : 'Weitere Person anlegen'}</h4>
+          <h3>{editingPersonId ? 'Person bearbeiten' : 'Weitere Person anlegen'}</h3>
           <div style={{width:'100%', maxWidth:SETTINGS_FORM_MAX_WIDTH}}>
             <form onSubmit={savePerson} className="settings-form" style={columnFormStyle}>
                     <div style={fieldWrapperStyle}>
@@ -1162,7 +1171,7 @@ export default function Settings(){
 
       {activeTab === TAB_PERSON_LIST && (
         <section className="settings-card" style={{margin:0}}>
-          <h4>Personen suchen</h4>
+          <h3>Personen suchen</h3>
           <div style={{display:'flex', flexDirection:'column', gap:12, maxWidth:SETTINGS_SEARCH_MAX_WIDTH}}>
             <div style={{display:'flex', flexDirection:'column', gap:4}}>
               <input
@@ -1225,7 +1234,7 @@ export default function Settings(){
 
       {activeTab === TAB_PASSWORD && (
         <section className="settings-card" style={{marginBottom:24}}>
-          <h4>Passwort ändern</h4>
+          <h3>Passwort ändern</h3>
           <form onSubmit={changePassword} className="settings-form" style={columnFormStyle}>
             <div style={fieldWrapperStyle}>
               <label style={labelStyle}>Altes Passwort</label>

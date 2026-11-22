@@ -10,7 +10,7 @@ try:
 except Exception:
     dotenv_values = None
 
-from app.services.ephemeris import setpath
+from app.services.ephemeris import setpath, clear_calc_cache
 
 EPHE_PATH: Optional[str] = None
 
@@ -135,6 +135,10 @@ def init_swisseph_path() -> None:
             # or if the path exists and is a directory (useful for project resources)
             if has_stars or (p_path.exists() and p_path.is_dir()) or p == env:
                 setpath(str(p_path))
+                # G-50-01: the retry in calculate_api_planet_entries runs only after this
+                # call; without the clear it would return the cached failure of the previous
+                # path for the same julian day (the cache key has no path component).
+                clear_calc_cache()
                 EPHE_PATH = str(p_path)
                 break
         except Exception:

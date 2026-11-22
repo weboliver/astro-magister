@@ -1,29 +1,17 @@
-body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;background:radial-gradient(circle at top right,rgba(215,239,232,.7),transparent 28%),linear-gradient(180deg,#f4efe4 0%,#fbf9f4 44%,#f4f7fb 100%);background-attachment:fixed;transition: background-color 0.6s ease}
+/* `background-attachment: scroll` (nicht `fixed`): Der Verlauf beginnt bei 0 % mit exakt der
+   Panel-Farbe (`buildBodyGradient`). Mit `fixed` liegt diese Farbe im ganzen Viewport oben, und
+   die Detail-Panels (`--admin-panel`) verschwinden darin. Dokumentgebunden bleibt die Fläche
+   oben Panel-Farbe und läuft nach unten heller — genau die Abhebung, die die Panels vorher
+   hatten (der Inline-`background`-Shorthand vor WR-01 setzte `attachment` ebenfalls auf `scroll`). */
+body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;background:var(--app-body-gradient, radial-gradient(circle at top right,rgba(215,239,232,.7),transparent 28%),linear-gradient(180deg,#f4efe4 0%,#fbf9f4 44%,#f4f7fb 100%));background-attachment:scroll;transition: background-color 0.6s ease}
 nav a{color:#fff}
 input{padding:6px;margin:6px 0;width:94%}
 button{padding:8px 12px}
 
-.app-nav-wrap{padding:0;background:linear-gradient(180deg,var(--admin-panel) 0%,var(--admin-panel) 45%,transparent 100%);max-width:1350px;margin:0 auto}
-.app-nav{background:var(--admin-accent);color:#fff;border-radius:24px;padding:14px 16px;box-shadow:var(--admin-shadow)}
-.app-nav-desktop,.app-nav-mobile-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.app-nav-group{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.app-nav-mobile-menu{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-.app-nav-link{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:999px;cursor:pointer;color:#f6fffc;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font-weight:600}
-.app-nav-link:hover,.app-nav-link:focus-visible{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);transform:translateY(-1px);outline:none}
-.app-nav-link-active{background:#fff;color:var(--admin-accent);border-color:#fff}
-.app-nav-link-logout{background:rgba(17,36,61,.18)}
-.app-nav-menu-button{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;border-radius:14px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1}
-.app-nav-menu-button:hover,.app-nav-menu-button:focus-visible{background:rgba(255,255,255,.16);outline:none}
-
-.app-content-stage{padding:0;padding-top:16px;min-height:calc(100vh - 60px)}
-.app-page-shell{width:100%;max-width:1350px;margin:0 auto;padding:0;box-sizing:border-box}
-.app-page-panel{background:var(--admin-panel);border:1px solid var(--admin-line);border-radius:28px;padding:24px;box-shadow:var(--admin-shadow);width:100%;box-sizing:border-box;max-width:100%}
-.app-page-panel > :first-child{margin-top:0}
-.app-page-panel > :last-child{margin-bottom:0}
-.app-page-shell-wide{padding:0}
-.app-footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;padding:18px 8px 8px}
-.app-footer-link{border:none;background:transparent;padding:0;color:#5b6877;cursor:pointer;font-size:.92rem;line-height:1.4;text-decoration:none}
-.app-footer-link:hover,.app-footer-link:focus-visible{color:var(--admin-accent);text-decoration:underline;outline:none}
+/* Die Hüllen-Regeln (Navigationsleiste, Kopf, Inhaltbühne, Seitenschale, Panel, Footer,
+   Titelbereich, Skip-Link) stehen seit Phase 40 ausschließlich in `shell.css` — eine Quelle
+   für App und statisches Wiki. Hier bleiben nur Tokens, Element-Grundlagen und die
+   Seiteninhalte. */
 
 :root{
 	--admin-ink:#11243d;
@@ -40,27 +28,99 @@ button{padding:8px 12px}
 	--admin-shadow:0 18px 40px rgba(17,36,61,.08);
 }
 
-.dashboard-grid-header{margin-top:32px;margin-bottom:16px}
-.dashboard-grid-header h3{margin:0;font-size:1.4rem}
-.dashboard-grid-header p{color:#6b7280;margin:6px 0 0}
-.dashboard-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.dashboard-card{border:1px solid #e2e8f0;border-radius:16px;background:#fff;color:#111;padding:1.25rem;display:flex;flex-direction:column;justify-content:space-between;min-height:140px;cursor:pointer;box-shadow:0 6px 18px rgba(15,23,42,.08);border-width:2px}
-.dashboard-card:hover,.dashboard-card:focus-visible{transform:translateY(-2px);box-shadow:0 10px 25px rgba(15,23,42,.15);border-color:#2563eb;outline:none}
-.dashboard-card:focus-visible{outline:3px solid rgba(37,99,235,.4);outline-offset:4px}
-.dashboard-card-title{font-size:1.15rem;font-weight:600}
-.dashboard-card p{margin:8px 0 0;line-height:1.5;color:#475569}
+/* ── Phase 41: Startseite (D-01…D-04) ──
+   Eine Lesespalte im 1350-px-Panel, damit das Bild neben dem Text steht und nicht 700 px
+   entfernt. Farben ausschließlich über var(--admin-…), Abstände aus der 4-px-Skala,
+   Radien 8/12/16/999, Umbruchpunkte nur 960 und 640 px. Der Kurztext wird bewusst NICHT
+   gekürzt (D-02): keine line-clamp, kein max-height, kein overflow:hidden. */
+.home-page{max-width:100%;margin:0;text-align:left;display:flex;flex-direction:column;gap:24px}
+/* Träger von data-state/aria-busy — keine eigene Optik. */
+.home-list{display:block}
+.home-list-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.home-row{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:24px;align-items:start;padding:20px;border:1px solid var(--admin-line);border-radius:16px;background:var(--admin-panel-strong);box-shadow:0 1px 2px rgba(17,36,61,.04);text-align:left}
+.home-row:first-child{border-top:1px solid var(--admin-line);padding-top:20px}
+.home-row-text{display:flex;flex-direction:column;gap:8px;min-width:0}
+.home-row-title{font-size:20px;font-weight:600;line-height:1.3;margin:0;overflow-wrap:anywhere;color:var(--admin-ink)}
+.home-row-title a{color:inherit;text-decoration:none}
+.home-row-title a:hover,.home-row-title a:focus-visible{color:var(--admin-accent);text-decoration:underline;text-underline-offset:4px}
+.home-row-title a:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+/* „Neu"-Badge (D-12): Text auf accent-soft ist immer --admin-ink (p40-Regel, Kontrast heller
+   Paletten) — die einzige Erlaubnis für accent-soft in dieser Phase. */
+.home-badge-new{display:inline-block;margin-left:8px;vertical-align:middle;padding:4px 8px;border-radius:999px;background:var(--admin-accent-soft);color:var(--admin-ink);font-size:14px;font-weight:600;line-height:1.4}
+.home-row-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0;font-size:14px;font-weight:400;line-height:1.4;color:var(--admin-ink)}
+.home-row-meta a{display:inline-flex;align-items:center;min-height:32px;color:inherit;text-decoration:underline;text-decoration-color:var(--admin-line);text-underline-offset:4px}
+.home-row-meta a:hover,.home-row-meta a:focus-visible{color:var(--admin-accent);text-decoration-color:var(--admin-accent)}
+.home-row-meta a:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.home-row-short{font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink);margin:0;overflow-wrap:anywhere}
+.home-row-cover{display:block;line-height:0;transition:opacity 150ms ease}
+.home-row-cover:hover{opacity:.88}
+.wiki-cover-thumb{display:block;width:200px;height:auto;aspect-ratio:40/21;border-radius:12px;background:var(--admin-panel-strong);object-fit:cover}
+/* App-Wiki-Liste (D-16): dasselbe Kopf-Raster wie die Startseitenzeile — Text links,
+   Bild rechts. Der Kopf bleibt der Toggle; das Bild ist darin das einzige neue Element. */
+.wiki-card-head{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:24px;align-items:start}
+.wiki-card-text{min-width:0}
+/* Admin-Knopf „Bearbeiten" neben der „Verbergen"-Pille: liegt außerhalb des Kopf-Toggles und
+   wird an das rechte Ende der Textspalte gesetzt (Kartenpolsterung 18px + Bild 200px + Spalt 24px);
+   der Kopf hält ihm per `padding-right` den Platz frei. */
+.wiki-card{position:relative}
+.wiki-card-header-with-edit{padding-right:118px}
+.wiki-card-edit{position:absolute;top:18px;right:calc(18px + 200px + 24px);padding:4px 12px;font-size:.85rem;line-height:1.4}
+/* Vereinheitlicht den Kartentitel mit der Startseite: die Browser-Standardgröße 24 px/bold
+   fällt weg, damit die 200-px-Spalte nicht umbricht. */
+.wiki-card-head h2{font-size:20px;font-weight:600;line-height:1.3;margin:0;overflow-wrap:anywhere}
+/* Banner über dem Artikeltext (D-13): höchstens der 400-px-Master, nie hochskaliert.
+   `object-fit:cover` plus feste Fläche — ein fehlschlagendes Bild hinterlässt kein Loch. */
+.wiki-cover-banner{display:block;float:right;width:45%;max-width:400px;height:auto;aspect-ratio:40/21;margin:4px 0 16px 24px;border-radius:16px;background:var(--admin-panel-strong);object-fit:cover}
+/* Artikel umschließt das rechts schwebende Cover (der Text fließt links herum); schmal steht das
+   Bild wieder volle Breite über dem Text, weil daneben kein lesbarer Satzspiegel bliebe. */
+.wiki-article{display:flow-root}
+@media (max-width:640px){.wiki-cover-banner{float:none;width:100%;margin:0 0 24px}}
+.home-list-message{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:16px;border-radius:16px;background:var(--admin-panel-strong);border:1px solid var(--admin-line);color:var(--admin-ink)}
+.home-list-message p{margin:0;font-size:16px;font-weight:400;line-height:1.5}
+.home-list-message a{font-weight:600;text-decoration:underline}
 
-@media (max-width:960px){
-	.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
+/* Kopfblock je Sitzungszustand (D-05/D-07). Höchstens einer sichtbar; er steht in allen
+   Listenzuständen und wird von ihnen nicht ersetzt. */
+.home-cta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* Die CTA sind Router-Links, keine Buttons: Maße und Fokusring deshalb hier, die Farben erben sie
+   von `.admin-primary-button`/`.admin-secondary-button`. */
+.home-cta a{display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;text-decoration:none;box-sizing:border-box}
+.home-cta a:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.home-personal{display:flex;flex-direction:column;gap:16px}
+.home-profile-hint{padding:16px;border-radius:16px;background:var(--admin-panel-strong);border:1px solid var(--admin-line);border-left:4px solid var(--admin-accent);margin:0;font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink)}
+.home-profile-hint a{font-weight:600;color:var(--admin-ink);text-decoration:underline}
+.home-profile-hint a:hover,.home-profile-hint a:focus-visible{color:var(--admin-accent)}
+.home-profile-hint a:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.home-head-placeholder{min-height:44px}
+
+/* Ladezustand (D-06): Skeleton-Zeilen im Raster der echten Zeile — gleiche Höhen, kein Text.
+   Der Puls ist die einzige Bewegung der Seite und unter `prefers-reduced-motion` aus. */
+.home-skeleton-bar{border-radius:8px;background:var(--admin-line);opacity:.6}
+.home-skeleton-title{height:20px;width:60%}
+.home-skeleton-meta{height:16px;width:30%}
+.home-skeleton-line{height:16px;width:100%}
+.home-skeleton-line-short{height:16px;width:80%}
+.home-skeleton-cover{height:105px}
+.home-row-skeleton .home-skeleton-bar,.home-skeleton-cover{animation:home-skeleton-pulse 1.2s ease-in-out infinite}
+@keyframes home-skeleton-pulse{50%{opacity:.3}}
+/* „Erneut versuchen" ist ein echter Button: die Maße kommen nicht aus den Link-Regeln oben. */
+.home-list-message button{min-height:44px;padding:8px 16px}
 
 @media (max-width:640px){
-	.app-nav-wrap{padding:12px 12px 0}
-	.app-nav{padding:12px}
-	.app-content-stage{padding:12px 0 20px}
-	.app-page-shell{padding:0 12px}
-	.app-page-panel{padding:18px;border-radius:22px}
-	.dashboard-grid{grid-template-columns:repeat(1,minmax(0,1fr))}
+	.home-row{grid-template-columns:minmax(0,1fr);padding:16px}
+	.home-row-cover{order:2}
+	.wiki-cover-thumb{width:200px;height:auto}
+	/* Kartenkopf einspaltig: das Bild rutscht unter den Text, bleibt aber 200 × 105. */
+	.wiki-card-head{grid-template-columns:minmax(0,1fr)}
+	.wiki-card-edit{right:18px}
+	/* Die beiden CTA bleiben nebeneinander und brechen nur bei Bedarf um. */
+	.home-cta{gap:8px}
+}
+
+@media (prefers-reduced-motion:reduce){
+	.home-row-cover{transition:none}
+	/* Der Skeleton bleibt sichtbar, aber statisch (UI-SPEC „Listenzustände"). */
+	.home-row-skeleton .home-skeleton-bar,.home-skeleton-cover{animation:none;opacity:.6}
 }
 
 .admin-page{display:flex;flex-direction:column;gap:20px;max-width:1350px;margin:0;width:100%}
@@ -137,7 +197,7 @@ button{padding:8px 12px}
 .settings-tab-panel{border:none;box-shadow:none;background:transparent;padding:20px 0 0;margin-bottom:0}
 .settings-panel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .settings-card{background:var(--admin-panel-strong);border:1px solid rgba(17,36,61,.08);border-radius:22px;padding:20px;box-shadow:0 10px 24px rgba(17,36,61,.06)}
-.settings-card h4{margin:0 0 16px;color:var(--admin-ink)}
+.settings-card h3{margin:0 0 16px;color:var(--admin-ink)}
 .settings-form{display:flex;flex-direction:column;gap:12px}
 .settings-form label{font-weight:700;color:var(--admin-ink)}
 .settings-form input,.settings-form select,.settings-form .flatpickr-input{width:100%;margin:0;border:1px solid var(--admin-line);border-radius:14px;background:#fff;padding:10px 12px;box-sizing:border-box}
@@ -155,7 +215,6 @@ button{padding:8px 12px}
 	.settings-hero-chip{width:100%;justify-content:center}
 	.settings-card{padding:16px}
 }
-.app-page-loading{display:flex;justify-content:center;align-items:center;min-height:200px;color:#666;font-size:1.1rem}
 
 /* ── AdminThemeTab ── */
 .theme-group{margin-bottom:24px}
@@ -178,19 +237,209 @@ button{padding:8px 12px}
 	.theme-grid{grid-template-columns:repeat(1,minmax(0,1fr))}
 }
 
-/* Phase 32: Glyph PNG display */
-.app-nav-glyph {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);  /* white glyph on colored nav background */
-  flex-shrink: 0;
-  opacity: 0.9;
-}
-
+/* Phase 32: Glyph PNG display — Seiten-Klasse `.dashboard-glyph`. */
 .dashboard-glyph {
   width: 32px;
   height: 32px;
   object-fit: contain;
   flex-shrink: 0;
+}
+
+/* ── Phase 39: Artikelbild-Picker (AdminCoverPicker) ──
+   Farben ausschließlich über var(--admin-…); das einzige Farb-Literal ist der
+   1px-Rand der Swatch-Fläche, damit das helle Preset „Papier" auf dem Panel sichtbar
+   bleibt. Die Preset-Farbe selbst kommt als CSS-Variable aus der Server-Antwort. */
+.admin-cover-overlay{position:fixed;inset:0;z-index:1000;background:rgba(16,24,40,.55);display:flex;align-items:stretch;justify-content:center;padding:24px}
+/* Scoped border-box-Reset (Phase-39-Verifikationsgap): ohne ihn rechnen Dialog, Kacheln und
+   Vorschauen Padding/Border zur Breite hinzu und laufen bei 320 px über ihre Spalte bzw. das
+   Overlay hinaus — .admin-cover-body hat overflow-y:auto, kippt damit auch overflow-x auf auto
+   und erzeugt eine horizontale Scrollleiste. */
+.admin-cover-dialog{box-sizing:border-box;width:min(1100px,100%);max-height:calc(100vh - 48px);display:flex;flex-direction:column;gap:16px;padding:24px;overflow:hidden}
+.admin-cover-dialog .admin-panel-header{margin-bottom:0}
+/* Fokusziel des modalen Dialogs (tabIndex=-1): kein Ring um das ganze Panel. */
+.admin-cover-dialog:focus{outline:none}
+.admin-cover-body{display:grid;grid-template-columns:minmax(0,3fr) minmax(320px,2fr);gap:24px;overflow-y:auto;align-items:start;padding-right:4px}
+.admin-cover-column{display:flex;flex-direction:column;gap:24px;min-width:0}
+/* Die Vorschau-Spalte steht im DOM zuerst (damit die Tastaturreihenfolge im schmalen Layout
+   stimmt) und wird auf breiten Viewports per order visuell nach rechts gelegt. */
+.admin-cover-column-preview{order:2;position:sticky;top:0}
+.admin-cover-column-glyphs{order:1}
+.admin-cover-group{display:flex;flex-direction:column;gap:16px;min-width:0}
+.admin-cover-group h4{margin:0;font-size:18px;font-weight:600;line-height:1.3;color:var(--admin-ink)}
+.admin-cover-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(136px, 1fr));gap:8px}
+.admin-cover-tile{box-sizing:border-box;position:relative;display:flex;flex-direction:column;gap:8px;align-items:stretch;width:100%;padding:8px;border:1px solid var(--admin-line);border-radius:16px;background:var(--admin-panel-strong);color:var(--admin-ink);font-weight:400;cursor:pointer}
+.admin-cover-tile:hover{border-color:var(--admin-accent)}
+.admin-cover-tile:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.admin-cover-tile-image{display:block;width:100%;aspect-ratio:1200/630;border-radius:8px;background:var(--admin-panel);object-fit:cover}
+.admin-cover-tile-name{font-size:14px;font-weight:600;line-height:1.4;text-align:center;overflow-wrap:anywhere}
+.admin-cover-tile-selected{outline:2px solid var(--admin-accent);outline-offset:-2px}
+.admin-cover-tile-check{position:absolute;top:4px;right:4px;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:999px;background:var(--admin-accent);color:var(--admin-panel-strong);font-size:14px;font-weight:600;line-height:1}
+.admin-cover-badge{position:absolute;top:4px;left:4px;padding:4px 8px;border-radius:999px;background:var(--admin-accent-soft);color:var(--admin-ink);font-size:14px;font-weight:600;line-height:1.4}
+.admin-cover-swatches{display:flex;flex-wrap:wrap;gap:8px}
+.admin-cover-swatch{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px;border:1px solid transparent;border-radius:16px;background:transparent;color:var(--admin-ink);font-weight:400;cursor:pointer}
+.admin-cover-swatch:hover{border-color:var(--admin-accent)}
+.admin-cover-swatch:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.admin-cover-swatch-face{box-sizing:border-box;width:40px;height:40px;border-radius:12px;border:1px solid rgba(17,36,61,.2);background:var(--admin-cover-swatch,var(--admin-panel))}
+.admin-cover-swatch-name{max-width:72px;font-size:14px;font-weight:400;line-height:1.4;text-align:center;overflow-wrap:anywhere}
+.admin-cover-swatch-selected{border-color:var(--admin-accent)}
+.admin-cover-swatch-selected .admin-cover-swatch-face{outline:3px solid var(--admin-accent);outline-offset:2px}
+.admin-cover-preview{box-sizing:border-box;display:block;width:100%;max-width:600px;aspect-ratio:1200/630;border:1px solid var(--admin-line);border-radius:16px;background:var(--admin-panel);object-fit:cover}
+.admin-cover-preview-pending{opacity:.6}
+.admin-cover-placeholder{display:flex;align-items:center;justify-content:center;width:100%;max-width:600px;aspect-ratio:1200/630;padding:16px;border:1px dashed var(--admin-line);border-radius:16px;background:var(--admin-panel);color:var(--admin-ink);font-size:14px;font-weight:400;line-height:1.4;text-align:center;box-sizing:border-box}
+.admin-cover-note{margin:0;color:var(--admin-ink);font-size:14px;font-weight:400;line-height:1.4;opacity:.72}
+
+@media (max-width:960px){
+	.admin-cover-body{grid-template-columns:minmax(0,1fr)}
+	.admin-cover-column-preview,.admin-cover-column-glyphs{order:0;position:static}
+}
+
+@media (max-width:640px){
+	.admin-cover-overlay{padding:12px}
+	.admin-cover-dialog{max-height:calc(100vh - 24px);padding:16px}
+}
+
+/* Phase 39: Abschnitt „Artikelbild" im Eintrags-Editor (AdminEntriesTab) */
+.admin-cover-section{display:flex;flex-direction:column;gap:8px}
+.admin-cover-editor-preview{box-sizing:border-box;display:block;width:100%;aspect-ratio:1200/630;border:1px solid var(--admin-line);border-radius:16px;background:var(--admin-panel);object-fit:cover}
+.admin-cover-editor-placeholder{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1200/630;padding:16px;border:1px dashed var(--admin-line);border-radius:16px;background:var(--admin-panel);color:var(--admin-ink);font-size:14px;font-weight:400;line-height:1.4;text-align:center;box-sizing:border-box;opacity:.72}
+.admin-cover-caption{margin:0;color:var(--admin-ink);font-size:14px;font-weight:400;line-height:1.4;opacity:.72}
+.admin-cover-suggestion{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:var(--admin-ink);font-size:14px;font-weight:400;line-height:1.4}
+.admin-cover-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+
+/* ── Phase 39: Startseiten-Kuration (AdminHomeCurationTab) ──
+   Farben ausschließlich über var(--admin-…); das einzige Farb-Literal ist der Rahmen der
+   Listenzeile, derselbe rgba-Wert wie in .admin-cache-card. Abstände aus der 4-px-Skala. */
+.admin-home-toolbar{display:flex;flex-direction:column;gap:16px;min-width:0}
+.admin-home-columns{display:grid;grid-template-columns:minmax(0,3fr) minmax(280px,2fr);gap:24px;align-items:start}
+.admin-home-column{display:flex;flex-direction:column;gap:16px;min-width:0}
+.admin-home-column h4,.admin-home-preview h4{margin:0;font-size:18px;font-weight:600;line-height:1.3;color:var(--admin-ink)}
+.admin-home-column h4:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.admin-home-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.admin-home-item{display:grid;grid-template-columns:44px 32px 120px 1fr auto;gap:16px;align-items:center;padding:8px 16px;border-radius:16px;background:var(--admin-panel-strong);border:1px solid rgba(17,36,61,.08)}
+.admin-home-item-dragging{border:2px solid var(--admin-accent);box-shadow:var(--admin-shadow)}
+.admin-home-handle{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--admin-line);border-radius:12px;background:var(--admin-panel);color:var(--admin-ink);font-size:20px;font-weight:400;line-height:1;cursor:grab;touch-action:none}
+.admin-home-handle:active{cursor:grabbing}
+.admin-home-handle:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.admin-home-position{font-size:16px;font-weight:600;color:var(--admin-ink)}
+.admin-home-thumb{display:block;width:120px;height:63px;border-radius:8px;background:var(--admin-panel);object-fit:cover}
+.admin-home-thumb-empty{display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:400;color:var(--admin-ink);opacity:.72;text-align:center}
+.admin-home-meta{display:flex;flex-direction:column;gap:4px;min-width:0}
+.admin-home-title{font-size:16px;font-weight:600;line-height:1.4;color:var(--admin-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-home-category{font-size:14px;font-weight:400;line-height:1.4;color:var(--admin-ink);opacity:.72}
+.admin-home-badge{align-self:flex-start;padding:4px 8px;border-radius:999px;background:var(--admin-warn-soft);color:var(--admin-warn);font-size:14px;font-weight:600;line-height:1.4}
+.admin-home-remove{min-height:44px}
+.admin-home-hint{margin:0;font-size:14px;font-weight:400;line-height:1.5;color:var(--admin-ink);opacity:.72}
+.admin-home-status{margin:0;font-size:14px;font-weight:400;line-height:1.4;color:var(--admin-ink);opacity:.72}
+.admin-home-empty{padding:16px;border-radius:16px;background:var(--admin-panel-strong);border:1px solid rgba(17,36,61,.08)}
+.admin-home-empty strong{display:block;font-size:16px;font-weight:600;color:var(--admin-ink)}
+.admin-home-empty p{margin:8px 0 0;font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink);opacity:.72}
+.admin-home-results{list-style:none;margin:0;padding:0 4px 0 0;display:flex;flex-direction:column;gap:8px;max-height:480px;overflow-y:auto}
+.admin-home-result{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 16px;border-radius:16px;background:var(--admin-panel-strong);border:1px solid rgba(17,36,61,.08)}
+.admin-home-result-meta{display:flex;flex-direction:column;gap:4px;min-width:0}
+.admin-home-result-title{font-size:16px;font-weight:400;line-height:1.4;color:var(--admin-ink);overflow-wrap:anywhere}
+.admin-home-preview{display:flex;flex-direction:column;gap:8px;margin-top:32px}
+
+/* ── Phase 39: Rebuild-Hinweis (AdminRebuildHint) ── */
+.admin-rebuild-hint{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px;border-radius:16px;border-left:4px solid var(--admin-accent);background:var(--admin-accent-soft)}
+.admin-rebuild-hint-heading{margin:0;font-size:18px;font-weight:600;line-height:1.3;color:var(--admin-ink)}
+.admin-rebuild-hint-body{margin:8px 0 0;font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink)}
+.admin-rebuild-hint-meta{margin:8px 0 0;font-size:14px;font-weight:400;line-height:1.4;color:var(--admin-ink);opacity:.72}
+
+@media (max-width:960px){
+	.admin-home-columns{grid-template-columns:minmax(0,1fr)}
+}
+
+@media (max-width:640px){
+	.admin-home-item{grid-template-columns:44px 32px 1fr auto;grid-template-areas:"handle position meta remove" "thumb thumb thumb thumb";align-items:start}
+	.admin-home-handle{grid-area:handle}
+	.admin-home-position{grid-area:position}
+	.admin-home-meta{grid-area:meta}
+	.admin-home-remove{grid-area:remove}
+	.admin-home-thumb{grid-area:thumb;width:100%;height:auto;aspect-ratio:1200/630}
+	.admin-home-thumb-empty{width:100%;height:auto;aspect-ratio:1200/630}
+}
+
+@media (prefers-reduced-motion:reduce){
+	.admin-home-item{transition:none}
+}
+
+/* Beiträge verwalten (/admin/entries): schmale Liste links, breiter Editor rechts. */
+.admin-entries-layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:16px;align-items:start}
+.admin-entries-list-column,.admin-entries-editor-column{min-width:0}
+.admin-entry-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.admin-entry-row{background:var(--admin-panel-strong);border:1px solid rgba(17,36,61,.08);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.admin-entry-row-selected{border-color:var(--admin-accent);box-shadow:inset 4px 0 0 var(--admin-accent)}
+.admin-entry-row-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.admin-entry-row-title{flex:1 1 auto;min-width:0;overflow-wrap:anywhere;color:var(--admin-ink)}
+.admin-entry-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:rgba(var(--admin-accent-r),var(--admin-accent-g),var(--admin-accent-b),.15);color:var(--admin-accent);font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.admin-entry-row-meta{margin:0;font-size:14px;line-height:1.4;color:#4b5d71;overflow-wrap:anywhere}
+.admin-entry-row-slug{margin:0;font-size:12px;color:#2d5a3d;overflow-wrap:anywhere}
+.admin-entry-row-slug code{background:rgba(var(--admin-accent-r),var(--admin-accent-g),var(--admin-accent-b),.1);padding:1px 4px;border-radius:3px}
+.admin-entry-row-slug-missing{color:#c00}
+.admin-entry-row-actions{display:flex;gap:8px;margin-top:4px}
+.admin-entry-row-actions button{padding:6px 12px}
+/* Inhalt und Markdown-Vorschau: ab 1200 px nebeneinander, gleich hoch. */
+.admin-entry-content-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.admin-entry-content-input{min-height:420px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;line-height:1.5}
+.admin-entry-preview-scroll{height:400px}
+.admin-entry-preview-field{margin-top:20px}
+@media (min-width:1200px){
+	.admin-entry-content-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+	.admin-entry-content-input{min-height:560px}
+	.admin-entry-preview-scroll{height:540px}
+}
+@media (max-width:960px){
+	.admin-entries-layout{grid-template-columns:minmax(0,1fr)}
+}
+/* Kurztext und Artikelbild im Editor: Bild nimmt ein Viertel neben dem Kurztext ein. */
+/* Kurztext halb so breit wie die Zeile (Bild ein Viertel, Rest bleibt frei) und per `stretch`
+   genau so hoch wie die Bildspalte inklusive Unterschrift und Knöpfen: das Textfeld füllt die
+   Höhe der Zelle, statt eine eigene Zeilenzahl vorzugeben. */
+.admin-entry-short-cover{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);max-width:75%;gap:16px;align-items:stretch}
+.admin-entry-short-cover > .admin-field:first-child textarea{flex:1 1 auto;min-height:0;resize:none}
+.admin-entry-short-cover .admin-cover-actions button{padding:6px 10px}
+@media (max-width:720px){
+	.admin-entry-short-cover{grid-template-columns:minmax(0,1fr);max-width:none}
+	.admin-entry-short-cover > .admin-field:first-child textarea{min-height:120px;resize:vertical}
+}
+
+/* ── Phase 43: Wiki-Verlinkung in KI-Auswertungen (TEXT-06, D-21) ──
+   Der Ruhezustand (Farbe erben, Unterstrich in `--admin-line`, `text-underline-offset: 3px`)
+   kommt als Inline-Style aus der `a`-Komponente in `InterpretationPage.jsx`; hier steht nur die
+   Interaktion. Eng gefasst auf die eigene Klasse — keine globale `a`-Regel, damit Wiki- und
+   Rechtstexte ihre Darstellung behalten. */
+.wiki-inline-link{color:inherit;text-decoration:underline;text-decoration-color:var(--admin-accent);text-underline-offset:3px}
+.wiki-inline-link:hover,.wiki-inline-link:focus-visible{color:var(--admin-accent);text-decoration-color:var(--admin-accent);text-decoration-thickness:2px;font-weight:600}
+.wiki-inline-link:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+
+/* ── Phase 43.1: Chart-Daten-Kästchen (CHART-01) ──
+   Ruhezustand UND Interaktion ausschließlich in Klassen (D-03): kein Inline-Style für Farbe,
+   Hover oder Fokus. Farben nur über var(--admin-…) — kein Literal, keine --admin-line-Kante
+   (Kontrast 1,52:1, UI-SPEC G-2). Der Akzent trägt nie Text, nur Rahmen und Fokusring. */
+.chart-data-stage{position:relative}
+.chart-data-toggle{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;border-radius:8px;position:relative}
+.chart-data-toggle:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.chart-data-toggle:hover .chart-data-chip{background:var(--admin-accent-soft)}
+.chart-data-toggle[aria-expanded="true"] .chart-data-chip{display:none}
+.chart-data-image{display:block}
+.chart-data-chip{position:absolute;left:8px;bottom:8px;z-index:2;font-size:12px;font-weight:600;line-height:1.2;white-space:nowrap;background:var(--admin-panel-strong);color:var(--admin-ink);border:1px solid var(--admin-accent);border-radius:8px;padding:4px 8px}
+.chart-data-panel{position:absolute;right:16px;bottom:16px;z-index:2;width:min(440px,72%);max-height:45%;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:16px;border:1px solid var(--admin-accent);border-radius:8px;background:var(--admin-panel-strong);color:var(--admin-ink);box-shadow:var(--admin-shadow)}
+.chart-data-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.chart-data-title{margin:0;font-size:16px;font-weight:600;line-height:1.2}
+.chart-data-close{min-width:44px;min-height:44px;padding:0;background:transparent;color:var(--admin-ink);font-size:16px;font-weight:400;line-height:1;border:0;border-radius:8px;cursor:pointer}
+.chart-data-close:hover{background:var(--admin-accent-soft)}
+.chart-data-close:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.chart-data-error{color:var(--admin-warn);font-size:14px;line-height:1.5;margin:0 0 8px}
+.chart-data-retry{min-height:44px;padding:0 16px;background:transparent;color:var(--admin-ink);font-size:14px;font-weight:600;line-height:1.2;border:1px solid var(--admin-accent);border-radius:8px;cursor:pointer}
+.chart-data-retry:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.chart-data-empty{font-size:14px;line-height:1.5;color:var(--admin-ink);margin:0 0 8px}
+.chart-data-group-title{font-size:14px;font-weight:600;line-height:1.2;margin:24px 0 8px}
+.chart-data-table{width:100%;border-collapse:collapse;font-size:14px;font-weight:400;line-height:1.5;font-variant-numeric:tabular-nums;margin-bottom:16px}
+.chart-data-caption{font-size:12px;font-weight:600;line-height:1.2;text-align:left;padding-bottom:4px}
+.chart-data-table th{font-size:12px;font-weight:600;line-height:1.2;text-align:left;padding:4px}
+.chart-data-table td{padding:4px;vertical-align:top}
+.chart-data-table th[scope="row"]{font-size:14px;font-weight:400;line-height:1.5;overflow-wrap:anywhere}
+.chart-data-cell-num{white-space:nowrap;text-align:right}
+@media (max-width:800px){
+	.chart-data-panel{position:static;right:auto;bottom:auto;width:auto;max-height:none;overflow:visible;margin-top:8px}
 }

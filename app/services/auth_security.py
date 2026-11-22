@@ -5,14 +5,17 @@ from datetime import datetime, time as datetime_time, timedelta, timezone
 from threading import Lock
 from time import time
 from typing import Optional
+import ipaddress
 import logging
 import re
 
 import httpx
 
 import app.config as app_config
+import app.services.auth_store as auth_store
 from app.db.models.users import AuthAuditLog, UserProfile
 from app.db.session import get_session
+from app.services.auth_store import AuthStoreUnavailable
 
 
 logger = logging.getLogger(__name__)
@@ -46,10 +49,10 @@ AI_DAILY_LIMIT_DEFAULT = _get_int_setting('AI_DAILY_LIMIT_DEFAULT', 5, test_defa
 AI_DAILY_LIMIT_POWERUSER = _get_int_setting('AI_DAILY_LIMIT_POWERUSER', 50, test_default=50)
 TURNSTILE_SECRET_KEY = (app_config.get_env_setting('TURNSTILE_SECRET_KEY') or '').strip()
 TURNSTILE_VERIFY_URL = (app_config.get_env_setting('TURNSTILE_VERIFY_URL') or 'https://challenges.cloudflare.com/turnstile/v0/siteverify').strip()
-REDIS_URL = (app_config.get_env_setting('REDIS_URL') or '').strip()
 
 # Comma-separated list of trusted reverse-proxy IPs.
-# X-Forwarded-For is only trusted when the direct client is one of these.
+# X-Real-IP is only read when the direct client is one of these.
+# X-Forwarded-For is logged only and never decides a limit or lockout.
 # Default: nginx container IP in the docker-compose internal network.
 _raw_trusted = app_config.get_env_setting('TRUSTED_PROXIES') or '172.28.0.15'
 TRUSTED_PROXIES: frozenset[str] = frozenset(ip.strip() for ip in _raw_trusted.split(',') if ip.strip())
@@ -129,7 +132,12 @@ class _RedisStore:
     def __init__(self, redis_url: str) -> None:
         import redis
 
-        self._client = redis.Redis.from_url(redis_url, decode_responses=True)
+        self._client = redis.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=auth_store.REDIS_CONNECT_TIMEOUT_SECONDS,  # 250 ms (D-16)
+            socket_timeout=auth_store.REDIS_READ_TIMEOUT_SECONDS,              # 500 ms (D-16)
+        )
         self._client.ping()
 
     def incr(self, key: str, ttl_seconds: int) -> tuple[int, int]:
@@ -157,49 +165,58 @@ class _RedisStore:
 
 
 _local_store = _LocalStore()
+_store = None  # D-21: explicit sentinel instead of the old NameError probe (FR-02)
 
 
 def _get_store():
-    """Get the configured rate limit store (Redis or local fallback).
+    """Return the configured rate limit store.
+
+    Ein gesetzter ``_store`` gewinnt (Reihenfolge ist bindend, Pitfall 4): fünf bestehende
+    Tests patchen ihn (``tests/test_api.py:500,524,547,572``, ``tests/test_client_ip.py:27``),
+    und der Fake-Store der Resilienz-Tests braucht denselben Vorrang. Danach entscheidet die
+    einzige Modusquelle ``auth_store.REDIS_URL``: leer = lokaler Modus (D-04), gesetzt =
+    ``_RedisStore``. Ein Konstruktionsfehler (``ping``) wird hier **nicht** verschluckt — der
+    Guard in ``auth_store`` fängt ihn und öffnet den Breaker (D-15/D-21).
 
     Returns:
         _RedisStore or _LocalStore instance.
     """
     global _store
-    try:
+    if _store is not None:
         return _store
-    except NameError:
-        pass
-
-    if REDIS_URL:
-        try:
-            _store = _RedisStore(REDIS_URL)
-            return _store
-        except Exception:
-            logger.warning('Redis auth security store unavailable, using local fallback')
-    _store = _local_store
+    if not auth_store.REDIS_URL:
+        return _local_store
+    _store = _RedisStore(auth_store.REDIS_URL)
     return _store
 
 
 def get_client_ip(request) -> str:
-    """Extract client IP address from request.
+    """Extract the real client IP address from a request.
 
-    X-Forwarded-For is only trusted when the direct connecting client
-    is a known reverse proxy (TRUSTED_PROXIES). Otherwise the direct
-    client IP is used, preventing header-spoofing attacks.
+    X-Real-IP is only trusted when the direct connecting client is a known reverse proxy
+    (TRUSTED_PROXIES); nginx sets it from the (real_ip corrected) remote address and overwrites
+    a client-supplied header. The value is validated as an IP address. X-Forwarded-For is not
+    read at all — it stays pure log information. Without a trusted peer the direct client IP is
+    used, so a spoofed header can never change the identifier.
 
     Args:
         request: FastAPI Request object.
 
     Returns:
-        Client IP address string.
+        Client IP address string ('unknown' when no peer information is available).
     """
     client = getattr(request, 'client', None)
     direct_ip = getattr(client, 'host', '') or ''
     if direct_ip in TRUSTED_PROXIES:
-        forwarded_for = request.headers.get('x-forwarded-for', '').split(',')[0].strip()
-        if forwarded_for:
-            return forwarded_for
+        raw = (request.headers.get('x-real-ip') or '').strip()
+        candidate = raw.split(',')[0].strip()
+        if candidate:
+            try:
+                ipaddress.ip_address(candidate)
+            except ValueError:
+                pass
+            else:
+                return candidate
     return direct_ip or 'unknown'
 
 
@@ -215,20 +232,40 @@ def normalize_username(username: Optional[str]) -> str:
     return (username or '').strip().lower()
 
 
-def check_rate_limit(scope: str, identifier: str, limit: int, window_seconds: int) -> RateLimitResult:
+def _utc_date_token(now: Optional[datetime] = None) -> str:
+    """Return the UTC calendar date as a ``YYYYMMDD`` token.
+
+    Phase 49 / D-10: the day boundary of every rate-limit key is UTC, not local time —
+    all workers share the same instant, independent of the host timezone.
+
+    Args:
+        now: Optional datetime (defaults to the current UTC time).
+
+    Returns:
+        Date token in the form YYYYMMDD.
+    """
+    return (now or datetime.now(timezone.utc)).strftime('%Y%m%d')
+
+
+def check_rate_limit(scope: str, identifier: str, limit: int, window_seconds: int, *, now: Optional[datetime] = None) -> RateLimitResult:
     """Check if an action is within rate limit.
 
     Args:
         scope: Rate limit scope (e.g., 'login', 'register').
-        identifier: Unique identifier (e.g., IP or user ID).
+        identifier: Unique rate-limit subject from ``build_rate_limit_identifier``
+            (``user:<id>`` or ``ip:<client-ip>``).
         limit: Maximum number of attempts allowed.
-        window_seconds: Time window in seconds.
+        window_seconds: Time window in seconds, kept as the key TTL.
+        now: Optional datetime for the date token — deterministic tests only.
 
     Returns:
         RateLimitResult with allowed status and details.
     """
-    key = f'auth:rate:{scope}:{identifier}'
-    count, retry_after_seconds = _get_store().incr(key, window_seconds)
+    # Phase 49 / D-08: key form is {scope}:{subject}:{date}. The live key measured before this
+    # phase was auth:rate:login:10.99.0.1 (TTL 741 s); old keys expire through their TTL, nothing
+    # is flushed or migrated. All keys of this module share this single key-building line.
+    key = f'{scope}:{identifier}:{_utc_date_token(now)}'
+    count, retry_after_seconds = auth_store.call(_get_store, 'incr', key, window_seconds)
     allowed = count <= limit
     remaining = max(0, limit - count)
     return RateLimitResult(
@@ -242,6 +279,11 @@ def check_rate_limit(scope: str, identifier: str, limit: int, window_seconds: in
 
 def build_rate_limit_identifier(request, user_id: Optional[int] = None) -> str:
     """Build rate limit identifier from request and optional user ID.
+
+    Phase 49 / D-09: this is the **only** subject source. Every limiter call site passes its
+    subject through this function — ``user:<id>`` for logged-in users, ``ip:<client-ip>`` for
+    login/register/refresh. The IP comes from ``get_client_ip``, which validates it with
+    ``ipaddress`` and only reads ``X-Real-IP`` behind a peer from ``TRUSTED_PROXIES``.
 
     Args:
         request: FastAPI Request object.
@@ -292,16 +334,50 @@ def _get_ai_limit_flags(user_id: Optional[int]) -> tuple[bool, bool]:
     return bool(getattr(profile, 'isadmin', False)), bool(getattr(profile, 'is_poweruser', False))
 
 
-def check_ai_rate_limit(request, user_id: Optional[int] = None, scope: str = 'ai') -> RateLimitResult:
+# Phase 49 / D-12: measured divergence between first evaluation and follow-up. First
+# evaluations sent ``ai:solar-return`` / ``ai:age-points``; the follow-up build its scope from
+# the persisted ``context_type`` values ``solar`` / ``age_points``. Both sides now run through
+# this function, so both spellings land on one counter.
+_AI_SCOPE_ALIASES = {'solar-return': 'solar'}
+
+
+def canonical_ai_scope(feature: str) -> str:
+    """Return the canonical rate-limit scope for an AI feature name (D-12).
+
+    Single feature-to-scope mapping of the codebase: routers pass a bare feature name, the
+    follow-up passes the persisted ``context_type``, and both end up here. Normalisation is
+    lowercase, ``_`` -> ``-`` and a ``[a-z0-9-]`` whitelist (T-49-09): the whitelist is what
+    keeps a manipulated ``context_type`` from injecting an extra ``:`` into the store key.
+
+    Args:
+        feature: Feature name or persisted ``context_type`` (e.g. 'solar-return', 'age_points').
+
+    Returns:
+        Scope in the form ``ai:<key>``; an empty feature maps to ``ai:interp``.
+    """
+    key = (feature or '').strip().lower().replace('_', '-')
+    key = re.sub(r'[^a-z0-9-]', '-', key)
+    key = _AI_SCOPE_ALIASES.get(key, key) or 'interp'
+    return f'ai:{key}'
+
+
+def check_ai_rate_limit(request, user_id: Optional[int] = None, *, feature: str) -> RateLimitResult:
     """Check AI interpretation rate limit for a user.
+
+    Phase 49 / D-11: every AI feature has its own daily budget. The caller names its feature;
+    ``canonical_ai_scope`` turns that name into the scope segment of the store key, so
+    ``ai:horoscope`` and ``ai:houses`` no longer share a counter.
 
     Args:
         request: FastAPI Request object.
         user_id: Optional user ID.
-        scope: Rate limit scope (default 'ai').
+        feature: Feature name of the calling site (e.g. 'horoscope', 'age-points', or the
+            persisted ``context_type`` of a follow-up question). Mandatory — the old
+            ``scope='ai'`` default silently pooled every feature and is gone (D-11).
 
     Returns:
-        RateLimitResult with allowed status and daily limit info.
+        RateLimitResult with allowed status and daily limit info. On a store outage the
+        result is fail-open with ``count=0`` and no counting (D-06).
     """
     is_admin, is_poweruser = _get_ai_limit_flags(user_id)
     if is_admin:
@@ -316,10 +392,25 @@ def check_ai_rate_limit(request, user_id: Optional[int] = None, scope: str = 'ai
         )
 
     daily_limit = AI_DAILY_LIMIT_POWERUSER if is_poweruser else AI_DAILY_LIMIT_DEFAULT
-    current_time = datetime.now(timezone.utc)
-    daily_scope = f'ai:{current_time.strftime("%Y%m%d")}'
+    scope = canonical_ai_scope(feature)
     identifier = build_rate_limit_identifier(request, user_id=user_id)
-    result = check_rate_limit(daily_scope, identifier, daily_limit, _seconds_until_next_utc_midnight(current_time))
+    current_time = datetime.now(timezone.utc)
+    try:
+        result = check_rate_limit(scope, identifier, daily_limit, _seconds_until_next_utc_midnight(current_time))
+    except AuthStoreUnavailable:
+        # Phase 49 / D-06 / D-07: the ONLY place that catches AuthStoreUnavailable. The three
+        # auth paths and the blacklist keep failing closed with 503; only the AI daily budget
+        # degrades to fail-open — without counting and without a local counter fallback.
+        logger.warning('ai_rate_limit_degraded reason=redis_unavailable scope=%s user=%s', scope, user_id)
+        return RateLimitResult(
+            allowed=True,
+            count=0,
+            retry_after_seconds=0,
+            remaining=0,
+            limit=daily_limit,
+            is_poweruser=is_poweruser,
+            is_admin=False,
+        )
     result.limit = daily_limit
     result.is_poweruser = is_poweruser
     return result
@@ -349,11 +440,16 @@ def get_login_lock(username: str) -> int:
 
     Returns:
         Seconds remaining in lockout, or 0 if not locked.
+
+    Raises:
+        AuthStoreUnavailable: wenn Redis konfiguriert und nicht erreichbar ist (D-01).
+            Der Login-Pfad betritt Redis als erstes hier; ohne den Guard wäre ein Ausfall
+            an dieser Stelle ein 500 statt eines 503.
     """
     normalized = normalize_username(username)
     if not normalized:
         return 0
-    _, retry_after_seconds = _get_store().get_value(f'auth:lock:{normalized}')
+    _, retry_after_seconds = auth_store.call(_get_store, 'get_value', f'auth:lock:{normalized}')
     return retry_after_seconds
 
 
@@ -370,10 +466,10 @@ def record_failed_login(username: str) -> int:
     if not normalized:
         return 0
 
-    count, _ = _get_store().incr(f'auth:fail:{normalized}', FAILED_LOGIN_LOCKOUT_SECONDS)
+    count, _ = auth_store.call(_get_store, 'incr', f'auth:fail:{normalized}', FAILED_LOGIN_LOCKOUT_SECONDS)
     if count >= FAILED_LOGIN_LOCKOUT_THRESHOLD:
-        _get_store().set_value(f'auth:lock:{normalized}', '1', FAILED_LOGIN_LOCKOUT_SECONDS)
-        _get_store().delete(f'auth:fail:{normalized}')
+        auth_store.call(_get_store, 'set_value', f'auth:lock:{normalized}', '1', FAILED_LOGIN_LOCKOUT_SECONDS)
+        auth_store.call(_get_store, 'delete', f'auth:fail:{normalized}')
         return FAILED_LOGIN_LOCKOUT_SECONDS
     return 0
 
@@ -387,8 +483,8 @@ def clear_failed_logins(username: str) -> None:
     normalized = normalize_username(username)
     if not normalized:
         return
-    _get_store().delete(f'auth:fail:{normalized}')
-    _get_store().delete(f'auth:lock:{normalized}')
+    auth_store.call(_get_store, 'delete', f'auth:fail:{normalized}')
+    auth_store.call(_get_store, 'delete', f'auth:lock:{normalized}')
 
 
 def validate_password_strength(password: str) -> Optional[str]:

@@ -1,5 +1,10 @@
 import React, { useState } from 'react'
 import { post } from '../../services/api'
+import {
+  acknowledgeRebuild,
+  notifyWikiContentChanged,
+  refreshRebuildStamp,
+} from '../../services/wikiRebuild'
 
 export default function AdminBuildWikiTab(){
   const [buildState, setBuildState] = useState('idle')
@@ -16,6 +21,14 @@ export default function AdminBuildWikiTab(){
       }
       setBuildState('ok')
       setBuildMessage('Build erfolgreich — /astro-wiki/ ist aktuell.')
+      // Ein erfolgreicher Build ist die Erledigung des Rebuild-Hinweises: den aktuellen
+      // Stempel quittieren und erneut melden, damit der bereits gemountete Hinweis die Quittung
+      // liest und verschwindet. Der Build selbst bleibt der einzige Build-Weg.
+      const stamp = await refreshRebuildStamp()
+      if (stamp){
+        acknowledgeRebuild(stamp)
+        notifyWikiContentChanged(stamp)
+      }
     }catch(err){
       setBuildState('error')
       setBuildMessage(err?.message || 'Build fehlgeschlagen')

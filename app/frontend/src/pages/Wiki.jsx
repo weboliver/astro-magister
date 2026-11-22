@@ -1,46 +1,60 @@
 /**
- * Wiki - Wiki content browser page with sections, categories, entries, and optional related entries display.
+ * Wiki - Wiki-Inhalte: Artikel unter `/wiki/<slug>`, Liste mit Filtern unter `/wiki`
  * @component
- * @param {Object} props - Component props
- * @param {string} [props.directPageName=''] - Direct page name to display (bypasses section/category navigation)
- * @param {string} [props.directOriginPage=''] - Origin page for back navigation
- * @param {string} [props.directOriginLabel=''] - Label for back navigation button
- * @param {string} [props.targetSectionId=''] - Target section ID to preselect
- * @param {string} [props.targetCategoryId=''] - Target category ID to preselect
- * @param {string} [props.targetEntryId=''] - Target entry ID to expand on load
- * @returns {JSX.Element} Rendered wiki page
- * @hook useState - Manages sections, categories, entries, direct entries, related entries, selection state, loading, errors
- * @hook useEffect - Loads data, handles navigation, manages URL/title updates, loads related entries
- * @hook useMemo - Computes wiki section IDs, filtered categories, visible entries, selected category
- * @hook useAuth - Accesses profile for admin rights and related entries visibility
+ * @description Der gesamte Seitenzustand kommt aus der Adresse: `:slug` wählt den Artikel
+ *              (`GET /wiki/by-slug/{slug}`), `?bereich=`/`?kategorie=` wählen die Filter der
+ *              Liste, `?artikel=<id>` den aufgeklappten Listeneintrag. Filter- und Aufklapp-Wechsel
+ *              laufen über `setSearchParams(..., { replace: true, preventScrollReset: true })` —
+ *              kein Verlaufseintrag pro Klick und kein Sprung nach oben.
+ *              Rechtstexte haben eigene Routen (`LegalPage`), der frühere Direktmodus ist samt
+ *              seinen Props entfallen. Die Sichtbarkeit verwandter Einträge hängt ausschließlich
+ *              an `profile`, nicht an einem gespeicherten Token.
+ *              Die Cover sind reine Anzeige der Serverfelder `cover_url`/`cover_alt`:
+ *              links im Kartenkopf steht der Text, rechts das dekorative 200 × 105-Bild (`alt=""`),
+ *              im aufgeklappten Eintrag und im Artikelkopf der 400 × 210-Banner mit sprechendem
+ *              Alt-Text. Kein Pfad entsteht hier — nur `|| DEFAULT_COVER_URL` als Rückfall.
+ * @hook useParams - `:slug` der Artikel-Route (`/wiki/:slug`)
+ * @hook useSearchParams - `?bereich=`, `?kategorie=`, `?artikel=`
+ * @hook useNavigate - Navigation zu verwandten Einträgen, Editor und Login
+ * @hook useLocation - aktueller Pfad für `?next=` beim Login-Sprung
+ * @hook useEffect - Artikel, Liste, nachgeladener Einzeleintrag, verwandte Einträge
+ * @hook useMemo - abgeleitete Filter (Bereich, Kategorien, aktive Kategorie)
+ * @hook useAuth - `profile` steuert verwandte Einträge und den Admin-Knopf
+ * @returns {JSX.Element} Gerenderte Wiki-Seite
  */
-import React, { useEffect, useMemo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../contexts/AuthContext'
+import MarkdownArticle from '../components/MarkdownArticle'
+import { useSeoMeta } from '../hooks/useSeoMeta'
+import { usePageFrame } from '../routing/pageFrame'
+import { pages } from '../routing/pages'
 import { get } from '../services/api'
+import { canonicalForWikiEntry } from '../services/canonical'
+import { DEFAULT_COVER_URL } from '../services/covers'
 
-const markdownComponents = {
-  h1: ({ node, ...props }) => <h1 style={{ margin: '0 0 12px', fontSize: '1.5rem', lineHeight: 1.2 }} {...props} />,
-  h2: ({ node, ...props }) => <h2 style={{ margin: '20px 0 10px', fontSize: '1.2rem', lineHeight: 1.25 }} {...props} />,
-  h3: ({ node, ...props }) => <h3 style={{ margin: '16px 0 8px', fontSize: '1.05rem', lineHeight: 1.3 }} {...props} />,
-  p: ({ node, ...props }) => <p style={{ margin: '0 0 12px', lineHeight: 1.65 }} {...props} />,
-  ul: ({ node, ...props }) => <ul style={{ margin: '0 0 12px', paddingLeft: 22, lineHeight: 1.6 }} {...props} />,
-  ol: ({ node, ...props }) => <ol style={{ margin: '0 0 12px', paddingLeft: 22, lineHeight: 1.6 }} {...props} />,
-  li: ({ node, ...props }) => <li style={{ marginBottom: 6 }} {...props} />,
-  strong: ({ node, ...props }) => <strong style={{ fontWeight: 700, color: 'var(--admin-ink)' }} {...props} />,
-  em: ({ node, ...props }) => <em style={{ color: 'var(--admin-ink)' }} {...props} />,
-  blockquote: ({ node, ...props }) => (
-    <blockquote style={{ margin: '16px 0', padding: '8px 14px', borderLeft: '4px solid var(--admin-accent-soft)', background: 'var(--admin-panel-strong)', color: 'var(--admin-ink)' }} {...props} />
-  ),
-  code: ({ inline, node, ...props }) =>
-    inline
-      ? <code style={{ background: 'var(--admin-accent-soft)', padding: '1px 5px', borderRadius: 4, fontSize: '0.92em' }} {...props} />
-      : <code style={{ display: 'block', background: 'var(--admin-accent-soft)', padding: 12, borderRadius: 8, overflowX: 'auto' }} {...props} />,
-}
-
-const PUBLIC_DIRECT_PAGE_NAMES = new Set(['login', 'impressum', 'kontakt', 'datenschutz'])
 const LOGIN_REQUIRED_MESSAGE = 'Keine Berechtigung - loggen Sie sich zuerst ein'
+const ARTICLE_NOT_FOUND_MESSAGE = 'Artikel nicht gefunden'
+/** Untertitel im Artikelmodus: „Erläuterungen: <Titel>“ (ersetzt „Artikel aus dem astrologischen Wiki“). */
+const articleSubtitle = (name) => `Erläuterungen: ${name}`
+const WIKI_TITLE = pages.wiki.meta.title
+const WIKI_DESCRIPTION = pages.wiki.meta.description
+
+/**
+ * Bild-Fehlerpfad der drei Cover-Flächen: fällt **genau einmal** auf das Standardbild
+ * zurück. Der Merker sitzt am Element (wie in `Dashboard.jsx`), nicht an einer gerenderten
+ * URL — sonst liefe der Rückfall bei jedem erneuten Fehlschlag erneut und die Fläche würde
+ * zwischen zwei Quellen flackern. Nach dem zweiten Fehlschlag bleibt die feste Fläche des Bildes
+ * stehen (`background: var(--admin-panel-strong)`), ohne Text und ohne Layoutsprung.
+ * @param {React.SyntheticEvent<HTMLImageElement>} event - Fehler-Ereignis des `<img>`
+ * @returns {void}
+ */
+function handleCoverError(event){
+  const image = event.currentTarget
+  if (!image || image.dataset.coverFallback === '1') return
+  image.dataset.coverFallback = '1'
+  image.src = DEFAULT_COVER_URL
+}
 
 function createRequestError(status, message){
   const error = new Error(message)
@@ -53,36 +67,68 @@ function scrollWindowToTop(){
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-export default function Wiki({
-  directPageName = '',
-  directOriginPage = '',
-  directOriginLabel = '',
-  targetSectionId = '',
-  targetCategoryId = '',
-  targetEntryId = '',
-}){
+/**
+ * Liest eine positive Ganzzahl aus einem Query-Wert.
+ * `Number('quatsch')` ergibt `NaN`, und `NaN > 0` ist `false` — deshalb prüft der Helfer
+ * explizit auf eine ganze Zahl (unbekannte Werte werden ignoriert, nicht weitergereicht).
+ * @param {string|null} value - Rohwert aus der Adresse
+ * @returns {number} ID oder 0
+ */
+function readEntryId(value){
+  const parsed = Number(value || 0)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0
+}
+
+export default function Wiki(){
   const { profile } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { slug = '' } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const bereich = searchParams.get('bereich') || ''
+  const kategorie = searchParams.get('kategorie') || ''
+  const artikelId = readEntryId(searchParams.get('artikel'))
+
   const [sections, setSections] = useState([])
   const [categories, setCategories] = useState([])
   const [entries, setEntries] = useState([])
-  const [directEntries, setDirectEntries] = useState([])
+  const [article, setArticle] = useState(null)
+  const [detachedEntry, setDetachedEntry] = useState(null)
   const [relatedEntriesByEntryId, setRelatedEntriesByEntryId] = useState({})
-  const [publicPageNameByEntryId, setPublicPageNameByEntryId] = useState({})
-  const [selectedSectionId, setSelectedSectionId] = useState('')
-  const [selectedCategoryId, setSelectedCategoryId] = useState('')
-  const [expandedEntryId, setExpandedEntryId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState({ message: '', requiresLogin: false })
-  const hasDirectPage = !!String(directPageName || '').trim()
-  const hasAuthToken = typeof window !== 'undefined' ? !!window.localStorage.getItem('token') : false
-  const isPublicDirectPage = PUBLIC_DIRECT_PAGE_NAMES.has(String(directPageName || '').trim().toLowerCase())
+
+  const isArticleMode = Boolean(slug)
   const isAdmin = Boolean(profile?.isadmin)
   const canShowRelatedEntries = Boolean(profile)
-  const normalizedTargetSectionId = String(targetSectionId || '')
-  const normalizedTargetCategoryId = String(targetCategoryId || '')
-  const normalizedTargetEntryId = Number(targetEntryId || 0)
 
   const wikiSectionIds = useMemo(() => new Set(sections.map((section) => Number(section.section_id))), [sections])
+
+  // Abgeleitete Filter: die Adresse gewinnt, sonst der erste Bereich/die erste Kategorie.
+  // Nichts davon wird zurück in die URL geschrieben — ein reiner Standardwert ist kein
+  // Zustandswechsel und darf die History nicht anfassen.
+  const activeSectionId = useMemo(() => {
+    if (bereich && wikiSectionIds.has(Number(bereich))) return String(bereich)
+    return sections[0] ? String(sections[0].section_id) : ''
+  }, [bereich, sections, wikiSectionIds])
+
+  const filteredCategories = useMemo(() => {
+    if (!activeSectionId) return []
+    return categories.filter((category) => {
+      const sectionId = Number(category.section_id)
+      return wikiSectionIds.has(sectionId) && sectionId === Number(activeSectionId)
+    })
+  }, [activeSectionId, categories, wikiSectionIds])
+
+  const activeCategoryId = useMemo(() => {
+    if (kategorie && filteredCategories.some((category) => String(category.category_id) === String(kategorie))) {
+      return String(kategorie)
+    }
+    return filteredCategories[0] ? String(filteredCategories[0].category_id) : ''
+  }, [filteredCategories, kategorie])
+
+  const selectedCategory = filteredCategories.find((category) => String(category.category_id) === String(activeCategoryId))
 
   function setRequestError(errorValue, fallbackMessage){
     if (Number(errorValue?.status) === 401){
@@ -93,90 +139,14 @@ export default function Wiki({
   }
 
   function navigateToLogin(){
-    window.dispatchEvent(new CustomEvent('astronexNavigate', { detail: { page: 'login', state: {} } }))
+    // Der Rückweg führt auf den aktuellen Artikel bzw. die gefilterte Liste, nicht pauschal
+    // auf `/wiki`; `safeNext` prüft das Ziel gegen die Routentabelle.
+    navigate('/login?next=' + encodeURIComponent(location.pathname + location.search))
   }
 
-  function navigateToEntryEditor(entry){
-    if (!entry?.entry_id) return
-    window.dispatchEvent(new CustomEvent('astronexNavigate', {
-      detail: {
-        page: 'admin',
-        state: {
-          activeTab: 'entries',
-          entryEditRequest: {
-            entry,
-            requestedAt: Date.now(),
-          },
-        },
-      },
-    }))
-  }
-
-  async function resolvePublicPageName(entryId){
-    const normalizedEntryId = Number(entryId)
-    if (!normalizedEntryId) return ''
-
-    if (publicPageNameByEntryId[normalizedEntryId]) {
-      return publicPageNameByEntryId[normalizedEntryId]
-    }
-
-    const pageContentResponse = await get(`/wiki/page-content?entry_id=${normalizedEntryId}`)
-    if (!pageContentResponse.ok) return ''
-
-    const pageContents = await pageContentResponse.json()
-    const pageId = Array.isArray(pageContents) ? Number(pageContents[0]?.page_id || 0) : 0
-    if (!pageId) return ''
-
-    const pageResponse = await get(`/wiki/pages/${pageId}`)
-    if (!pageResponse.ok) return ''
-
-    const page = await pageResponse.json()
-    const pageName = String(page?.page_name || '').trim()
-    if (!pageName) return ''
-
-    setPublicPageNameByEntryId((current) => ({
-      ...current,
-      [normalizedEntryId]: pageName,
-    }))
-
-    return pageName
-  }
-
-  async function navigateToRelatedEntry(relatedEntry){
-    const normalizedEntryId = Number(relatedEntry?.entry_id || 0)
-    if (!normalizedEntryId) return
-
-    if (relatedEntry?.ispublic) {
-      const publicPageName = await resolvePublicPageName(normalizedEntryId)
-      if (publicPageName) {
-        window.dispatchEvent(new CustomEvent('astronexNavigate', {
-          detail: {
-            page: 'wiki',
-            state: {
-              directPageName: publicPageName,
-              directOriginPage: 'wiki',
-              directOriginLabel: 'Wiki',
-            },
-          },
-        }))
-        return
-      }
-    }
-
-    const normalizedCategoryId = String(relatedEntry?.category_id || '')
-    const matchingCategory = categories.find((category) => String(category.category_id) === normalizedCategoryId)
-    const nextSectionId = matchingCategory ? String(matchingCategory.section_id) : ''
-
-    window.dispatchEvent(new CustomEvent('astronexNavigate', {
-      detail: {
-        page: 'wiki',
-        state: {
-          targetSectionId: nextSectionId,
-          targetCategoryId: normalizedCategoryId,
-          targetEntryId: String(relatedEntry?.entry_id || ''),
-        },
-      },
-    }))
+  function navigateToRelatedEntry(relatedEntry){
+    if (!relatedEntry?.slug) return
+    navigate('/wiki/' + encodeURIComponent(relatedEntry.slug))
   }
 
   async function loadSections(){
@@ -217,31 +187,6 @@ export default function Wiki({
     }catch(err){
       setEntries([])
       setRequestError(err, 'Beiträge konnten nicht geladen werden')
-    }finally{
-      setLoading(false)
-    }
-  }
-
-  async function loadDirectEntries(pageName){
-    const normalizedPageName = String(pageName || '').trim()
-    if (!normalizedPageName) {
-      setDirectEntries([])
-      return
-    }
-
-    setLoading(true)
-    setError({ message: '', requiresLogin: false })
-    try{
-      const params = new URLSearchParams({ page_name: normalizedPageName })
-      const resp = await get(`/wiki/page-entries?${params.toString()}`)
-      if (!resp.ok) throw createRequestError(resp.status, `Direkter Wiki-Eintrag konnte nicht geladen werden (${resp.status})`)
-      const data = await resp.json()
-      const nextEntries = Array.isArray(data) ? data : []
-      setDirectEntries(nextEntries)
-      setExpandedEntryId(nextEntries[0]?.entry_id || null)
-    }catch(err){
-      setDirectEntries([])
-      setRequestError(err, 'Direkter Wiki-Eintrag konnte nicht geladen werden')
     }finally{
       setLoading(false)
     }
@@ -288,123 +233,140 @@ export default function Wiki({
     })
   }
 
-  useEffect(() => {
-    if (hasDirectPage) {
-      if (hasAuthToken || canShowRelatedEntries) {
-        loadSections()
-        loadCategories()
-      }
-      loadDirectEntries(directPageName)
-      return
-    }
+  /** Setzt Filter/Aufklapp-Zustand in der Adresse — ohne Verlaufseintrag und ohne Scroll-Sprung. */
+  function applySearchParams(mutate, options = { replace: true, preventScrollReset: true }){
+    const next = new URLSearchParams(searchParams)
+    mutate(next)
+    setSearchParams(next, options)
+  }
 
-    setDirectEntries([])
+  function selectSection(sectionId){
+    const nextSectionId = String(sectionId)
+    const nextSectionCategories = categories.filter((category) => String(category.section_id) === nextSectionId)
+    applySearchParams((next) => {
+      next.set('bereich', nextSectionId)
+      if (nextSectionCategories[0]) next.set('kategorie', String(nextSectionCategories[0].category_id))
+      else next.delete('kategorie')
+      next.delete('artikel')
+    })
+  }
+
+  function selectCategory(categoryId){
+    applySearchParams((next) => {
+      next.set('kategorie', String(categoryId))
+      next.delete('artikel')
+    })
+  }
+
+  function toggleExpandedEntry(entryId){
+    const normalizedEntryId = Number(entryId)
+    if (!normalizedEntryId) return
+    applySearchParams((next) => {
+      if (Number(artikelId) === normalizedEntryId) next.delete('artikel')
+      else next.set('artikel', String(normalizedEntryId))
+    })
+  }
+
+  // Liste: Bereiche und Kategorien werden nur im Listenmodus gebraucht.
+  useEffect(() => {
+    if (isArticleMode) return
     loadSections()
     loadCategories()
-  }, [canShowRelatedEntries, directPageName, hasAuthToken, hasDirectPage, isPublicDirectPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isArticleMode])
 
+  // Artikelmodus: der Slug ist die einzige Quelle, nie ein `find()` über die Liste.
   useEffect(() => {
-    if (hasDirectPage) return
-    if (!sections.length) {
-      if (selectedSectionId) setSelectedSectionId('')
-      if (selectedCategoryId) setSelectedCategoryId('')
-      return
+    if (!slug) {
+      setArticle(null)
+      return undefined
     }
 
-    const nextSectionId = selectedSectionId || String(sections[0].section_id)
-    if (nextSectionId !== selectedSectionId) {
-      setSelectedSectionId(nextSectionId)
-      return
+    let active = true
+    setArticle(null)
+    setError({ message: '', requiresLogin: false })
+    setLoading(true)
+    scrollWindowToTop()
+
+    get('/wiki/by-slug/' + encodeURIComponent(slug))
+      .then(async (resp) => {
+        if (!resp.ok) {
+          if (resp.status === 404) throw createRequestError(404, ARTICLE_NOT_FOUND_MESSAGE)
+          throw createRequestError(resp.status, `Artikel konnte nicht geladen werden (${resp.status})`)
+        }
+        return resp.json()
+      })
+      .then((data) => {
+        if (active) setArticle(data && typeof data === 'object' ? data : null)
+      })
+      .catch((err) => {
+        if (!active) return
+        setRequestError(err, 'Artikel konnte nicht geladen werden')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
     }
+  }, [slug])
 
-    const nextFilteredCategories = categories.filter((category) => {
-      const sectionId = Number(category.section_id)
-      return wikiSectionIds.has(sectionId) && sectionId === Number(nextSectionId)
-    })
-    const nextCategoryId = nextFilteredCategories[0] ? String(nextFilteredCategories[0].category_id) : ''
-
-    if (selectedCategoryId && !nextFilteredCategories.some((category) => String(category.category_id) === String(selectedCategoryId))) {
-      setSelectedCategoryId(nextCategoryId)
-      return
-    }
-
-    if (!selectedCategoryId && nextCategoryId) {
-      setSelectedCategoryId(nextCategoryId)
-    }
-  }, [categories, hasDirectPage, sections, selectedCategoryId, selectedSectionId, wikiSectionIds])
-
+  // Liste: der Ladevorgang hängt an den Filtern aus der Adresse, nicht an lokalem Zustand.
   useEffect(() => {
-    if (hasDirectPage || !sections.length) return
-    let resolvedTargetSectionId = normalizedTargetSectionId
-
-    if (!resolvedTargetSectionId && normalizedTargetCategoryId && categories.length) {
-      const matchingCategory = categories.find((category) => String(category.category_id) === normalizedTargetCategoryId)
-      resolvedTargetSectionId = matchingCategory ? String(matchingCategory.section_id) : ''
-    }
-
-    if (!resolvedTargetSectionId) return
-    if (!sections.some((section) => String(section.section_id) === resolvedTargetSectionId)) return
-    if (selectedSectionId === resolvedTargetSectionId) return
-    setSelectedSectionId(resolvedTargetSectionId)
-  }, [categories, hasDirectPage, normalizedTargetCategoryId, normalizedTargetSectionId, sections, selectedSectionId])
-
-  useEffect(() => {
-    if (hasDirectPage || !categories.length) return
-    if (!normalizedTargetCategoryId) return
-    const matchingCategory = categories.find((category) => String(category.category_id) === normalizedTargetCategoryId)
-    if (!matchingCategory) return
-
-    const matchingSectionId = String(matchingCategory.section_id)
-    if (selectedSectionId !== matchingSectionId) return
-    if (selectedCategoryId === normalizedTargetCategoryId) return
-    setSelectedCategoryId(normalizedTargetCategoryId)
-  }, [categories, hasDirectPage, normalizedTargetCategoryId, selectedCategoryId, selectedSectionId])
-
-  useEffect(() => {
-    if (hasDirectPage) return
-    setExpandedEntryId(null)
-    if (!selectedSectionId || !selectedCategoryId) {
+    if (isArticleMode) return
+    if (!activeSectionId || !activeCategoryId) {
       setEntries([])
       return
     }
-    loadEntries({
-      section_id: selectedSectionId,
-      category_id: selectedCategoryId,
-    })
-  }, [hasDirectPage, selectedCategoryId, selectedSectionId])
+    loadEntries({ section_id: activeSectionId, category_id: activeCategoryId })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategoryId, activeSectionId, isArticleMode])
 
+  // `?artikel=` jenseits der geladenen 20: den Eintrag gezielt nachladen, sonst wäre der
+  // geteilte Link ein halbes Versprechen.
   useEffect(() => {
-    if (!hasDirectPage) {
-      setExpandedEntryId(null)
-      return
+    setDetachedEntry(null)
+    if (isArticleMode || !artikelId) return undefined
+    if (entries.some((entry) => Number(entry.entry_id) === artikelId)) return undefined
+
+    let active = true
+
+    async function loadDetachedEntry(){
+      try{
+        const resp = await get('/wiki/entries/' + artikelId)
+        if (!resp.ok) throw createRequestError(resp.status, `Beitrag konnte nicht geladen werden (${resp.status})`)
+        const data = await resp.json()
+        if (active) setDetachedEntry(data && typeof data === 'object' ? data : null)
+      }catch(err){
+        if (active) setRequestError(err, 'Beitrag konnte nicht geladen werden')
+      }
     }
-    scrollWindowToTop()
-    loadDirectEntries(directPageName)
-  }, [directPageName, hasDirectPage])
 
-  useEffect(() => {
-    if (hasDirectPage || !normalizedTargetEntryId || !entries.length) return
-    const matchingEntry = entries.find((entry) => Number(entry.entry_id) === normalizedTargetEntryId)
-    if (!matchingEntry) return
+    loadDetachedEntry()
+    return () => {
+      active = false
+    }
+  }, [artikelId, entries, isArticleMode])
 
-    setExpandedEntryId(normalizedTargetEntryId)
-    scrollWindowToTop()
-  }, [entries, hasDirectPage, normalizedTargetEntryId])
-
+  // Verwandte Einträge: Sichtbarkeit hängt an `profile`, Quelle ist je nach Modus der
+  // Artikel oder die geladene Liste (inklusive nachgeladenem Einzeleintrag).
   useEffect(() => {
     if (!canShowRelatedEntries) {
       setRelatedEntriesByEntryId({})
-      return
+      return undefined
     }
 
-    const sourceEntries = hasDirectPage ? directEntries : entries
-    const sourceEntryIds = sourceEntries
-      .map((entry) => Number(entry.entry_id))
-      .filter((entryId) => entryId > 0)
+    const sourceEntries = isArticleMode
+      ? (article ? [article] : [])
+      : (detachedEntry ? [...entries, detachedEntry] : entries)
+    const sourceEntryIds = Array.from(new Set(
+      sourceEntries.map((entry) => Number(entry.entry_id)).filter((entryId) => entryId > 0)
+    ))
 
     if (!sourceEntryIds.length) {
       setRelatedEntriesByEntryId({})
-      return
+      return undefined
     }
 
     let active = true
@@ -431,55 +393,65 @@ export default function Wiki({
     return () => {
       active = false
     }
-  }, [canShowRelatedEntries, directEntries, entries, hasDirectPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article, canShowRelatedEntries, detachedEntry, entries, isArticleMode])
 
-  // Update page title and meta description when an entry is expanded or a direct page is shown
+  // Titel: Artikelmodus → `entry_name`, sonst die Wiki-Seite. Die Hülle setzt für `wikiEntry`
+  // wegen `meta.dynamicTitle` keinen eigenen Titel (sonst überschriebe ihr Effekt den Artikel).
+  // Das Canonical schreibt in diesem Artikelzweig **nur** diese Seite; auf der Übersicht `/wiki`
+  // gehört `<head>` allein der Hülle (`canonicalForPath('/wiki')` → `/astro-wiki/`). Kind-Effekte
+  // laufen vor Eltern-Effekten — schrieben beide auf `/wiki`, überschriebe die Hülle bei jeder
+  // Navigation das Wiki-Canonical. Ohne geladenen Eintrag bleibt `DEFAULT_CANONICAL` stehen.
+  useSeoMeta(article?.entry_name || WIKI_TITLE, article?.entry_short || WIKI_DESCRIPTION, isArticleMode, canonicalForWikiEntry(article?.slug))
+
+  // Titelbereich: Artikelname und Untertitel kommen aus dem schmalen Kontext, bis der
+  // Artikel geladen ist bleibt der `handle`-Titel („Wiki") stehen.
+  const setTitle = usePageFrame()?.setTitle
+  const setDescription = usePageFrame()?.setDescription
+  const setActions = usePageFrame()?.setActions
+  const articleEntryId = article?.entry_id
+  const articleName = article?.entry_name || ''
+
+  // Editor-Sprung transportiert nur die ID. Als `useCallback` mit primitiven Abhängigkeiten
+  // stabilisiert, damit der Aktions-Slot keine veraltete Closure rendert.
+  const editArticle = useCallback(() => {
+    if (!articleEntryId) return
+    navigate('/admin/entries?entry=' + articleEntryId)
+  }, [articleEntryId, navigate])
+
   useEffect(() => {
-    const SITE_NAME = 'Astro-Magister'
-    const sourceEntries = hasDirectPage ? directEntries : entries
-    const expandedEntry = sourceEntries.find((entry) => Number(entry.entry_id) === Number(expandedEntryId))
-    const entryName = String(expandedEntry?.entry_name || '').trim()
-
-    let title
-    let description
-    if (entryName) {
-      title = `${entryName} – Wiki | ${SITE_NAME}`
-      description = expandedEntry?.short_description
-        ? String(expandedEntry.short_description).slice(0, 155)
-        : `${entryName} – astrologischer Wiki-Eintrag auf ${SITE_NAME}.`
-    } else if (hasDirectPage && directPageName) {
-      title = `${directPageName} | ${SITE_NAME}`
-      description = `Wiki-Seite „${directPageName}" auf ${SITE_NAME}.`
-    } else {
-      title = `Wiki | ${SITE_NAME}`
-      description = 'Das astrologische Wiki von Astro-Magister – Begriffe, Planeten, Aspekte und mehr erklärt.'
+    if (!setTitle || !isArticleMode || !articleName) return undefined
+    setTitle(articleName)
+    setDescription(articleSubtitle(articleName))
+    return () => {
+      setTitle(null)
+      setDescription(null)
     }
+  }, [isArticleMode, slug, articleName, setTitle, setDescription])
 
-    document.title = title
-    const descEl = document.querySelector('meta[name="description"]')
-    if (descEl) descEl.setAttribute('content', description)
-    const ogTitle = document.querySelector('meta[property="og:title"]')
-    if (ogTitle) ogTitle.setAttribute('content', title)
-    const ogDesc = document.querySelector('meta[property="og:description"]')
-    if (ogDesc) ogDesc.setAttribute('content', description)
-    const twTitle = document.querySelector('meta[name="twitter:title"]')
-    if (twTitle) twTitle.setAttribute('content', title)
-    const twDesc = document.querySelector('meta[name="twitter:description"]')
-    if (twDesc) twDesc.setAttribute('content', description)
-  }, [directEntries, directPageName, entries, expandedEntryId, hasDirectPage])
+  useEffect(() => {
+    if (!setActions || !isArticleMode) return undefined
+    setActions(
+      <>
+        <Link
+          to="/wiki"
+          className="admin-secondary-button"
+          style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 12px', textDecoration: 'none' }}
+        >
+          Zur Wiki-Übersicht
+        </Link>
+        {isAdmin && articleEntryId ? (
+          <button type="button" className="admin-primary-button" onClick={editArticle}>
+            Beitrag bearbeiten
+          </button>
+        ) : null}
+      </>
+    )
+    return () => setActions(null)
+  }, [setActions, isArticleMode, isAdmin, articleEntryId, editArticle])
 
-  const filteredCategories = useMemo(() => {
-    if (!selectedSectionId) return []
-
-    return categories.filter((category) => {
-      const sectionId = Number(category.section_id)
-      return wikiSectionIds.has(sectionId) && sectionId === Number(selectedSectionId)
-    })
-  }, [categories, selectedSectionId, wikiSectionIds])
-
-  const visibleEntries = hasDirectPage ? directEntries : entries
-  const directEditableEntry = hasDirectPage && directEntries.length > 0 ? directEntries[0] : null
-  const selectedCategory = filteredCategories.find((category) => String(category.category_id) === String(selectedCategoryId))
+  const visibleEntries = entries
+  const expandedEntry = detachedEntry && Number(detachedEntry.entry_id) === artikelId ? detachedEntry : null
 
   function renderRelatedEntries(entryId){
     if (!canShowRelatedEntries) return null
@@ -487,8 +459,8 @@ export default function Wiki({
     if (!relatedEntries.length) return null
 
     return (
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--admin-line)' }}>
-        <h4 style={{ margin: '0 0 10px', fontSize: '1rem', color: 'var(--admin-ink)' }}>Weitere Beiträge</h4>
+      <div style={{ clear: 'both', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--admin-line)' }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: '1rem', color: 'var(--admin-ink)' }}>Weitere Beiträge</h3>
         <div style={{ display: 'grid', gap: 10 }}>
           {relatedEntries.map((relatedEntry) => (
             <button
@@ -511,62 +483,64 @@ export default function Wiki({
     )
   }
 
-  return (
-    <div>
-      <div className="admin-panel-header">
-        {!hasDirectPage ? (
-        <div>
-          <h3>Wiki</h3>
-          <p>{hasDirectPage ? `Direkt verlinkter Wiki-Eintrag für ${directPageName}.` : 'Bereiche und Kategorien auswählen, Beiträge durchsuchen und Inhalte direkt lesen.'}</p>
-        </div>
-        ): <div></div>}
-        {hasDirectPage ? (
-          <div className="admin-action-group">
-            {directOriginPage ? (
+  if (isArticleMode) {
+    return (
+      <div>
+        {error.message ? (
+          <div className="admin-message admin-error">
+            <span>{error.message}</span>
+            {error.requiresLogin ? (
               <button
                 type="button"
-                className="admin-secondary-button"
-                onClick={() => window.dispatchEvent(new CustomEvent('astronexNavigate', { detail: { page: directOriginPage, state: {} } }))}
+                onClick={navigateToLogin}
+                style={{ marginLeft: 8, padding: 0, border: 'none', background: 'transparent', color: 'var(--admin-accent)', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700 }}
               >
-                {`Zurück${directOriginLabel ? ` zu ${directOriginLabel}` : ''}`}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="admin-secondary-button"
-              onClick={() => window.dispatchEvent(new CustomEvent('astronexNavigate', { detail: { page: 'wiki', state: {} } }))}
-            >
-              Zur Wiki Startseite
-            </button>
-            {isAdmin ? (
-              <button
-                type="button"
-                className="admin-primary-button"
-                onClick={() => navigateToEntryEditor(directEditableEntry)}
-                disabled={!directEditableEntry}
-              >
-                Beitrag bearbeiten
+                Zum Login
               </button>
             ) : null}
           </div>
         ) : null}
-      </div>
 
-      {!hasDirectPage ? (
+        {article ? (
+          <article className="app-page-panel wiki-article" data-testid="wiki-article">
+            {/* Cover als erstes Kind: schwebt rechts, der Artikeltext fließt links herum, höchstens
+                400 px breit. Alt-Text kommt aus dem Serverfeld `cover_alt` — ohne Bild ist er
+                leer, weil dann das dekorative Standardbild erscheint. */}
+            <img
+              className="wiki-cover-banner"
+              data-testid="wiki-article-cover"
+              src={article.cover_url || DEFAULT_COVER_URL}
+              alt={article.cover_alt || ''}
+              width="400"
+              height="210"
+              loading="eager"
+              decoding="async"
+              onError={handleCoverError}
+            />
+            <MarkdownArticle content={article.entry_content || 'Kein Inhalt vorhanden.'} />
+            {renderRelatedEntries(article.entry_id)}
+          </article>
+        ) : null}
+
+        {!article && !loading && !error.message ? (
+          <div className="admin-message">{ARTICLE_NOT_FOUND_MESSAGE}</div>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <div>
       <div style={{ display: 'grid', gap: 10, marginBottom: 18, marginLeft: 0, padding: 0 }}>
         <div style={{ display: 'flex', marginLeft: 0, padding: 0, flexWrap: 'wrap', alignItems: 'center', gap: 0, color: 'var(--admin-ink)' }}>
           {sections.map((section) => {
-            const isActive = String(selectedSectionId) === String(section.section_id)
-            const nextSectionCategories = categories.filter((category) => Number(category.section_id) === Number(section.section_id) && wikiSectionIds.has(Number(category.section_id)))
+            const isActive = String(activeSectionId) === String(section.section_id)
             return (
               <React.Fragment key={`wiki-section-${section.section_id}`}>
                 <span style={{ margin: '5px', color: 'var(--admin-line)', fontSize: 20 }}>{section === sections[0] ? '' : '|'}</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedSectionId(String(section.section_id))
-                    setSelectedCategoryId(nextSectionCategories[0] ? String(nextSectionCategories[0].category_id) : '')
-                  }}
+                  onClick={() => selectSection(section.section_id)}
                   style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 20, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--admin-accent)' : 'var(--admin-ink)' }}
                 >
                   {section.section_name}
@@ -576,16 +550,16 @@ export default function Wiki({
           })}
         </div>
 
-        {selectedSectionId ? (
+        {activeSectionId ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0, color: 'var(--admin-ink)' }}>
             {filteredCategories.map((category) => {
-              const isActive = String(selectedCategoryId) === String(category.category_id)
+              const isActive = String(activeCategoryId) === String(category.category_id)
               return (
                 <React.Fragment key={`wiki-category-${category.category_id}`}>
                   <span style={{ margin: '5px', color: 'var(--admin-line)', fontSize: 18 }}>{category === filteredCategories[0] ? '' : '|'}</span>
                   <button
                     type="button"
-                    onClick={() => setSelectedCategoryId(String(category.category_id))}
+                    onClick={() => selectCategory(category.category_id)}
                     style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--admin-accent)' : 'var(--admin-ink)' }}
                   >
                     {category.category_name}
@@ -596,7 +570,6 @@ export default function Wiki({
           </div>
         ) : null}
       </div>
-      ) : null}
 
       {error.message ? (
         <div className="admin-message admin-error">
@@ -619,46 +592,101 @@ export default function Wiki({
       ) : null}
 
       <div style={{ display: 'grid', gap: 16 }}>
-        {visibleEntries.map((entry) => {
-          const isExpanded = Number(expandedEntryId) === Number(entry.entry_id)
+        {visibleEntries.map((entry, index) => {
+          const isExpanded = Number(artikelId) === Number(entry.entry_id)
           return (
-            <article id={`wiki-entry-${entry.entry_id}`} key={`wiki-entry-${entry.entry_id}`} className="admin-cache-card">
-              {hasDirectPage ? (
-                <div>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                    {entry.entry_content || 'Kein Inhalt vorhanden.'}
-                  </ReactMarkdown>
-                  {renderRelatedEntries(entry.entry_id)}
-                </div>
-              ) : null}
-
-              {!hasDirectPage ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedEntryId((current) => Number(current) === Number(entry.entry_id) ? null : entry.entry_id)}
-                    style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-                  >
-                    <header className="admin-cache-card-header">
-                      <h3>{entry.entry_name}</h3>
+            <article id={`wiki-entry-${entry.entry_id}`} key={`wiki-entry-${entry.entry_id}`} className="admin-cache-card wiki-card">
+              <button
+                type="button"
+                onClick={() => toggleExpandedEntry(entry.entry_id)}
+                aria-expanded={isExpanded}
+                style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                {/* Kopf als Raster: Text links, Bild rechts. Das Bild ist ein nacktes `<img>` —
+                    kein Link, kein zweiter Knopf; der ganze Kopf bleibt der Toggle. */}
+                <div className="wiki-card-head">
+                  <div className="wiki-card-text">
+                    <header className={isExpanded && isAdmin ? 'admin-cache-card-header wiki-card-header-with-edit' : 'admin-cache-card-header'}>
+                      <h2>{entry.entry_name}</h2>
                       <span>{isExpanded ? 'Verbergen' : 'Details'}</span>
                     </header>
                     <p style={{ margin: 0, color: 'var(--admin-ink)' }}>{entry.entry_short || 'Kein Kurztext'}</p>
-                  </button>
+                  </div>
+                  <img
+                    className="wiki-cover-thumb"
+                    data-testid="wiki-card-cover"
+                    src={entry.cover_url || DEFAULT_COVER_URL}
+                    alt=""
+                    width="200"
+                    height="105"
+                    loading={index < 3 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    onError={handleCoverError}
+                  />
+                </div>
+              </button>
+              {/* Admin: „Bearbeiten“ neben „Verbergen“. Steht bewusst **neben** dem Kopf-Toggle,
+                  nicht darin (kein Knopf im Knopf); der Kopf reserviert ihm rechts den Platz. */}
+              {isExpanded && isAdmin ? (
+                <button
+                  type="button"
+                  className="admin-primary-button wiki-card-edit"
+                  data-testid="wiki-card-edit"
+                  onClick={() => navigate('/admin/entries?entry=' + entry.entry_id)}
+                >
+                  Bearbeiten
+                </button>
+              ) : null}
 
-                  {isExpanded ? (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--admin-line)' }}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                        {entry.entry_content || 'Kein Inhalt vorhanden.'}
-                      </ReactMarkdown>
-                      {renderRelatedEntries(entry.entry_id)}
+              {isExpanded ? (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--admin-line)' }}>
+                  {/* Kein zweites Banner im aufgeklappten Eintrag: das Bild
+                      steht direkt darüber im Kartenkopf und ist beim Aufklappen sichtbar. Nur der
+                      nachgeladene Einzeleintrag jenseits der 20 rendert ein Banner, weil er keinen
+                      Kartenkopf hat. */}
+                  <MarkdownArticle content={entry.entry_content || 'Kein Inhalt vorhanden.'} />
+                  {renderRelatedEntries(entry.entry_id)}
+                  {/* Ohne Slug (in der DB nullable) gibt es keine Artikel-Adresse; der Eintrag ist
+                      hier bereits über `?artikel=<id>` aufgeklappt, ein Link auf `/wiki/` würde nur
+                      auf die Liste zurückfallen. */}
+                  {entry.slug ? (
+                    <div className="admin-cache-card-actions">
+                      <Link to={'/wiki/' + encodeURIComponent(entry.slug)} style={{ color: 'var(--admin-accent)', fontWeight: 700 }}>
+                        Artikel öffnen
+                      </Link>
                     </div>
                   ) : null}
-                </>
+                </div>
               ) : null}
             </article>
           )
         })}
+
+        {expandedEntry ? (
+          <article id={`wiki-entry-${expandedEntry.entry_id}`} className="admin-cache-card">
+            <header className="admin-cache-card-header">
+              <h2>{expandedEntry.entry_name}</h2>
+              <span>Details</span>
+            </header>
+            <div style={{ marginTop: 8 }}>
+              {/* Nachgeladener Einzeleintrag (`?artikel=` jenseits der 20): Kopf ohne Kopfbild,
+                  Banner trotzdem über dem Text — dieselbe Fläche wie im aufgeklappten Eintrag. */}
+              <img
+                className="wiki-cover-banner"
+                data-testid="wiki-card-banner"
+                src={expandedEntry.cover_url || DEFAULT_COVER_URL}
+                alt={expandedEntry.cover_alt || ''}
+                width="400"
+                height="210"
+                loading="eager"
+                decoding="async"
+                onError={handleCoverError}
+              />
+              <MarkdownArticle content={expandedEntry.entry_content || 'Kein Inhalt vorhanden.'} />
+              {renderRelatedEntries(expandedEntry.entry_id)}
+            </div>
+          </article>
+        ) : null}
       </div>
     </div>
   )

@@ -16,6 +16,7 @@ from astronex import database as astronex_database_adapter
 from astronex.utils import degtodec, dectodeg
 
 from app.db.session import get_session
+from app.services.ephemeris import clear_calc_cache
 from app.db.models.locations import (
     CountryName,
     WorldAdminRegion,
@@ -258,6 +259,10 @@ def ensure_astro_env(app: FastAPI) -> AstroEnvironment:
         _patch_astronex_database_adapter_for_web()
         state = Current(app)
         init_config(app.home_dir, opts, state)
+        # G-50-01: init_config sets the ephemeris path internally (astronex/nex.py:75-78).
+        # The clear lives here because that desktop module is read-only for this project, and
+        # without it a failure cached under the previous path survives the path change.
+        clear_calc_cache()
         manager = Manager(app, opts, state)
         _env_instance = AstroEnvironment(manager, state, opts)
         return _env_instance

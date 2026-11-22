@@ -1,0 +1,190 @@
+/* Hüllen-CSS für App **und** statisches Wiki — einzige Quelle (Phase 40).
+   Vorausgesetzt werden nur die `--admin-*`-Tokens und `nav a{color:#fff}`; beide Dateien
+   definieren sie selbst. Hier stehen deshalb keine globalen Element-Regeln (kein `body`,
+   kein `nav a`, kein `input`/`button`, kein `:root`) — die bleiben in `styles.css`
+   bzw. der Wiki-`global.css`. Einzige Ausnahme ist die Landmark-Regel für `<main>`, weil
+   App und Wiki dasselbe Sprungziel fokussieren. */
+
+.app-nav-wrap{padding:0;background:linear-gradient(180deg,var(--admin-panel) 0%,var(--admin-panel) 45%,transparent 100%);max-width:1350px;margin:0 auto}
+.app-nav{background:var(--admin-accent);color:#fff;border-radius:24px;padding:14px 16px;box-shadow:var(--admin-shadow)}
+/* Eine Höhe für alle: `height` + `border-box` macht die Box unabhängig von Schrift-Metrik und
+   Padding. Nötig, weil dieselbe Klasse auf `<a>` (NavLink) und `<button>` (Gruppenknopf) liegt und
+   Buttons die Schrift nicht erben — mit `min-height` bei `content-box` ergaben Padding und Border
+   je Element eine andere Kisten-Höhe (Padding 8px + Border 1px kommen sonst obendrauf). */
+.app-nav-link{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:44px;min-height:44px;padding:0 16px;border-radius:999px;cursor:pointer;color:#f6fffc;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font-family:inherit;font-size:inherit;font-weight:600;line-height:1}
+.app-nav-link:hover,.app-nav-link:focus-visible{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);transform:translateY(-1px);outline:2px solid #fff;outline-offset:2px}
+/* Aktiv-Zustand hängt an beiden Signalen: React setzt die `-active`-Klasse über `NavLink`, das
+   statische Wiki nur `aria-current` (WR-03). Ohne den Attribut-Selektor wäre die gemeinsame
+   Hüllen-CSS im Wiki für den wichtigsten Zustand wirkungslos. */
+.app-nav-link-active,.app-nav-link[aria-current="page"],.app-nav-link[aria-current="true"]{background:#fff;color:var(--admin-accent);border-color:#fff}
+.app-nav-link-logout{background:rgba(17,36,61,.18)}
+/* NavLink rendert <a>: ohne Reset unterstreicht der Browser die Menüleiste (Pitfall 11). */
+a.app-nav-link{text-decoration:none}
+/* Programm-Fokus auf den Hauptbereich (D-11) soll keinen sichtbaren Fokusring zeigen. */
+main[tabindex="-1"]:focus:not(:focus-visible){outline:none}
+.app-nav-menu-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:44px;min-height:44px;padding:0 14px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;border-radius:14px;cursor:pointer;font-size:16px;line-height:1}
+.app-nav-menu-button:hover,.app-nav-menu-button:focus-visible{background:rgba(255,255,255,.16);outline:2px solid #fff;outline-offset:2px}
+
+.app-content-stage{padding:0;padding-top:16px;min-height:calc(100vh - 60px)}
+.app-page-shell{width:100%;max-width:1350px;margin:0 auto;padding:0;box-sizing:border-box}
+/* Panel-Fläche halb zur Zeichen-Palette, halb Weiß (50 % heller): `color-mix` liest `--admin-panel` zur
+   Laufzeit, damit jede Personen-/Zeichenfarbe automatisch mitwandert (D-08) und App wie statisches
+   Wiki dieselbe Fläche zeigen. Die einzelnen Zeilen/Karten setzen darauf `--admin-panel-strong`. */
+.app-page-panel{background:color-mix(in srgb, var(--admin-panel) 50%, #fff 50%);border:1px solid var(--admin-line);border-radius:28px;padding:24px;box-shadow:var(--admin-shadow);width:100%;box-sizing:border-box;max-width:100%}
+.app-page-panel > :first-child{margin-top:0}
+.app-page-panel > :last-child{margin-bottom:0}
+.app-page-shell-wide{padding:0}
+.app-page-loading{display:flex;justify-content:center;align-items:center;min-height:200px;color:#666;font-size:1.1rem}
+
+/* ── Phase 40: Seitenhülle (Navigation, Titelbereich) ──
+   Der Balken ist eine Zeile: Menüliste links, Konto rechts. `flex-wrap:wrap` ist die Voraussetzung für das Mobil-Panel unter dem Balken. */
+.app-header{display:block}
+.app-nav{display:flex;align-items:center;flex-wrap:wrap;gap:16px;position:relative}
+.app-nav-panel{display:flex;align-items:center;gap:16px;flex:1 1 auto;min-width:0;list-style:none;margin:0;padding:0}
+.app-nav-item-group{position:relative}
+.app-nav-group-heading{display:none}
+.app-nav-anon-list{display:flex;align-items:center;gap:8px;list-style:none;margin:0;padding:0}
+/* Gleicher Abstand wie zwischen den direkten Kindern der Menüliste (`.app-nav-panel` → 16px), damit
+   die Rubrik „Allgemein" auf dem Desktop-Balken keine engere Gruppe bildet als der Rest. */
+.app-nav-inline-list{display:flex;align-items:center;gap:16px;list-style:none;margin:0;padding:0}
+.app-nav-link{min-height:44px}
+.app-nav-menu-button{display:none}
+.app-nav-group-button{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.app-nav-caret{transition:transform 150ms;font-size:12px}
+.app-nav-group-button[aria-expanded="true"] .app-nav-caret{transform:rotate(180deg)}
+.app-nav-subgroup{list-style:none;margin:0;padding:8px;display:none;background:var(--admin-panel-strong);border:1px solid var(--admin-line);border-radius:16px;box-shadow:var(--admin-shadow);min-width:240px;z-index:900}
+/* Sichtbarer Abstand zwischen den Einträgen: als Block klebten die Zeilen aneinander, und zwei
+   benachbarte Hervorhebungen (Hover + aktiv) verschmolzen zu einer Fläche. `gap` braucht flex —
+   deshalb ist die geöffnete Liste eine Spalte, keine `block`-Liste. */
+.app-nav-subgroup[data-open="true"]{display:flex;flex-direction:column;gap:5px;position:absolute;top:calc(100% + 8px);left:0}
+/* Die rechte Seite (Konto bzw. anonyme Anmeldung) sitzt am rechten Rand der Leiste. */
+.app-nav-item-group-konto,.app-nav-item-group-anon{margin-left:auto}
+/* Der Admin-Knopf steht links neben dem Konto: er uebernimmt den Schub nach rechts, die Gruppe
+   folgt ihm mit dem normalen gap. Ohne den Nachbar-Knopf behaelt die Gruppe ihren auto-Rand. */
+.app-nav-account-item{margin-left:auto}
+.app-nav-account-item + .app-nav-item-group-konto{margin-left:0}
+/* Schriftzug „Astro-Magister" (Desktop): steht in der Menüliste zwischen den linken Gruppen und
+   dem Kontobereich und sitzt über `margin:0 auto` mittig im freien Raum. Er übernimmt damit den
+   Schub nach rechts — die rechte Seite verliert ihren eigenen auto-Rand, sonst teilte sich der
+   Freiraum dreifach und der Schriftzug säße nicht in der Mitte. Darf schrumpfen (Ellipse), damit
+   eine volle Leiste knapp über 960 px nicht überläuft. */
+.app-nav-brand{margin:0 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px;font-weight:700;letter-spacing:.02em;color:#fff}
+.app-nav-brand ~ .app-nav-item-group-konto,.app-nav-brand ~ .app-nav-item-group-anon,.app-nav-brand ~ .app-nav-account-item{margin-left:0}
+/* Mobil-Variante: nur ≤ 960 px sichtbar (s. Media-Query). */
+.app-nav-brand-mobile{display:none}
+/* „Konto“ klappt nach rechts auf, damit das Menü nie über den Viewport-Rand ragt. */
+.app-nav-item-group-konto .app-nav-subgroup{left:auto;right:0}
+/* Pflicht wegen `nav a{color:#fff}`: Untermenü-Einträge stehen auf heller Fläche. */
+.app-nav-sub-link{display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;min-height:36px;padding:4px 12px;border-radius:10px;color:var(--admin-ink);text-decoration:none;font-size:16px;font-weight:400;line-height:1.4}
+.app-nav-sub-link:hover,.app-nav-sub-link:focus-visible{background:var(--admin-accent-soft)}
+.app-nav-sub-link:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+.app-nav-sub-link-active,.app-nav-sub-link[aria-current="page"],.app-nav-sub-link[aria-current="true"]{font-weight:600;background:var(--admin-accent-soft);box-shadow:inset 4px 0 0 var(--admin-accent)}
+/* Kontrast auf den hellen Flächen: die verschobene Bestandsregel `.app-nav-link` trägt
+   `#f6fffc` (Balkenfarbe, praktisch weiß). Die Unterliste ist **immer** hell — Desktop-Dropdown
+   wie mobile flache Liste. Die Panel-Karte wird erst im 960-px-Block umgefärbt, weil
+   `.app-nav-panel` auf Desktop die Inline-Leiste auf dem Akzent-Balken ist. */
+.app-nav-subgroup .app-nav-link{color:var(--admin-ink);background:transparent;border-color:transparent}
+/* Logout im Dropdown ist eine Zeile wie die anderen Einträge: keine Fläche, volle Breite, nur fett.
+   Die frühere helle Fläche las sich als „vorausgewählt"; der Betreiber hat sie verworfen (WR-04
+   damit bewusst überholt). Höhe und Polsterung folgen `.app-nav-sub-link`, damit die Zeile nicht
+   höher steht als ihre Nachbarn. */
+.app-nav-subgroup .app-nav-link-logout{display:flex;align-items:center;justify-content:flex-start;box-sizing:border-box;width:100%;height:auto;min-height:36px;padding:4px 12px;border:0;border-radius:10px;background:transparent;color:var(--admin-ink);font-weight:600}
+/* Hover wie bei den Untermenü-Links (helle Fläche auf dem hellen Dropdown, kein weißer Schleier). */
+.app-nav-subgroup .app-nav-link-logout:hover,.app-nav-subgroup .app-nav-link-logout:focus-visible{background:var(--admin-accent-soft)}
+.app-nav-subgroup .app-nav-link:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+/* Gesperrter Rechner (NAV-07): zweizeilig mit immer sichtbarem Hinweis. Kein Sonderzustand —
+   der Eintrag bleibt voll bedienbar (kein `pointer-events:none`, kein `aria-disabled`, D-09);
+   allein der Hinweistext signalisiert die Sperre. Der Hinweis ist ein Geschwister des Links
+   (nicht sein Kind), damit er den Accessible Name nicht verdoppelt — deshalb `display:block`
+   und dieselbe waagerechte Polsterung wie `.app-nav-sub-link`. */
+.app-nav-sub-link-locked{cursor:pointer}
+.app-nav-sub-label{font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink)}
+.app-nav-lock-hint{display:block;padding:0 12px;margin-top:2px;font-size:14px;font-weight:400;line-height:1.4;color:var(--admin-ink);opacity:.72}
+/* Platzhalter der rechten Seite, solange die Sitzung lädt: gleiche Kante wie die Kontogruppe
+   (`margin-left:auto` kommt von `.app-nav-item-group-konto`), Mindestbreite gegen den Sprung. */
+.app-nav-account-loading{min-width:120px}
+.app-title-area{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px;padding:24px 24px 16px}
+.app-title-text{min-width:0}
+.app-page-title{margin:0;font-size:28px;font-weight:600;line-height:1.2;color:var(--admin-ink);overflow-wrap:anywhere}
+.app-page-subtitle{margin:8px 0 0;max-width:72ch;font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink)}
+.app-title-actions{display:flex;flex-wrap:wrap;gap:8px}
+/* Skip-Link (D-18): Ruhezustand geclippt, nicht `display:none` — sonst wäre er nicht das
+   erste fokussierbare Element. Beim Fokus wird er als Pille über den Balken gelegt. */
+.app-skip-link{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.app-skip-link:focus{position:fixed;top:8px;left:8px;z-index:1100;width:auto;height:auto;clip-path:none;padding:8px 16px;min-height:44px;border-radius:999px;background:var(--admin-panel-strong);color:var(--admin-ink);font-size:16px;font-weight:600;text-decoration:none;outline:2px solid var(--admin-accent);outline-offset:2px}
+/* Footer als eigenes `contentinfo`-Landmark (D-17): außerhalb von <main>, zwei Gruppen,
+   Copyright-Zeile. Die Trennlinie ersetzt die frühere zentrierte Link-Reihe. */
+.app-footer{max-width:1350px;margin:48px auto 0;padding:24px 24px 32px;box-sizing:border-box;border-top:1px solid var(--admin-line)}
+.app-footer-groups{display:flex;flex-wrap:wrap;gap:48px}
+.app-footer-group{display:flex;flex-direction:column}
+.app-footer-heading{margin:0 0 8px;font-size:14px;font-weight:600;line-height:1.4;color:var(--admin-ink)}
+.app-footer-group ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.app-footer-link{display:inline-flex;align-items:center;gap:6px;min-height:44px;font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink);text-decoration:none}
+.app-footer-link:hover,.app-footer-link:focus-visible{color:var(--admin-accent);text-decoration:underline;outline:2px solid var(--admin-accent);outline-offset:2px}
+.app-footer-copy{margin:24px 0 0;font-size:14px;font-weight:400;line-height:1.4;color:var(--admin-ink);opacity:.72}
+/* Nur für Screenreader: „(öffnet in neuem Tab)" am externen Link. */
+.app-visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+@media (prefers-reduced-motion:reduce){
+	.app-nav-caret{transition:none}
+}
+
+/* Mobil-Regeln stehen hinter dem Grundblock: bei gleicher Spezifität entscheidet die
+   Reihenfolge, nicht der Ort. */
+@media (max-width:960px){
+	.app-nav-menu-button{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;margin-left:auto;font-size:20px}
+	.app-nav-menu-button > span{display:block;line-height:1}
+	.app-nav-panel{display:none}
+	/* Ohne border-box addierten sich Polsterung und Rahmen zu `width:100%` bzw. `flex-basis:100%`
+	   und die Einträge ragten rechts über die helle Panel-Fläche hinaus. */
+	.app-nav-panel[data-open="true"],.app-nav-panel[data-open="true"] *{box-sizing:border-box}
+	.app-nav-panel[data-open="true"]{display:flex;flex-direction:column;align-items:stretch;gap:2px;flex:1 1 100%;margin-top:16px;padding:8px;background:var(--admin-panel-strong);border-radius:16px}
+	.app-nav-group-button{display:none}
+	.app-nav-subgroup,.app-nav-subgroup[data-open="true"]{display:flex;flex-direction:column;gap:4px;position:static;min-width:0;padding:0;margin:0;background:transparent;border:0;box-shadow:none}
+	/* Gemeinsame Textkante: oberste Einträge, Untermenü-Einträge und Gruppen-Überschrift sitzen alle
+	   auf 12 px Innenabstand — vorher standen 16 px gegen 12 px und die Spalte wirkte ausgefranst.
+	   Die Rubrik ist zusätzlich unterstrichen: sie trennt Gruppen in einer Liste, die sonst nur aus
+	   Textzeilen besteht, und der Abstand darüber ist bewusst knapp (6 px statt 16 px). */
+	.app-nav-panel .app-nav-group-heading{display:block;padding:6px 12px 4px;font-size:14px;font-weight:600;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;color:var(--admin-ink);opacity:.72}
+	/* Zeilenhöhen: die Untermenü-Zeilen bleiben bei 44 px (Navigation-Spec misst sie, NAV-04); die
+	   obersten Einträge (Startseite, Wiki, Konto, Logout) sehen im Panel genauso aus wie sie —
+	   gleiche Höhe, gleiche Polsterung, gleicher Hover- und Aktiv-Zustand inklusive Akzentbalken. */
+	/* Untermenü-Zeilen sind eine Spalten-Flexbox (Label + Sperr-Hinweis). `justify-content` wirkt
+	   dort VERTIKAL: `flex-start` drückte den Text nach oben (mehr Luft unten als oben). Horizontal
+	   zuständig ist `align-items`, vertikal bleibt zentriert. */
+	.app-nav-panel .app-nav-sub-link{width:100%;align-items:flex-start;justify-content:center;min-height:44px}
+	.app-nav-panel .app-nav-link{width:100%;justify-content:flex-start;box-sizing:border-box;height:44px;min-height:44px;padding:4px 12px;border:0;border-radius:10px;font-weight:400}
+	.app-nav-panel .app-nav-link{color:var(--admin-ink);background:transparent}
+	/* Die obersten Einträge müssen sich wie alle anderen Zeilen verhalten: ohne diese Zeile gewinnt
+	   `background:transparent` (gleiche Spezifität, spätere Position) gegen `.app-nav-link:hover`
+	   und „Startseite"/„Wiki" blieben als einzige Zeilen ohne Rückmeldung. Farbe identisch zur
+	   Hover-Fläche der Untermenü-Zeilen. */
+	.app-nav-panel .app-nav-link:hover,.app-nav-panel .app-nav-link:focus-visible{background:var(--admin-accent-soft);transform:none}
+	.app-nav-panel .app-nav-link-active,.app-nav-panel .app-nav-link[aria-current="page"],.app-nav-panel .app-nav-link[aria-current="true"]{background:var(--admin-accent-soft);color:var(--admin-ink);font-weight:600;box-shadow:inset 4px 0 0 var(--admin-accent)}
+	/* Logout ist eine Zeile wie jede andere: keine Fläche, nur fett. Die frühere helle Fläche
+	   (WR-04) las sich in der Liste als „ausgewählt", weil sie identisch mit Hover/Aktiv aussah —
+	   der Betreiber hat sie deshalb verworfen. */
+	.app-nav-panel .app-nav-link-logout{background:transparent;color:var(--admin-ink);font-weight:600}
+	.app-nav-panel .app-nav-link:focus-visible{outline:2px solid var(--admin-accent);outline-offset:2px}
+	.app-nav-panel .app-nav-item-group-konto{margin-left:0}
+	.app-nav-panel .app-nav-account-item{margin-left:0}
+	.app-nav-panel .app-nav-item-group-anon{margin-left:0}
+	/* Schriftzug mobil: im Balken mittig über die Zeile des Menüknopfs gelegt (`.app-nav` ist
+	   `position:relative`, Polsterung 14px, Knopfhöhe 44px) — unabhängig von der Knopfbreite und
+	   ohne das aufgeklappte Panel zu verschieben. Die Desktop-Variante in der Liste entfällt. */
+	.app-nav-brand{display:none}
+	.app-nav-brand-mobile{display:block;position:absolute;top:14px;left:50%;transform:translateX(-50%);height:44px;line-height:44px;max-width:calc(100% - 140px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:20px;font-weight:700;letter-spacing:.02em;color:#fff;pointer-events:none}
+	.app-nav-panel .app-nav-anon-list,.app-nav-panel .app-nav-inline-list{flex-direction:column;align-items:stretch;gap:4px;width:100%}
+}
+
+@media (max-width:640px){
+	.app-nav-wrap{padding:12px 12px 0}
+	.app-nav{padding:12px}
+	.app-content-stage{padding:12px 0 20px}
+	.app-page-shell{padding:0 12px}
+	.app-page-panel{padding:18px;border-radius:22px}
+	.app-title-area{padding:16px 8px}
+	.app-title-actions{width:100%}
+	.app-footer{padding:24px 12px 32px}
+	.app-footer-groups{gap:24px;flex-direction:column}
+}

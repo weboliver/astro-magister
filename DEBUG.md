@@ -8,7 +8,7 @@ Speichert alle Ausgaben in debug.log
 
 ## Methode 2: Mit erweiterten Umgebungsvariablen
 ```bash
-DEBUG_NEX=1 ./debug_nex.sh
+DEBUG_NEX=1 python nex.py
 ```
 Aktiviert:
 - Python Faulthandler (zeigt C-Stack bei Crashes)
@@ -69,13 +69,13 @@ Drücke Ctrl+Shift+D in der laufenden App für GTK Inspector
 1. Prüfe ob dispatch() aufgerufen wird:
 ```bash
 cd astronex/surfaces
-# In layoutsurface.py dispatch() Zeile 505:
+# In layoutsurface.py dispatch() Zeile 574:
 # Füge hinzu: print("DISPATCH CALLED", file=sys.stderr, flush=True)
 ```
 
 2. Prüfe DrawMaster Sichtbarkeit:
 ```bash
-cd astronex/boss.py
+cd astronex
 # Nach show_main_window() hinzufügen:
 # print(f"DA visible: {self.da.get_visible()}", file=sys.stderr, flush=True)
 # print(f"DA size: {self.da.get_allocated_width()}x{self.da.get_allocated_height()}", file=sys.stderr, flush=True)

@@ -2,13 +2,17 @@
 JWT Token Blacklist for key rotation and logout invalidation.
 
 Provides mechanism to invalidate JWT tokens before their expiration.
-Uses Redis when REDIS_URL is configured, falls back to in-memory store.
+
+Drei Modi (Phase 49, D-04): ein leerer ``REDIS_URL`` ist der lokale Modus (in-memory, kein
+503); gesetzt und erreichbar ist Redis; gesetzt und nicht erreichbar ist ein Ausfall und
+wirft ``AuthStoreUnavailable`` → 503 (fail-closed, D-01). Einen stillen In-Process-Fallback
+im konfigurierten Modus gibt es nicht mehr.
 """
 import logging
 import time
 from threading import Lock
 
-import app.config as app_config
+import app.services.auth_store as auth_store
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +20,7 @@ _BLACKLIST_KEY_PREFIX = "jwt:blacklist:"
 
 
 class _LocalBlacklist:
-    """In-memory fallback blacklist (single-process only)."""
+    """In-memory blacklist for the documented local mode (single-process only, D-04)."""
 
     def __init__(self) -> None:
         self._blacklist: dict[str, float] = {}
@@ -50,7 +54,12 @@ class _RedisBlacklist:
 
     def __init__(self, redis_url: str) -> None:
         import redis
-        self._client = redis.Redis.from_url(redis_url, decode_responses=True)
+        self._client = redis.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=auth_store.REDIS_CONNECT_TIMEOUT_SECONDS,  # 250 ms (D-16)
+            socket_timeout=auth_store.REDIS_READ_TIMEOUT_SECONDS,              # 500 ms (D-16)
+        )
         self._client.ping()
 
     def add(self, token_jti: str, expires_in_seconds: int) -> None:
@@ -70,31 +79,43 @@ _store: _LocalBlacklist | _RedisBlacklist | None = None
 
 
 def _get_store() -> _LocalBlacklist | _RedisBlacklist:
+    """Return the blacklist store; the mode decision comes from ``auth_store.REDIS_URL``.
+
+    The ``_store`` priority is binding: the existing tests and the resilience tests install
+    their fake here. A constructor failure (``ping``) is not swallowed — the guard in
+    ``auth_store`` catches it and opens the breaker.
+    """
     global _store
     if _store is not None:
         return _store
-    redis_url = (app_config.get_env_setting("REDIS_URL") or "").strip()
-    if redis_url:
-        try:
-            _store = _RedisBlacklist(redis_url)
-            logger.info("JWT blacklist using Redis backend")
-            return _store
-        except Exception:
-            logger.warning("Redis JWT blacklist unavailable, falling back to in-memory store")
-    _store = _local_blacklist
+    if not auth_store.REDIS_URL:
+        _store = _local_blacklist
+        return _store
+    _store = _RedisBlacklist(auth_store.REDIS_URL)
+    logger.info("JWT blacklist using Redis backend")
     return _store
 
 
 def blacklist_token(token_jti: str, expires_in_seconds: int = 3600) -> None:
-    """Add a token JTI to the blacklist with the given TTL."""
-    _get_store().add(token_jti, expires_in_seconds)
+    """Add a token JTI to the blacklist with the given TTL.
+
+    Raises:
+        AuthStoreUnavailable: Redis konfiguriert und nicht erreichbar -> 503 (D-01).
+            Auch ein Ausfall beim Schreiben ist derselbe Ausfall.
+    """
+    auth_store.call(_get_store, 'add', token_jti, expires_in_seconds)
 
 
 def is_token_blacklisted(token_jti: str) -> bool:
-    """Return True if the token JTI is on the blacklist."""
-    return _get_store().is_blacklisted(token_jti)
+    """Return True if the token JTI is on the blacklist.
+
+    Raises:
+        AuthStoreUnavailable: Redis konfiguriert und nicht erreichbar -> 503 (D-01).
+            Der Lesepfad ist die Entwertungsprüfung; er darf nichts durchlassen.
+    """
+    return bool(auth_store.call(_get_store, 'is_blacklisted', token_jti))
 
 
 def cleanup_blacklist() -> None:
     """Remove expired entries (no-op for Redis backend)."""
-    _get_store().cleanup()
+    auth_store.call(_get_store, 'cleanup')

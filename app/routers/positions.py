@@ -4,7 +4,6 @@ import asyncio
 import logging
 import json
 from app.services.ephemeris import julday, calc_ut, houses
-from app.static.texte import get_general_anweisung
 from astronex.chart import Chart
 from app.static.zodiac_names import get_zodiac_name
 from app import config as app_config
@@ -19,9 +18,11 @@ from app.db.session import get_session
 from app.db.models.locations import CountryName, WorldAdminRegion, Location
 from app.routers.auth import _get_user_from_request, require_authenticated_user
 router = APIRouter(tags=["positions"], dependencies=[Depends(require_authenticated_user)])
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 
 # Perplexity AI streaming/caching
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
@@ -157,9 +158,13 @@ def get_calc(
         # build concise summary for single-planet calc
         
         birth = f"{request.year:04d}-{request.month:02d}-{request.day:02d}"
-        summary_text = f"Huber Astrologische Psychologie.\n\nInterpretiere Horoskop: {birth}.\n\n"
-        summary_text += f"Planeten: {planet.planet_name} - {planet.sign or 'unknown'} ({planet.sign_degree or ''}) / {planet.house_index if planet.house_index is not None else 'unknown'} ({planet.house_degree or ''})"
-        summary_text += "\n\n" + get_general_anweisung()
+        summary_text = f"Geburtsdatum: {birth}\n"
+        summary_text += (
+            f"Planet: {planet.planet_name} - {planet.sign or 'unknown'} "
+            f"({planet.sign_degree or ''}) / Haus "
+            f"{planet.house_index if planet.house_index is not None else 'unknown'} "
+            f"({planet.house_degree or ''})"
+        )
 
         return CalcResponse(
             year=request.year,
@@ -274,13 +279,12 @@ def get_planets(
                 sdeg = p.sign_degree or ''
                 hidx = p.house if p.house is not None else 'unknown'
                 hdeg = p.house_degree or ''
-                parts.append(f"{pname} - {sign} ({sdeg}) / house {hidx} ({hdeg})")           
+                parts.append(f"{pname} - {sign} ({sdeg}) / Haus {hidx} ({hdeg})")           
         
             birth = f"{request.year:04d}-{request.month:02d}-{request.day:02d}"
-            summary_text = f"Huber Astrologische Psychologie.\n\nInterpretiere Horoskop: {birth}.\n\n"
-            summary_text += "Planets:\n\n" + "\n".join(parts)
-            summary_text += "\n\n" + get_general_anweisung()
+            summary_text = f"Geburtsdatum: {birth}\n\nPlaneten:\n" + "\n".join(parts)
         except Exception:
+            logger.exception("Daten-Prompt für die Planeten-Auswertung konnte nicht gebaut werden")
             summary_text = None
 
         return CalcResponse(
@@ -291,7 +295,7 @@ def get_planets(
             julian_day=jd,
             planets=planet_list,
             status=0,
-            summary=append_additional_question(summary_text, getattr(request, 'additional_question', None)),
+            summary=summary_text,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error calculating planets: {str(e)}")
@@ -319,20 +323,27 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
     try:
         # Reuse existing logic to compute positions and a summary
         result = get_planets(payload)
+        summary_data = result.summary
         response_data = {
             "planets": [p.__dict__ for p in result.planets],
-            "summary_prompt": result.summary,
+            "summary_prompt": "",
         }
-        if response_data["summary_prompt"]:
+        if summary_data:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_planets(request, payload)
+            response_data["summary_prompt"] = prompts.summary_prompt(
+                "planets", summary_data, role_name
+            )
+            response_data["summary_prompt"] = append_additional_question(
+                response_data["summary_prompt"], getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(
                 response_data["summary_prompt"],
                 PLANETS_SYSTEM_PROMPT,
             )
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:planets')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='planets')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -358,7 +369,7 @@ async def get_planets_stream(payload: DateTimeRequest, request: Request):
         if not response_data["summary_prompt"]:
             meta_payload = {key: value for key, value in response_data.items() if key != "summary_prompt"}
             yield _sse_event("meta", meta_payload)
-            yield _sse_event("done", {"summary": ""})
+            yield missing_chart_data_event("planets")
             return
 
         summary_parts = []

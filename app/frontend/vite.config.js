@@ -7,21 +7,21 @@ const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost,127.0.0.1')
   .map((host) => host.trim())
   .filter(Boolean)
 
+// Genau ein API-Eingang: alles unter `/api/` gehört der API, der Rest der SPA.
+// Der Key beginnt mit `^`, also interpretiert Vite ihn als RegExp — das hält die Grenze
+// byte-gleich zu nginx `location /api/`: `/apiary` oder `/api-docs` werden nicht verschluckt.
+// `rewrite` schneidet das Präfix ab wie nginx `^/api/(.*)$ /$1`; das Backend bleibt präfixlos.
+// Kein `ws: true` — HMR läuft weiter über `location /`.
+// `/api` ohne Schrägstrich fällt in den SPA-Fallback statt 301 wie nginx — bewusst,
+// niemand ruft `/api` nackt.
+// `preview.proxy` bleibt explizit, weil der `--prod`-Pfad (`vite preview`) daran hängt.
 const apiProxy = {
-  '/horoscope': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/transits': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/houses': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/auth': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/locations': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/getPosition': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/solar-return': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/age-points': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/interpretations': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/persons': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/timezone': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/wiki': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/nodes': { target: proxyTarget, changeOrigin: true, secure: false },
-  '/synastry': { target: proxyTarget, changeOrigin: true, secure: false },
+  '^/api/': {
+    target: proxyTarget,
+    changeOrigin: true,
+    secure: false,
+    rewrite: (path) => path.replace(/^\/api/, ''),
+  },
 }
 
 export default defineConfig({
