@@ -48,7 +48,7 @@ wget https://www.astro.com/ftp/swisseph/sefstars.txt -O astronex/resources/sefst
 |-----------|---------|
 | GTK app | `python nex.py` |
 | API only | `uvicorn app.main:app --host 0.0.0.0 --port 8000` |
-| Dev frontend | `cd app/frontend && npm install && npm run dev` |
+| Dev frontend | `cd app/frontend && npm ci && npm run dev` |
 
 ---
 
@@ -75,7 +75,7 @@ cp _pysw.so ../../
 cp pysw.py ../../
 ```
 
-Docker builds this automatically via `docker/api.Dockerfile`.
+Docker does not build this: `docker/api.Dockerfile` leaves `_pysw.so` untouched (no `make` in `ext/ext64`) and the image gets the extension through the repository bind mount.
 
 ### PostgreSQL in Docker
 
@@ -103,13 +103,13 @@ export SWISS_EPHE_PATH="$PWD/astronex/resources"
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Note: interactive API docs are disabled — `app/main.py` creates the FastAPI app with `docs_url=None`, `redoc_url=None`, `openapi_url=None` (lines 114–116), so `/docs` returns 404.
+Note: interactive API docs are disabled — `app/main.py` creates the FastAPI app with `docs_url=None`, `redoc_url=None`, `openapi_url=None` (lines 116–118), so `/docs` returns 404.
 
 ### Frontend
 
 ```bash
 cd app/frontend
-npm install
+npm ci                # installs exactly the versioned package-lock.json
 npm run dev           # dev server on http://localhost:5173
 npm run build         # production build
 npm run preview       # preview production build
@@ -234,7 +234,7 @@ curl -X POST 'http://localhost:8000/planets' \
 
 ### Houses
 
-**POST /houses** — House cusps (Placidus)
+**POST /houses** — House cusps (Koch)
 
 ```bash
 curl -X POST 'http://localhost:8000/houses?latitude=48.8566&longitude=2.3522' \

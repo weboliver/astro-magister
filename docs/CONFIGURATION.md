@@ -22,7 +22,7 @@ Rotation procedures for these values and what a rotation invalidates are documen
 | `DEBUG` | Optional | `false` | Boolean (`1`/`true`/`yes`/`on`). In dev mode relaxes `SECRET_KEY` validation, accepts placeholder Turnstile keys, runs the Vite dev server (Docker) and uses local mkcert HTTPS certificates (Nginx). |
 | `SECRET_KEY` | **Required** | — | JWT signing secret, minimum 32 characters. Startup fails with `ValueError` if missing or too short and `DEBUG` is not `true`. Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | `60` | JWT access-token lifetime in minutes (used by `app/config.py`, `app/services/auth.py`, `app/services/fastapi_users.py`). |
-| `AUTH_COOKIE_SECURE` | Optional | `1` | `Secure` flag on the auth cookies (`app/routers/auth.py:48`; `1`/`true`/`yes`/`on` enables it). Any other value drops the flag. With the flag set the cookies only travel over HTTPS, so a login on a real host over plain HTTP fails; Chromium tolerates it on `http://localhost` (trustworthy origin), Safari does not. Documented in [API.md](API.md) as well. |
+| `AUTH_COOKIE_SECURE` | Optional | `1` | `Secure` flag on the auth cookies (`app/routers/auth.py:49`; `1`/`true`/`yes`/`on` enables it). Any other value drops the flag. With the flag set the cookies only travel over HTTPS, so a login on a real host over plain HTTP fails; Chromium tolerates it on `http://localhost` (trustworthy origin), Safari does not. Documented in [API.md](API.md) as well. |
 | `LOG_LEVEL` | Optional | `INFO` | Log level for the `app`, `uvicorn` and `uvicorn.access` loggers (`app/main.py`). `DEBUG` additionally logs per-request timing lines to stdout. |
 | `API_HOST` | Optional | `0.0.0.0` | Declared in `.env.example` for manual uvicorn runs. The Docker Compose API container hardcodes `--host 0.0.0.0`, so this variable is not consumed there. |
 | `API_PORT` | Optional | `8000` | Declared in `.env.example` for manual uvicorn runs. The Docker Compose API container hardcodes `--port 8000`. |
@@ -44,7 +44,7 @@ Rotation procedures for these values and what a rotation invalidates are documen
 | `PERPLEXITY_CACHE_TTL` | Optional | `604800` | Perplexity response cache TTL in seconds (code default `7 * 24 * 3600`; `.env.example` sets `86400`). |
 | `PERPLEXITY_CACHE_MAX` | Optional | `256` | Max entries in the Perplexity local LRU cache (`.env.example` sets `10000`). |
 | `PERPLEXITY_CACHE_PREFIX` | Optional | `perplexity` | Redis key prefix for the Perplexity cache namespace. |
-| `REDIS_URL` | Optional | — | Redis connection URL, e.g. `redis://redis:6379/0`. Used for the `redis` cache backend, the auth rate-limit store and the JWT blacklist. Three modes (Phase 49): (1) empty or unset = local mode — rate limits, lockout and blacklist live inside the process and no `503` is produced (dev, tests, single process); (2) set and reachable = Redis carries the counters, the blacklist and the lockout; (3) set but **not** reachable = the auth paths fail closed with `503` + `Retry-After`, while the daily AI budget degrades fail-open with one log line per call. The value is read at **import** time, so a change needs a container restart. Store keys have the form `{scope}:{subject}:{date}`, e.g. `login:ip:1.2.3.4:20261119`. |
+| `REDIS_URL` | Optional | — | Redis connection URL, e.g. `redis://redis:6379/0`. Used for the `redis` cache backend, the auth rate-limit store and the JWT blacklist. Three modes (Phase 49): (1) empty or unset = local mode — rate limits, lockout and blacklist live inside the process and no `503` is produced (dev, tests, single process); (2) set and reachable = Redis carries the counters, the blacklist and the lockout; (3) set but **not** reachable = the auth paths fail closed with `503` + `Retry-After`, while the daily AI budget degrades fail-open with one log line per call. The value is read at **import** time, so a change needs a container restart. Store keys: rate-limit counters use the form `{scope}:{subject}:{date}`, e.g. `login:ip:1.2.3.4:20261119`; the failed-login lockout uses its own pair `auth:fail:{username}` / `auth:lock:{username}`. |
 | `TURNSTILE_SECRET_KEY` | Optional (see note) | — | Cloudflare Turnstile server secret. Placeholder values raise `ValueError` at startup unless `DEBUG=true`. |
 | `VITE_TURNSTILE_SITE_KEY` | Optional | — | Turnstile site key passed to the Vite frontend (`import.meta.env.VITE_TURNSTILE_SITE_KEY` in `InvisibleTurnstile.jsx`). |
 | `TURNSTILE_VERIFY_URL` | Optional | `https://challenges.cloudflare.com/turnstile/v0/siteverify` | Turnstile server-side verification endpoint (`app/services/auth_security.py`). |
@@ -54,7 +54,7 @@ Rotation procedures for these values and what a rotation invalidates are documen
 | `REGISTER_RATE_LIMIT_WINDOW_SECONDS` | Optional | `3600` | Registration rate-limit window in seconds. |
 | `REFRESH_RATE_LIMIT_ATTEMPTS` | Optional | `30` | Max token-refresh attempts per window. |
 | `REFRESH_RATE_LIMIT_WINDOW_SECONDS` | Optional | `300` | Refresh rate-limit window in seconds. |
-| `FAILED_LOGIN_LOCKOUT_THRESHOLD` | Optional | `5` | Consecutive failed logins before the client IP is locked out. |
+| `FAILED_LOGIN_LOCKOUT_THRESHOLD` | Optional | `5` | Consecutive failed logins before **that username** is locked out — the lockout is per account, not per client IP (`app/services/auth_security.py`, keys `auth:fail:{username}` / `auth:lock:{username}`). |
 | `FAILED_LOGIN_LOCKOUT_SECONDS` | Optional | `3600` | Lockout duration in seconds after the threshold is reached. |
 | `AI_DAILY_LIMIT_DEFAULT` | Optional | `5` | Daily AI-interpretation quota for regular users. |
 | `AI_DAILY_LIMIT_POWERUSER` | Optional | `50` | Daily AI-interpretation quota for power users. |
@@ -206,9 +206,11 @@ real URL at runtime from `DATABASE_URL`. Migration revisions are timestamped via
 
 No config file is required beyond the `.env` variables `VITE_PROXY_TARGET`
 (default `http://localhost:8000`) and `VITE_ALLOWED_HOSTS` (default `localhost,127.0.0.1`).
-The dev/preview server runs on port `5173` and proxies the API routes
-(`/horoscope`, `/transits`, `/houses`, `/auth`, `/locations`, `/getPosition`, `/solar-return`,
-`/age-points`, `/interpretations`, `/persons`, `/timezone`, `/wiki`, `/nodes`, `/synastry`).
+The dev server runs on port `5173` (the `preview` block sets no port, so `vite preview` uses Vite's
+default `4173`; the container command passes `--port 5173` explicitly) and proxies a single API
+entry `^/api/` to the target,
+rewriting the prefix away (`rewrite: (path) => path.replace(/^\/api/, '')`), so the boundary matches
+nginx `location /api/` and the backend stays prefix-less.
 
 ### `app/wiki/astro.config.mjs`
 
@@ -254,7 +256,7 @@ Defaults not already listed in the environment-variable table above:
 | Host DB port mapping | `5433:5432` | `docker/docker-compose.yml` |
 | Vite dev/preview port | `5173` | `app/frontend/vite.config.js` |
 | Wiki build server port | `9000` (container-internal) | `docker/wiki-build-server.js` |
-| Certbot renew schedule | daily at `03:17` (`17 3 * * *`) | `docker/nginx-entrypoint.sh` |
+| Certbot renew schedule | initial run after `sleep 60`, then every 12 h (`sleep 43200`) | `docker/nginx-entrypoint.sh` |
 
 The nginx rate-limit zones key on `$binary_remote_addr` **after** the `real_ip` module has run, so
 `limit_req` counts per real client IP — not per Cloudflare edge and not per proxy hop. The zone is

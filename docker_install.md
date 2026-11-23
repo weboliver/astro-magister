@@ -99,13 +99,14 @@ docker run --rm hello-world
 
 ## Schnellstart für dieses Projekt
 
-Im Projektroot (`~/Projects/Python/astronex`):
+Im Projektroot (`~/Projects/astronex`):
 
 ```bash
-cd ~/Projects/Python/astronex
-cd docker && docker compose --env-file ../.env up -d --build
-docker compose ps
-docker compose logs -f
+cd ~/Projects/astronex
+docker/build.sh
+cd docker
+docker compose --project-name astronex --env-file ../.env ps
+docker compose --project-name astronex --env-file ../.env logs -f
 ```
 
 ## Fehlerbehebung / Hinweise

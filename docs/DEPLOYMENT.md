@@ -60,7 +60,7 @@ There is no external CI/CD pipeline in the repository. Image builds and containe
 
 ### Base images
 
-- **api** ([`docker/api.Dockerfile`](../docker/api.Dockerfile)): `debian:bookworm-slim` with Python 3, a virtualenv at `/opt/venv` (`--system-site-packages` for GTK/GI/Cairo bindings), `requirements.txt` installed via pip, and the Astro-Nex font registered via `fc-cache`.
+- **api** ([`docker/api.Dockerfile`](../docker/api.Dockerfile)): `ubuntu:24.04` with Python 3, a virtualenv at `/opt/venv` (`--system-site-packages` for GTK/GI/Cairo bindings), `requirements.lock.txt` installed via pip, and the Astro-Nex font registered via `fc-cache`.
 - **nginx** ([`docker/nginx.Dockerfile`](../docker/nginx.Dockerfile)): `alpine:3.24` with `nginx` and `certbot`.
 - **db / redis / frontend / wiki-builder**: stock upstream images (`postgres:16-alpine`, `redis:7-alpine`, `node:20-alpine`).
 
@@ -87,7 +87,7 @@ For fine-grained control (e.g., only rebuild nginx), pass service names as argum
 
 ## Environment Setup
 
-The stack reads configuration exclusively from the `.env` file in the project root (passed via `--env-file ../.env` on the compose command line and via `env_file: ../.env` on each service). Without it, the helper scripts abort with an error.
+The stack reads configuration exclusively from the `.env` file in the project root (passed via `--env-file ../.env` on the compose command line and via `env_file: ../.env` on the `db`, `api`, `frontend` and `nginx` services). Without it, the helper scripts abort with an error.
 
 For production, at minimum set:
 
@@ -105,13 +105,13 @@ For production, at minimum set:
 
 Before deploying, run `bash scripts/check-env-defaults.sh` from the repository root. It compares `.env` against `.env.example` and exits `1` as long as a value is still the shipped example; it prints **only variable names** — never a value — and it does **not** check for missing variables. Rotation steps for every secret are in [SECRETS.md](SECRETS.md).
 
-Migrations run on the api container's startup and are controlled by `MIGRATE_IF_EMPTY_ONLY` (default `1`) and `FORCE_MIGRATIONS` (default `0`); seeding is controlled by `SEED_USERS`, `SEED_LOCATIONS`, and `SEED_E2E_USER`.
+Migrations run on the api container's startup and are controlled by `MIGRATE_IF_EMPTY_ONLY` (default `1`) and `FORCE_MIGRATIONS` (default `0`); seeding is controlled by `SEED_E2E_USER` (interpolated from `.env`, default `0`), while `SEED_USERS` (`0`) and `SEED_LOCATIONS` (`1`) are pinned in the compose file and override any value in `.env`.
 
 See [CONFIGURATION.md](CONFIGURATION.md) for the full environment variable reference, including rate-limit tuning and AI-provider settings.
 
 ## HTTPS
 
-**HTTPS is not optional for logins.** `AUTH_COOKIE_SECURE` defaults to `1` (`app/routers/auth.py:48`), so the auth cookies are `Secure` and the browser only sends them back over TLS. Over plain HTTP the session cookie is lost directly after the login and the user lands logged out. Chromium tolerates `Secure` cookies on `http://localhost` because it treats `localhost` as a trustworthy origin; real hosts and Safari do not. Use the HTTPS configuration below for anything users actually log in to.
+**HTTPS is not optional for logins.** `AUTH_COOKIE_SECURE` defaults to `1` (`app/routers/auth.py:49`), so the auth cookies are `Secure` and the browser only sends them back over TLS. Over plain HTTP the session cookie is lost directly after the login and the user lands logged out. Chromium tolerates `Secure` cookies on `http://localhost` because it treats `localhost` as a trustworthy origin; real hosts and Safari do not. Use the HTTPS configuration below for anything users actually log in to.
 
 **Visible CAPTCHA fallback:** for the fallback area in the login/register forms to show a real challenge, the widget mode of the Turnstile site key must be `Managed` or `Non-Interactive` (Cloudflare → Turnstile → Widget → Settings). With the mode `Invisible` the frontend still opens the fallback, but Cloudflare renders no interactive widget and the instruction sits above an empty area. This is a dashboard setting only — no redeploy required.
 
@@ -128,7 +128,7 @@ Renewal is automatic: the nginx entrypoint starts a background loop that runs [`
 
 Requirements for Let's Encrypt: public domain(s) resolving to the host, ports 80 and 443 reachable from the internet, and `LETSENCRYPT_DOMAINS` + `LETSENCRYPT_EMAIL` set. It does not work for `localhost` or `.local` domains.
 
-> Note: both nginx templates hardcode a redirect block from `astro-magister.de` to `https://www.astro-magister.de`. Adjust these `server_name`/redirect blocks in the templates if your production domain differs. <!-- VERIFY: `astro-magister.de` / `www.astro-magister.de` are the live production hostnames; DNS and public IP records for this host are not in the repository. -->
+> Note: both nginx templates contain a canonical redirect block (apex → www) built from the placeholders `__CANONICAL_SOURCES__` and `__CANONICAL_HOST__`; the templates themselves hold no domain names. The defaults `astro-magister.de` → `https://www.astro-magister.de` are set in [`docker/nginx-entrypoint.sh`](../docker/nginx-entrypoint.sh) (`NGINX_CANONICAL_SOURCES` / `NGINX_CANONICAL_HOST`, lines 22-23) and injected by `render_http_conf`/`render_https_conf`, so set those environment variables in `.env` if your production domain differs — editing the templates is the wrong place. <!-- VERIFY: `astro-magister.de` / `www.astro-magister.de` are the live production hostnames; DNS and public IP records for this host are not in the repository. -->
 
 ### mkcert (local development HTTPS)
 
@@ -152,7 +152,7 @@ DEV_SSL_KEY_PATH=/etc/nginx/dev-certs/yourserver.local-key.pem
 
 The mkcert CA must be trusted in the browser (run on the host, not inside the container). If the certificate files are missing, nginx falls back to plain HTTP even in dev mode. A pre-generated `raspissd.local` certificate pair exists in `docker/certs/`. <!-- VERIFY: `raspissd.local` is the development hostname used for the pre-generated mkcert certificates. -->
 
-Nginx also trusts Cloudflare's published IP ranges as the source for the real client IP (`set_real_ip_from` in [`docker/nginx.conf`](../docker/nginx.conf)) and applies rate limits: 10 r/s on the API zone (`burst=50 nodelay`) and 100 r/min on the health zone; excess requests receive a JSON `429` response.
+Nginx also trusts Cloudflare's published IP ranges as the source for the real client IP (`set_real_ip_from` in [`docker/nginx.conf`](../docker/nginx.conf)) and applies rate limits: 10 r/s on the API zone (`burst=50 nodelay`); excess requests receive a JSON `429` response.
 
 ## Nginx Routing
 

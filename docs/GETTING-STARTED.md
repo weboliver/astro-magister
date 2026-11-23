@@ -12,7 +12,7 @@ For architecture and data flow see [ARCHITECTURE.md](ARCHITECTURE.md); for confi
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Python | 3.11+ | The repository venv is Python 3.11; the Docker image is `debian:bookworm-slim` (Python 3.11) |
+| Python | 3.12+ | The repository venv is Python 3.12 (`version = 3.12.3` in `.venv/pyvenv.cfg`); the Docker image is `ubuntu:24.04` (Python 3.12.3) |
 | GTK 3 / GObject Introspection | — | System packages, **not** pip-installable (see below) |
 | Node.js + npm | Node 20+ (LTS) | The frontend container uses `node:20-alpine` |
 | Docker + Docker Compose | — | Only needed for PostgreSQL/Redis (see [docker/docker-compose.yml](../docker/docker-compose.yml)) |
@@ -163,13 +163,15 @@ The root endpoint (`GET /`) returns the API name/version; interactive API docs a
 
 ```bash
 cd app/frontend
-npm install
+npm ci             # installs exactly the versioned package-lock.json
 npm run dev        # Vite dev server on http://localhost:5173
 ```
 
-The Vite dev server proxies API paths (`/auth`, `/horoscope`, `/transits`, `/wiki`, …) to the
-backend at `http://localhost:8000` by default (`VITE_PROXY_TARGET` in `app/frontend/vite.config.js`),
-so start the API first. Make sure `.env` is ready before testing the frontend.
+The Vite dev server proxies everything under `/api/` to the backend — one proxy key `^/api/`, with the
+`/api` prefix stripped by `rewrite` — at `http://localhost:8000` by default (`VITE_PROXY_TARGET` in
+`app/frontend/vite.config.js`); the frontend calls the API through `API_BASE = '/api'`
+(`app/frontend/src/services/api.js`), so start the API first. Make sure `.env` is ready before testing
+the frontend.
 
 ### First-use steps
 
@@ -212,7 +214,7 @@ The test suite lives in the private repository this tree is mirrored from; this 
 | `ModuleNotFoundError: gi` / `Gtk` import failures | venv created without system site packages | Recreate with `python3 -m venv --system-site-packages .venv` and (re)install `python3-gi python3-gi-cairo` |
 | `_pysw.so` build failure | Missing `gcc`/`swig`/`pkg-config`/Python headers | Install `build-essential swig pkg-config python3-dev`, then rebuild with `make` in `ext/ext64` |
 | API cannot reach the database | Postgres container not running, or wrong host/port | `cd docker && docker compose --env-file ../.env up -d db`; the host port is **5433** — for local runs set `DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5433/astronex` |
-| `/health` reports `degraded` with warning `Astro-Nex.ttf font not accessible — glyph PNGs will not render` | `Astro-Nex.ttf` not installed | Re-run the font step and `fc-cache -f -v` |
+| `/health` reports `degraded` with warning `Astro-Nex.ttf font not accessible — glyph PNGs will not render` | `Astro-Nex.ttf` is missing or unreadable at **both** lookup paths — `/usr/local/share/fonts/astronex/Astro-Nex.ttf` and `<repo>/astronex/resources/Astro-Nex.ttf` | Make sure `astronex/resources/Astro-Nex.ttf` exists and is readable (it ships with the repo), or copy it to `/usr/local/share/fonts/astronex/` in the container; `get_font_path()` only checks these two file paths, so `~/.fonts` and `fc-cache -f -v` will **not** clear the warning |
 | Port already in use (8000 / 5173 / 5433) | Another process on the same port | Stop the conflicting process or change the port (API: `--port`, Vite: `server.port` in `vite.config.js`) |
 
 ## Next steps

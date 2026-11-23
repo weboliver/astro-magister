@@ -50,8 +50,10 @@ is enabled (default on).
   (`TOKEN_AUDIENCE` in `app/services/auth.py`), expires after `ACCESS_TOKEN_EXPIRE_MINUTES`
   (default **60 minutes**). Contains a `jti` claim used for blacklisting on logout.
 - **Refresh token**: opaque token (not a JWT), created by `create_refresh_token(user_id)`,
-  valid for `REFRESH_TOKEN_EXPIRE_SECONDS` (default 7 days). Rotation: each `/auth/refresh`
-  call revokes the old refresh token and issues a new one.
+  valid for **7 days** — that lifetime is the hardcoded default `days=7` in
+  `app/services/auth.py` and reads no environment variable. Rotation: each `/auth/refresh`
+  call revokes the old refresh token and issues a new one. `REFRESH_TOKEN_EXPIRE_SECONDS`
+  sets only the refresh cookie `max_age` in `app/routers/auth.py`, not the token validity.
 - Access tokens presented via header *or* cookie are validated; blacklisted `jti` values
   (after logout) are rejected.
 
@@ -140,7 +142,7 @@ Endpoints accept a `DateTimeRequest` JSON body (see [Request/response formats](#
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/houses` | 12 house cusps (Placidus) + AI summary |
+| POST | `/houses` | 12 house cusps (Koch) + AI summary |
 | POST | `/houses/stream` | Houses + streamed AI summary (SSE) |
 | POST | `/houses/graphic?width=&height=` | House chart rendered as PNG |
 
@@ -596,8 +598,9 @@ Streaming endpoints:
 2. **`summary_delta`** — repeated; `{"content": "<chunk>"}`. Concatenate chunks to rebuild
    the interpretation.
 3. **`done`** — `{"summary": "<full text>"}`. Emitted even when the AI answer was served from
-   cache (then no `summary_delta` events occur). If no AI prompt could be built, `done` is
-   sent with an empty `summary` immediately after `meta`.
+   cache (then no `summary_delta` events occur). If no AI prompt could be built, an `error`
+   event carrying `MISSING_CHART_DATA_DETAIL` is sent immediately after `meta` instead — no
+   `done`, and nothing is saved (`missing_chart_data_event()` in `app/routers/_sse_utils.py`).
 4. **`saved`** — `{"interpretation_id": <int>}`. Emitted for authenticated users after the
    result is persisted to the interpretation store. Some endpoints emit this only when a
    summary actually exists.
@@ -621,7 +624,7 @@ The API uses standard HTTP status codes. Errors are returned as
 | `423` | Account temporarily locked after too many failed logins (with `Retry-After` header) |
 | `429` | Rate limit exceeded — login/register/refresh or AI daily quota (with `Retry-After` header) |
 | `500` | Internal server error / unexpected calculation failure |
-| `503` | Wiki build server unreachable (`/wiki/build`) |
+| `503` | Wiki build server unreachable (`/wiki/build`); or the auth store unreachable while `REDIS_URL` is set — every auth path and blacklist read answers `503` with `Retry-After` and `Authentifizierung ist vorübergehend nicht verfügbar` (fail-closed, `app/services/auth_store.py`) |
 
 Note: several detail strings are German (auth rate limits, captcha, power-user messages,
 theme messages, age-point errors). `POST /age-points` returns `502` when the AI provider

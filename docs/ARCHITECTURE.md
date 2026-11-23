@@ -132,7 +132,7 @@ from the shared `/workspace` mount and falls back to the named `@cover_miss` loc
 proxies the unchanged path to the API. `app/routers/covers.py` answers it by rendering through
 `ensure_cover()` — the single render entry, used by the write path, the bulk suggestion and the
 miss endpoint alike — and answers 404 for a malformed name or a hash outside the whitelist
-(23 glyphs × 50 allowed colour pairs), so a guessed URL costs one lookup instead of CPU time.
+(35 glyphs × 50 allowed colour pairs), so a guessed URL costs one lookup instead of CPU time.
 
 Entries without a usable selection fall back to one default image: `default_cover_url()` is an
 ordinary whitelisted selection (glyph "Sonne" on the "Schiefer" background with the "Elfenbein"
@@ -177,7 +177,7 @@ astronex/
 │   ├── services/        # Business logic: ephemeris, auth, AI providers, rendering, DB init
 │   ├── db/              # SQLAlchemy engine/session + ORM models (users, locations, wiki, …)
 │   ├── schemas/         # Pydantic request/response models
-│   ├── static/          # German zodiac/aspect/interpretation text tables
+│   ├── static/          # Sign/planet/aspect name tables (English templates + German names)
 │   ├── frontend/        # React/Vite SPA (src/pages, src/services, src/contexts, …) + Playwright e2e
 │   └── wiki/            # Plain Astro wiki site (astro.config.mjs, src/content) — content via CMS
 ├── astronex/            # GTK3 desktop app "Astro-Nex" — shares chart core with the API
@@ -189,7 +189,7 @@ astronex/
 │   ├── db/local.db      # Bundled SQLite location database (reflected read-only by app/db/models/local.py)
 │   └── resources/       # Fonts (Astro-Nex.ttf), images, charts.db, Swiss Ephemeris data (sefstars.txt, *.se1)
 ├── ext/ext64/           # Swiss Ephemeris C sources + SWIG interface (pysw.i) → _pysw.so
-├── alembic/             # Database migrations (alembic.ini at repo root; 12 revision files in versions/)
+├── alembic/             # Database migrations (alembic.ini at repo root; 15 revision files in versions/)
 ├── docker/              # docker-compose services, Dockerfiles, nginx templates, helper scripts
 └── scripts/             # DB bootstrap and migration helper scripts (docker_init_postgres.sh, …)
 ```

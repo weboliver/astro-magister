@@ -12,7 +12,7 @@ DEBUG_NEX=1 python nex.py
 ```
 Aktiviert:
 - Python Faulthandler (zeigt C-Stack bei Crashes)
-- GTK Debug-Modus
+- Kein GTK Debug-Modus (`DEBUG_NEX` setzt nur das Logging; `G_MESSAGES_DEBUG` und `G_DEBUG` werden in `astronex/gi_init.py` geleert — GTK-Debug nur über Methode 7)
 - Ausführliches Logging nach /tmp/astronex_debug.log
 
 ## Methode 3: Mit Python Debugger (pdb)

@@ -143,9 +143,11 @@ docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' astronex-api | gre
 ```
 
 **One-time cleanup of bytecode in the working tree.** Host-side runs of the local `.venv` (Python
-3.12) left `__pycache__` directories and `.pyc` files in the repository; the container runs Python
-3.11 and never reads them. Delete them once — the prune paths are mandatory, without them these two
-commands would wipe `.venv` and every `node_modules`:
+3.12) left `__pycache__` directories and `.pyc` files in the repository. The container also runs
+Python 3.12.3 since Phase 48 (`ubuntu:24.04`), so the version no longer tells them apart — it never
+writes or reads them because `PYTHONPYCACHEPREFIX` redirects the cache into the tmpfs. Delete them
+once — the prune paths are mandatory, without them these two commands would wipe `.venv` and every
+`node_modules`:
 
 ```bash
 # Repo-weit, .venv und node_modules zwingend ausgenommen — sonst zerstört der Befehl das lokale Environment

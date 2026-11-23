@@ -4,7 +4,41 @@ Was sich für Nutzerinnen und Nutzer von Astro-Magister ändert — nutzernah be
 Ticket-Nummern.
 
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.0.0/); die interne Meilenstein-Historie
-dokumentiert ältere Versionen.
+dokumentiert ältere Versionen. Ab `1.1` folgt die Nummerierung den öffentlichen Releases; `v3.1`
+und `v3.2` darunter tragen noch die interne Meilenstein-Nummer.
+
+## [1.1] — 2026-11-23
+
+Erste öffentliche Fassung. Sie enthält den Stand aus v3.1 und v3.2 (siehe unten) sowie die
+Härtung dieses Releases.
+
+### Geändert
+
+- **Klares Verhalten bei Ausfall des Zwischenspeichers:** Fällt der Zwischenspeicher aus, antworten
+  Anmeldung, Registrierung und Sitzungserneuerung mit `503` und einem Hinweis, wann es weitergeht —
+  statt Anfragen durchzulassen. Sobald der Dienst zurück ist, läuft alles ohne Neustart der API
+  weiter, und eine abgemeldete Sitzung wird nicht wieder gültig.
+- **KI-Budget bei Ausfall nachvollziehbar:** Die KI-Funktionen antworten weiter; das Tagesbudget
+  greift in dieser Zeit eingeschränkt, und jede Einschränkung steht mit benanntem Grund im Log.
+
+### Entfernt
+
+- **Länder-Sperre (GeoIP2):** Die Seite ist weltweit ohne regionale Zugangsbeschränkung erreichbar.
+  Die Ländererkennung samt ihrer `GEOIP2_*`-Konfiguration, dem nginx-Modul und dem Aktualisierungs-
+  skript für die Datenbank ist entfernt. Wer die Seite aufruft, wird nicht mehr nach seinem Land
+  beurteilt.
+
+### Sicherheit
+
+- **Sicherheits-Header auf allen Seiten:** Jede Seite liefert jetzt eine durchsetzende
+  Content-Security-Policy sowie `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
+  `Permissions-Policy`, `frame-ancestors 'none'` und HSTS — auch auf Asset- und API-Pfaden, wo
+  eigene Header-Regeln die geerbten sonst verdrängen würden.
+- **Abhängigkeiten aus geprüftem Stand:** API und Frontend installieren ausschließlich aus
+  versionierten Lock-Dateien; beide Ökosysteme laufen durch ein Audit-Gate. Zum Stand dieses
+  Releases: keine Laufzeit-Findings, benannte Ausnahmen sind dokumentiert.
+- **Dienste ohne Root-Rechte:** Die Container laufen mit eigenem Benutzer und lesbarem
+  Wurzeldateisystem; geschrieben wird nur in den dafür vorgesehenen Verzeichnissen.
 
 ## [v3.2] — 2026-11-06
 

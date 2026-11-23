@@ -9,8 +9,10 @@
 # Mit diesen Mustern ließe `git add -A` im Spiegel fünf veröffentlichte Dateien
 # stillschweigend aus — genau der Befund, den `mirror_index_guard` vor dem Commit fängt.
 #
-# Ebenfalls entfernt: die internen Werkzeug-Einträge (`.planning/`, `.opencode/`, der
-# Graphify-Ausgabeordner). In einem öffentlichen Checkout gibt es nichts zu ignorieren.
+# Ebenfalls entfernt: die internen Werkzeug-Einträge des privaten Repositories (Planung,
+# Agenten-Konfiguration, Graphify-Ausgabeordner). Sie stehen hier bewusst nicht namentlich —
+# diese Datei ist öffentlich, und die Einträge können in der Stage gar nicht auftauchen: die
+# Ausschlussliste entfernt sie vorher, und `git archive` trägt ohnehin nur getrackte Pfade.
 #
 # Alles Schutzrelevante bleibt. `.env.*` ist eine bewusste Verschärfung gegenüber der
 # privaten Liste (die nur `.env` führt); die Negation `!.env.example` steht unmittelbar
