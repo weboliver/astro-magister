@@ -115,10 +115,26 @@ PY
 
 echo "[init-postgres] running Alembic migrations ..."
 "$PYTHON_BIN" - <<'PY'
-from alembic.config import Config
 from alembic import command
+from alembic.config import Config
+from sqlalchemy import inspect
+
+from app.db.session import get_engine
+
 cfg = Config('/workspace/alembic.ini')
-command.upgrade(cfg, 'head')
+inspector = inspect(get_engine())
+tables = set(inspector.get_table_names())
+has_alembic_version = 'alembic_version' in tables
+# create_all() above may already have created the full current schema (legacy path).
+# In that case revision 0001 would fail with DuplicateTable, so the schema is marked
+# as up to date instead of being re-created by the historical revisions.
+schema_pre_created = not has_alembic_version and bool(tables)
+
+if schema_pre_created:
+    print("[init-postgres] schema was created by create_all -> alembic stamp head")
+    command.stamp(cfg, 'head')
+else:
+    command.upgrade(cfg, 'head')
 print("[init-postgres] alembic ready")
 PY
 

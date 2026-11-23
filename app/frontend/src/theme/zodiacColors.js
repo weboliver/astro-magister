@@ -1,7 +1,6 @@
 /**
  * zodiacColors.js — 12-sign default palette with fixed date boundaries
  *
- * Phase 30: Dynamic Theme Core
  * Provides SIGN_DATE_BOUNDARIES for sign lookup and ZODIAC_DEFAULTS for per-sign CSS variables.
  * Sign index convention: 0=Aries through 11=Pisces (consistent with zodiac_names.py).
  */

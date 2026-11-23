@@ -8,7 +8,7 @@ import logging
 import asyncio
 
 from app.services.ephemeris import julday, calc_ut, houses
-from app.static.texte import get_general_anweisung
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.db.session import get_session
@@ -30,6 +30,7 @@ from astronex.config import ORBS as CONFIG_ORBS
 
 from app.db.models.users import UserPerson
 
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["synastry"], dependencies=[Depends(require_authenticated_user)])
@@ -37,25 +38,72 @@ router = APIRouter(tags=["synastry"], dependencies=[Depends(require_authenticate
 SYNASTRY_SYSTEM_PROMPT = "synastrie"
 
 
+_BIRTH_DATE_FIELDS = ('year', 'month', 'day', 'hour', 'minute', 'second')
+
+
+def _missing_birth_fields(birth_data: dict) -> list[str]:
+    """Return the birth-date fields that are missing or unset.
+
+    Args:
+        birth_data: Birth data dict as returned by ``_lookup_person_birth_data``.
+
+    Returns:
+        List of field names without a usable value.
+    """
+    return [field for field in _BIRTH_DATE_FIELDS if birth_data.get(field) is None]
+
+
+def _require_birth_date(birth_data: dict, label: str) -> dict:
+    """Validate that a birth data dict can be turned into a chart.
+
+    Args:
+        birth_data: Birth data dict.
+        label: Human readable source (e.g. "Person 3") for the error message.
+
+    Returns:
+        The unchanged birth data dict.
+
+    Raises:
+        HTTPException: If year, month or day are missing.
+    """
+    missing = [field for field in ('year', 'month', 'day') if birth_data.get(field) is None]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unvollständige Geburtsdaten für {label}: {', '.join(missing)} fehlt",
+        )
+    return birth_data
+
+
 def _lookup_person_birth_data(db, person_id: Optional[int], user_id: int) -> dict:
     """Look up a person's birth data from user_persons table or own profile.
+
+    Die Suche nach ``person_id`` ist **eigentümergebunden**: der Filter enthält
+    ``UserPerson.user_id == user_id``. Ohne ihn wäre ``POST /synastry/stream`` ein
+    IDOR — jede angemeldete Person könnte über eine fremde ``person_a_id``/
+    ``person_b_id`` Geburtsdatum, -zeit, -ort und das komplette Chart einer anderen
+    Person abrufen (CR-01 aus `43-REVIEW.md`). „Existiert nicht" und „gehört dir
+    nicht" liefern bewusst dieselbe Meldung, damit die Antwort nicht verrät, ob die
+    ID vergeben ist.
 
     Args:
         db: SQLAlchemy session
         person_id: user_persons.id, or None for logged-in user's own profile
-        user_id: The currently authenticated user's ID (for own profile lookup)
+        user_id: The currently authenticated user's ID (own profile lookup AND
+            ownership filter on ``person_id``)
 
     Returns:
         Birth data dict with year, month, day, hour, minute, second, timezone, latitude, longitude
 
     Raises:
-        HTTPException(400) if person or profile not found
+        HTTPException(400) if person or profile not found, or the person belongs to
+            another user
     """
     if person_id is None:
         profile = auth_service.get_profile(user_id)
         if not profile:
             raise HTTPException(status_code=400, detail="Own profile not found")
-        return {
+        return _require_birth_date({
             'year': profile.get('birth_year', 0),
             'month': profile.get('birth_month', 1),
             'day': profile.get('birth_day', 1),
@@ -65,11 +113,15 @@ def _lookup_person_birth_data(db, person_id: Optional[int], user_id: int) -> dic
             'timezone': profile.get('birth_timezone') or 'UTC',
             'latitude': profile.get('birth_latitude') or 0.0,
             'longitude': profile.get('birth_longitude') or 0.0,
-        }
-    person = db.query(UserPerson).filter(UserPerson.id == person_id).first()
+        }, 'das eigene Profil')
+    person = (
+        db.query(UserPerson)
+        .filter(UserPerson.id == person_id, UserPerson.user_id == user_id)
+        .first()
+    )
     if not person:
         raise HTTPException(status_code=400, detail=f"Person {person_id} not found")
-    return {
+    return _require_birth_date({
         'year': person.birth_year,
         'month': person.birth_month,
         'day': person.birth_day,
@@ -79,33 +131,33 @@ def _lookup_person_birth_data(db, person_id: Optional[int], user_id: int) -> dic
         'timezone': person.birth_timezone or 'UTC',
         'latitude': person.birth_latitude or 0.0,
         'longitude': person.birth_longitude or 0.0,
-    }
+    }, f"Person {person_id}")
 
 
-def _build_chart_from_birth_data(birth_data: dict) -> Chart:
-    """Build a Chart instance from a birth data dict.
+def _birth_time_utc(birth_data: dict):
+    """Return the UTC time base of a birth data dict as ``(decimal_hour, utc_dt)``.
+
+    Same shape as ``_decimal_hour`` in ``app/services/horoscope_graphics.py``: the local
+    wall clock time is localized through the IANA timezone and rotated to UTC. Chart
+    graphic and interpretive calculation therefore share one time base (D-21).
 
     Args:
-        birth_data: dict with year, month, day, hour, minute, second, timezone, latitude, longitude
+        birth_data: dict with year, month, day, hour, minute, second, timezone
 
     Returns:
-        Chart instance with populated planets, houses, and metadata.
+        Tuple of the UTC decimal hour and the UTC datetime.
     """
-    year = birth_data['year']
-    month = birth_data['month']
-    day = birth_data['day']
-    hour = birth_data['hour']
-    minute = birth_data['minute']
-    second = birth_data['second']
-    timezone = birth_data['timezone']
-    latitude = birth_data['latitude']
-    longitude = birth_data['longitude']
-
-    app_config.init_swisseph_path()
-
     from datetime import datetime
-    naive_dt = datetime(year, month, day, hour, minute, second)
-    tz_name = timezone or 'UTC'
+
+    naive_dt = datetime(
+        birth_data['year'],
+        birth_data['month'],
+        birth_data['day'],
+        birth_data['hour'],
+        birth_data['minute'],
+        birth_data['second'],
+    )
+    tz_name = birth_data.get('timezone') or 'UTC'
     try:
         local_tz = pytz_timezone(tz_name)
     except Exception:
@@ -116,8 +168,50 @@ def _build_chart_from_birth_data(birth_data: dict) -> Chart:
         local_dt = pytz_timezone('UTC').localize(naive_dt)
     utc_dt = local_dt.astimezone(pytz_timezone('UTC'))
     decimal_hour = utc_dt.hour + utc_dt.minute / 60.0 + utc_dt.second / 3600.0
+    return decimal_hour, utc_dt
 
-    jd = julday(year, month, day, decimal_hour)
+
+def _julday_from_utc(utc_dt) -> float:
+    """Julian Day from a UTC datetime — date and time both come from the UTC instant.
+
+    Using the local calendar date with the UTC decimal hour is off by exactly 24 h
+    whenever the rotation crosses midnight (e.g. 00:30 Europe/Berlin → 22:30 UTC on
+    the previous day), which moves the Moon by roughly 13° (CR-01).
+    """
+    decimal_hour = utc_dt.hour + utc_dt.minute / 60.0 + utc_dt.second / 3600.0
+    return julday(utc_dt.year, utc_dt.month, utc_dt.day, decimal_hour)
+
+
+def _utc_julian_day(birth_data: dict) -> float:
+    """Julian Day on the UTC time base — the single time reference for positions (D-21)."""
+    _decimal_hour, utc_dt = _birth_time_utc(birth_data)
+    return _julday_from_utc(utc_dt)
+
+
+def _build_chart_from_birth_data(birth_data: dict) -> Chart:
+    """Build a Chart instance from a birth data dict.
+
+    Args:
+        birth_data: dict with year, month, day, hour, minute, second, timezone, latitude, longitude
+
+    Returns:
+        Chart instance with populated planets, houses, and metadata.
+
+    Raises:
+        ValueError: If the birth date fields are incomplete.
+    """
+    missing = _missing_birth_fields(birth_data)
+    if missing:
+        raise ValueError(f"Unvollständige Geburtsdaten: {', '.join(missing)} fehlt")
+    timezone = birth_data['timezone']
+    latitude = birth_data['latitude']
+    longitude = birth_data['longitude']
+
+    app_config.init_swisseph_path()
+
+    decimal_hour, utc_dt = _birth_time_utc(birth_data)
+
+    jd = _julday_from_utc(utc_dt)
 
     chart = Chart()
     chart.first = ''
@@ -133,7 +227,7 @@ def _build_chart_from_birth_data(birth_data: dict) -> Chart:
     from app.services.planet_positions import calculate_api_planet_longitudes
     chart.planets = calculate_api_planet_longitudes(jd, _calc_ut, epheflag=4)
     chart.houses = houses(jd, latitude, longitude) or chart.calc(
-        (year, month, day, decimal_hour),
+        (utc_dt.year, utc_dt.month, utc_dt.day, decimal_hour),
         type('loc', (), {'latdec': latitude, 'longdec': longitude, 'zone': timezone or 'UTC'})(),
         4
     )[1]
@@ -158,7 +252,7 @@ def _calculate_synastry_response(
 
     Returns:
         Dictionary containing chart_a, chart_b, planet entries, cross_aspects,
-        summary_prompt, and comparison_mode.
+        summary_prompt, comparison_mode and the UTC julian days ``jd_a``/``jd_b``.
     """
     try:
         app_config.init_swisseph_path()
@@ -171,8 +265,7 @@ def _calculate_synastry_response(
     planames_chart = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']
 
     planet_entries_a = []
-    decimal_hour_a = birth_data_a['hour'] + birth_data_a['minute'] / 60.0 + birth_data_a['second'] / 3600.0
-    jd_a = julday(birth_data_a['year'], birth_data_a['month'], birth_data_a['day'], decimal_hour_a)
+    jd_a = _utc_julian_day(birth_data_a)
 
     for planet_id in range(10):
         flags_p, lon_p, err_p = _calc_ut(jd_a, planet_id, 4)
@@ -201,8 +294,7 @@ def _calculate_synastry_response(
     chart_a.planets = [e['longitude'] for e in planet_entries_a]
 
     planet_entries_b = []
-    decimal_hour_b = birth_data_b['hour'] + birth_data_b['minute'] / 60.0 + birth_data_b['second'] / 3600.0
-    jd_b = julday(birth_data_b['year'], birth_data_b['month'], birth_data_b['day'], decimal_hour_b)
+    jd_b = _utc_julian_day(birth_data_b)
 
     for planet_id in range(10):
         flags_p, lon_p, err_p = _calc_ut(jd_b, planet_id, 4)
@@ -269,39 +361,76 @@ def _calculate_synastry_response(
     birth_a = f"{birth_data_a['year']:04d}-{birth_data_a['month']:02d}-{birth_data_a['day']:02d}"
     birth_b = f"{birth_data_b['year']:04d}-{birth_data_b['month']:02d}-{birth_data_b['day']:02d}"
 
-    planets_a_str = "; ".join([f"{p['planet_name']} in {p['sign']} {p['sign_degree']} (Haus {p['house'] or 'unbekannt'})" for p in planet_entries_a])
-    planets_b_str = "; ".join([f"{p['planet_name']} in {p['sign']} {p['sign_degree']} (Haus {p['house'] or 'unbekannt'})" for p in planet_entries_b])
-    aspects_str = "; ".join(aspects_list) if aspects_list else "keine"
-
     label_a = (person_a_name or "Person A").strip()
     label_a = label_a[0].upper() + label_a[1:] if label_a else "Person A"
     label_b = (person_b_name or "Person B").strip()
     label_b = label_b[0].upper() + label_b[1:] if label_b else "Person B"
 
-    summary_prompt = f"""Huber Astrologische Psychologie — Partnerhoroskop (Synastrie).
+    def _house_in(chart, longitude):
+        """Hausnummer (1-basiert) einer Länge im gegebenen Chart, sonst None."""
+        try:
+            return chart.house_label(chart.which_house(longitude))
+        except Exception:
+            return None
 
-Interpretiere die Beziehung zwischen zwei Personen: {mode_label}.
+    # Der Vergleichsmodus muss im Prompt Substanz haben, nicht nur im Titel: der
+    # Häuservergleich liefert die Überlagerung (Planet der einen Person im Haus der
+    # anderen), der Radixvergleich ausschließlich Zeichen/Grade und Aspekte — Häuser
+    # gehören dort nicht hinein. Ohne diesen Unterschied bekam das Modell in beiden
+    # Modi dieselben Daten und antwortete fast identisch.
+    if comparison_mode == "hh":
+        planets_a_str = "; ".join(
+            f"{p['planet_name']} in {p['sign']} {p['sign_degree']} (Haus {p['house'] or 'unbekannt'})"
+            for p in planet_entries_a
+        )
+        planets_b_str = "; ".join(
+            f"{p['planet_name']} in {p['sign']} {p['sign_degree']} (Haus {p['house'] or 'unbekannt'})"
+            for p in planet_entries_b
+        )
+        # Eigener, vorrangiger Block: die Überlagerung ist der Kern des Häuservergleichs.
+        # Inline-Hausangaben in den Planetenzeilen gingen im Aspektberg unter.
+        overlay_a = "; ".join(
+            f"{p['planet_name']} in Haus {_house_in(chart_b, p['longitude']) or 'unbekannt'}"
+            for p in planet_entries_a
+        )
+        overlay_b = "; ".join(
+            f"{p['planet_name']} in Haus {_house_in(chart_a, p['longitude']) or 'unbekannt'}"
+            for p in planet_entries_b
+        )
+        overlay_block = (
+            f"Haus-Überlagerung — Planeten von {label_a} in den Häusern von {label_b}: {overlay_a}\n"
+            f"Haus-Überlagerung — Planeten von {label_b} in den Häusern von {label_a}: {overlay_b}\n\n"
+        )
+        mode_instruction = (
+            "Deute vorrangig die Haus-Überlagerung: welche Lebensbereiche löst ein Planet der einen "
+            "Person bei der anderen aus, und wie verschiebt sich dadurch das gemeinsame Feld? "
+            "Die Aspekte am Ende dienen der Bestätigung, nicht als Hauptquelle."
+        )
+    else:
+        overlay_block = ""
+        planets_a_str = "; ".join(
+            f"{p['planet_name']} in {p['sign']} {p['sign_degree']}" for p in planet_entries_a
+        )
+        planets_b_str = "; ".join(
+            f"{p['planet_name']} in {p['sign']} {p['sign_degree']}" for p in planet_entries_b
+        )
+        mode_instruction = (
+            "Deute die Begegnung aus den Radixpositionen beider Horoskope in Zeichen und Graden "
+            "sowie den interplanetaren Aspekten; Häuser sind nicht Teil dieses Vergleichs."
+        )
 
-{label_a} — Geburtsdatum: {birth_a}
-Planeten: {planets_a_str}
+    aspects_str = "; ".join(aspects_list) if aspects_list else "keine"
 
-{label_b} — Geburtsdatum: {birth_b}
-Planeten: {planets_b_str}
-
-Interplanetare Aspekte (Beziehungsaspekte): {aspects_str}
-
-Erstelle eine detaillierte Partnerhoroskop-Interpretation als Bullet-Liste:
-1. Die wichtigsten Beziehungsaspekte zwischen beiden Personen — welche Planetenkontakte prägen die Beziehung?
-2. Die Häuserüberlagerungen — in welchen Lebensbereichen beeinflussen sich die Partner gegenseitig?
-3. Harmonie und Herausforderungen in der Partnerschaft — Stärken und Entwicklungsfelder
-4. Psychologische Dynamik der Beziehung aus Sicht der Huber-Astrologie — Entwicklungspotential
-
-Erstelle eine Liste der wichtigsten Beziehungsthemen.
-(Keine Meta Information, nur die Interpretation. Verwende eine klare und verständliche Sprache)
-
-{get_general_anweisung()}"""
-
-    summary_prompt = append_additional_question(summary_prompt, additional_question)
+    summary_prompt = (
+        f"Partnerhoroskop (Synastrie): {mode_label}\n"
+        f"{mode_instruction}\n\n"
+        f"{overlay_block}"
+        f"{label_a} — Geburtsdatum: {birth_a}\n"
+        f"Planeten: {planets_a_str}\n\n"
+        f"{label_b} — Geburtsdatum: {birth_b}\n"
+        f"Planeten: {planets_b_str}\n\n"
+        f"Interplanetare Aspekte (Beziehungsaspekte): {aspects_str}\n"
+    )
 
     return {
         'chart_a': chart_a,
@@ -311,6 +440,8 @@ Erstelle eine Liste der wichtigsten Beziehungsthemen.
         'cross_aspects': cross_aspects,
         'summary_prompt': summary_prompt,
         'comparison_mode': comparison_mode,
+        'jd_a': jd_a,
+        'jd_b': jd_b,
     }
 
 
@@ -366,15 +497,22 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
 
     provider = None
     cached_summary = None
+    summary_prompt = ""
     try:
         if response_data['summary_prompt']:
+            summary_prompt = prompts.summary_prompt(
+                "synastrie", response_data['summary_prompt'], role_name
+            )
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(
-                response_data['summary_prompt'],
+                summary_prompt,
                 SYNASTRY_SYSTEM_PROMPT,
             )
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user_id, scope='ai:synastry')
+                rate_limit = check_ai_rate_limit(request, user_id=user_id, feature='synastry')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -397,7 +535,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
         raise HTTPException(status_code=400, detail=f"Error calculating synastry: {str(e)}")
 
     async def event_stream():
-        if not response_data['summary_prompt']:
+        if not summary_prompt:
             meta_payload = {
                 'comparison_mode': response_data['comparison_mode'],
                 'planet_entries_a': response_data['planet_entries_a'],
@@ -405,7 +543,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
                 'cross_aspects': response_data['cross_aspects'],
             }
             yield f"event: meta\ndata: {__import__('json').dumps(meta_payload, ensure_ascii=False)}\n\n"
-            yield f"event: done\ndata: {__import__('json').dumps({'summary': ''}, ensure_ascii=False)}\n\n"
+            yield missing_chart_data_event("synastry")
             return
 
         meta_payload = {
@@ -428,7 +566,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
                             user_id=user_id,
                             interpretation_id=getattr(payload, 'interpretation_id', None),
                             user_question=getattr(payload, 'additional_question', None) or "",
-                            query_content=response_data['summary_prompt'] or "",
+                            query_content=summary_prompt or "",
                             assistant_content=cached_summary,
                             user_persons_id=payload.person_a_id,
                             user_person_id_2=payload.person_b_id,
@@ -453,7 +591,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
         summary_parts = []
         try:
             async for chunk in provider.stream_completion(
-                summary=response_data['summary_prompt'],
+                summary=summary_prompt,
                 system_prompt=SYNASTRY_SYSTEM_PROMPT,
             ):
                 summary_parts.append(chunk)
@@ -464,7 +602,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
                     logger.debug("No streamed chunks received, invoking synchronous fallback for synastry")
                     text = await asyncio.to_thread(
                         provider.chat_completion,
-                        response_data['summary_prompt'],
+                        summary_prompt,
                         SYNASTRY_SYSTEM_PROMPT,
                     )
                     summary_parts = [text]
@@ -475,7 +613,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
             full_summary = "".join(summary_parts)
             logger.debug("Assembled full synastry summary, length=%d", len(full_summary))
             try:
-                provider.cache_result(response_data['summary_prompt'], SYNASTRY_SYSTEM_PROMPT, full_summary)
+                provider.cache_result(summary_prompt, SYNASTRY_SYSTEM_PROMPT, full_summary)
                 logger.debug("Wrote full synastry summary to cache")
             except Exception:
                 logger.exception("Failed to set cache for synastry")
@@ -491,7 +629,7 @@ async def get_synastry_stream(payload: SynastryRequest, request: Request):
                             user_id=user_id,
                             interpretation_id=getattr(payload, 'interpretation_id', None),
                             user_question=getattr(payload, 'additional_question', None) or "",
-                            query_content=response_data['summary_prompt'] or "",
+                            query_content=summary_prompt or "",
                             assistant_content=full_summary,
                             user_persons_id=payload.person_a_id,
                             user_person_id_2=payload.person_b_id,

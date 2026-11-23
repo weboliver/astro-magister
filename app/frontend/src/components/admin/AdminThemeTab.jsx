@@ -3,7 +3,7 @@ import { get, post, put } from '../../services/api'
 import { applyTheme, getSignIndex } from '../../theme/ThemeApplier.js'
 import { ZODIAC_DEFAULTS, zodiacNames } from '../../theme/zodiacColors.js'
 
-// ── Element groups for sign layout (D-10: Fire, Earth, Air, Water) ──
+// ── Element groups for sign layout (Fire, Earth, Air, Water) ──
 const ELEMENT_GROUPS = [
   { name: 'Feuer', signs: [0, 4, 8] },
   { name: 'Erde', signs: [1, 5, 9] },
@@ -80,7 +80,7 @@ export default function AdminThemeTab() {
       setSavedTheme(JSON.parse(JSON.stringify(data.theme)))
       setArchive(data.archive)
       setEnabled(data.enabled)
-      // Initialize localStorage on page load (Phase 32)
+      // Initialize localStorage on page load
       localStorage.setItem('zodiacThemeEnabled', data.enabled)
     } catch (err) {
       setError(
@@ -231,7 +231,7 @@ export default function AdminThemeTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Cleanup on unmount: revert any active preview (D-16)
+  // Cleanup on unmount: revert any active preview
   useEffect(() => {
     return () => {
       const st = savedThemeRef.current
@@ -440,7 +440,7 @@ export default function AdminThemeTab() {
             </div>
           ))}
 
-          {/* ── Bottom Save Button (D-11: top + bottom) ── */}
+          {/* ── Bottom Save Button (top + bottom) ── */}
           <div style={{ marginTop: '32px', textAlign: 'right' }}>
             <button
               type="button"

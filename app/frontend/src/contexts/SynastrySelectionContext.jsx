@@ -76,6 +76,21 @@ export function SynastrySelectionProvider({ children }){
     }
   }, [])
 
+  // Ohne gespeicherte Partnerwahl zeigt der Person-B-Select (kein „Eigenes Profil"-Eintrag)
+  // optisch die erste Zeile, obwohl nichts ausgewählt ist — die Seite rechnete dann still
+  // gegen das eigene Profil. Deshalb wird die erste zulässige Person wirklich gesetzt:
+  // nicht die bereits als Person A gewählte Person. Das eigene Profil ist kein Eintrag in
+  // `user_persons`, also gibt es hier nichts weiter auszuschließen — `profile.id` ist eine
+  // Benutzer-ID und darf nicht gegen `user_persons.id` gefiltert werden.
+  useEffect(() => {
+    if (selectedPersonBId !== null) return
+    if (loading) return
+    if (!persons.length) return
+    const fallback = persons.find(person => person.id !== globalSelectedPersonId)
+    if (!fallback) return
+    storeSelectionB(fallback.id)
+  }, [persons, loading, globalSelectedPersonId, selectedPersonBId, storeSelectionB])
+
   const selectedPersonB = useMemo(() => {
     if (selectedPersonBId === null) return null
     return persons.find(person => person.id === selectedPersonBId) || null

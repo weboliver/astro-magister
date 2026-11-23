@@ -19,6 +19,7 @@ from app.services.glyph_renderer import (
     PLANET_CODEPOINTS,
     PLANET_NAMES,
     _DEFAULT_ACCENT_COLORS,
+    get_font_path,
 )
 
 router = APIRouter(prefix="/theme/glyph", tags=["glyphs"])
@@ -54,7 +55,9 @@ def warm_glyph_cache(accent_colors: dict | None = None):
     # Build a single Python script that renders all glyphs and outputs them
     # as base64-encoded chunks separated by newlines
     lines = ["from PIL import Image, ImageFont, ImageDraw", "from io import BytesIO", "import base64, sys"]
-    lines.append("font = ImageFont.truetype('/usr/local/share/fonts/astronex/Astro-Nex.ttf', 96)")
+    # Resolve via the shared renderer so the host fallback
+    # (astronex/resources/Astro-Nex.ttf) works outside the Docker image.
+    lines.append(f"font = ImageFont.truetype({get_font_path()!r}, 96)")
     for key, ch, acc, op, pad in to_render:
         r, g, b = int(acc[1:3], 16), int(acc[3:5], 16), int(acc[5:7], 16)
         canvas = 128 + pad * 2
@@ -63,7 +66,10 @@ def warm_glyph_cache(accent_colors: dict | None = None):
         lines.append(f"draw.text(({canvas // 2}, {canvas // 2}), {ch!r}, fill=({r}, {g}, {b}, {op}), font=font, anchor='mm')")
         lines.append("buf = BytesIO()")
         lines.append("img.save(buf, format='PNG')")
-        lines.append(f"print({key!r})")
+        # Both records must go through the raw buffer: mixing buffered print()
+        # with unbuffered buffer.write() on a pipe reorders them, so the key
+        # arrived after its payload and the parser read base64 as a key.
+        lines.append(f"sys.stdout.buffer.write({key.encode()!r} + b'\\n')")
         lines.append("sys.stdout.buffer.write(base64.b64encode(buf.getvalue()) + b'\\n')")
         lines.append("sys.stdout.flush()")
 

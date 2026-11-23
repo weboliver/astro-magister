@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import InterpretationPage from '../components/InterpretationPage'
 import { useInterpretationPage } from '../hooks/useInterpretationPage'
 import { usePersonSelection } from '../contexts/PersonSelectionContext'
-import { post, postWithSignal } from '../services/api'
+import { apiUrl, post, postWithSignal } from '../services/api'
 import { streamInterpret } from '../hooks/useInterpretationStream'
 import { streamFollowup } from '../hooks/useInterpretations'
 import { normalizeAdditionalQuestion } from '../utils/aiPrompt'
@@ -134,6 +134,15 @@ export default function AgePoints() {
       transit_location: location,
     }
   }, [selectedPerson?.id, selectedAgePoint, year, month, day, hour, minute, second, latitude, longitude, timezone])
+
+  // Derselbe Payload, den die Seite an `/transits/graphic` schickt (D-17): der Kasten beschreibt
+  // damit genau das gezeichnete Chart. Ohne gewählten Alterspunkt ist er `null` — dann rendert
+  // `InterpretationPage` keinen Toggle (S11). Memoisiert, weil der Hook den Payload als Cache-Key
+  // serialisiert (T-43.1-12).
+  const agePointsChartDataPayload = useMemo(
+    () => buildTransitPayloadForAgePoint(),
+    [buildTransitPayloadForAgePoint]
+  )
 
   const fetchAgePointTransit = useCallback(async () => {
     const payload = buildTransitPayloadForAgePoint()
@@ -434,7 +443,7 @@ export default function AgePoints() {
 
   const chartChildren = apMarker && Number.isFinite(apMarker.xPercent) && Number.isFinite(apMarker.yPercent) ? (
     <img
-      src="/age-points/ap-graphic"
+      src={apiUrl('/age-points/ap-graphic')}
       alt="Alterspunkt Marker"
       style={{
         position: 'absolute',
@@ -482,6 +491,8 @@ export default function AgePoints() {
       chartMarginTop={-156}
       chartMinHeight={420}
       chartChildren={chartChildren}
+      chartType="age_points"
+      chartDataPayload={agePointsChartDataPayload}
       questionPlaceholder="Optional: Welche zusätzliche Frage soll die KI zu diesem Alterspunkt beantworten?"
       state={pageState}
     >

@@ -1,11 +1,10 @@
+import re
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from app.db.session import get_session
-from app.db.models.wiki import Entry, Category, Section
 from app import config as app_config
-
-import re
+from app.services import wiki as wiki_service
 
 
 router = APIRouter(tags=['seo'])
@@ -15,27 +14,31 @@ router = APIRouter(tags=['seo'])
 async def sitemap(request: Request):
     """Generate XML sitemap for SEO.
 
+    The entry set is the **build set over every section**: ``wiki_active`` and a stored
+    slug, on top of ``wiki_service.public_wiki_entries()`` (the shared public *and* active
+    base definition, D-13), minus the legal-page titles (D-20). That is exactly the
+    condition ``app/wiki/src/pages/wiki/[slug].astro`` uses to create pages, so the sitemap
+    can only name URLs the static build actually has — for a second activated section just
+    as for the first.
+
+    The ``<loc>`` comes from the **stored** ``slug`` (D-19), never from a recomputation off
+    ``entry_name`` + ``entry_id``: the stored slug is the address the build publishes, and
+    a recomputed one could differ from it and advertise a URL that does not exist.
+
+    ``lastmod`` per entry is ``updated`` else ``created``; the five static URLs carry none,
+    because an invented date is worse than none (D-21). The whole document is computed per
+    request — there is no cache layer, only the ``Cache-Control`` header below (D-22).
+
     Args:
         request: FastAPI Request.
 
     Returns:
         Response with XML sitemap content.
     """
-    import re
     base_url = app_config.get_env_setting('BASE_URL') or str(request.base_url).rstrip('/')
     base_url = re.sub(r'^https?://astro-magister\.de(?=[:/]|$)', 'https://www.astro-magister.de', base_url)
 
-    session = get_session()
-    try:
-        entries = (
-            session.query(Entry, Category, Section)
-            .outerjoin(Category, Entry.category_id == Category.category_id)
-            .outerjoin(Section, Category.section_id == Section.section_id)
-            .filter(Entry.entry_active == True)
-            .all()
-        )
-    finally:
-        session.close()
+    entries = wiki_service.public_wiki_entries()
 
     static_urls = [
         {'loc': base_url, 'priority': '1.0', 'changefreq': 'daily'},
@@ -46,21 +49,25 @@ async def sitemap(request: Request):
     ]
 
     entry_urls = []
-    hidden_titles = {'Datenschutz', 'Impressum', 'Kontakt'}
-    for entry, category, section in entries:
-        if not entry.ispublic:
+    for entry in entries:
+        # Composable filters on top of the shared base definition — never a second
+        # "is public" check (the base predicate already covers public *and* active).
+        if entry['entry_name'] in wiki_service.PUBLIC_TITLE_EXCLUDE:
             continue
-        if entry.entry_name in hidden_titles:
+        # The build set (D-20): a non-wiki-active section has no page in the static site,
+        # and an entry without a slug has no URL. Both gates must bind here, otherwise the
+        # sitemap advertises addresses the build does not contain.
+        if not entry.get('wiki_active'):
             continue
-        if section and section.section_name != 'Astrologie':
+        if not entry.get('slug'):
             continue
-        entry_base = re.sub(r'[^a-z0-9]+', '-', entry.entry_name.lower()).strip('-')
-        entry_slug = f"{entry_base}-{entry.entry_id}"
+        entry_slug = entry['slug']
+        updated = entry.get('updated') or entry.get('created')
         entry_urls.append({
             'loc': f"{base_url}/astro-wiki/{entry_slug}/",
             'priority': '0.6',
             'changefreq': 'monthly',
-            'lastmod': (entry.updated or entry.created).strftime('%Y-%m-%d') if entry.updated or entry.created else None,
+            'lastmod': updated.strftime('%Y-%m-%d') if updated else None,
         })
 
     xml_lines = [

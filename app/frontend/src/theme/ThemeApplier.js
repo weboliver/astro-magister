@@ -1,13 +1,13 @@
 /**
  * ThemeApplier.js — sign lookup and CSS variable application utility
  *
- * Phase 30: Dynamic Theme Core
  * Provides getSignIndex(date) for zodiac sign detection and
  * applyTheme(signIndex, palette) for CSS custom property application.
  * Uses direct DOM setProperty() calls — no React state, no Context provider.
  */
 
 import { SIGN_DATE_BOUNDARIES, ZODIAC_DEFAULTS } from "./zodiacColors.js";
+import { apiUrl } from "../services/api.js";
 
 /**
  * Check if the admin has enabled zodiac theming.
@@ -112,7 +112,7 @@ export function loadSavedTheme() {
   if (localStorage.getItem('zodiacTheme')) return Promise.resolve()
   if (_themeFetchPromise) return _themeFetchPromise
 
-  _themeFetchPromise = fetch('/theme/settings')
+  _themeFetchPromise = fetch(apiUrl('/theme/settings'))
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
     .then(data => {
       if (data && data.theme) {
@@ -129,7 +129,8 @@ export function loadSavedTheme() {
 
 /**
  * Apply zodiac theme colors to the document root.
- * Sets five CSS custom properties and the body background.
+ * Sets five CSS custom properties plus `--app-body-gradient`;
+ * the body background reads that variable in `styles.css` (one source for App and Wiki).
  * Idempotent — safe to call multiple times with the same values.
  *
  * @param {number} signIndex - Sign index 0-11
@@ -137,6 +138,11 @@ export function loadSavedTheme() {
  *   palette may include optional bodyGradient; if omitted, computed from accentSoft + panel
  */
 export function applyTheme(signIndex, palette) {
+  // Der Admin-Schalter aus `/api/theme/settings` ist verbindlich: ist das Zodiac-Theming
+  // serverseitig abgeschaltet, bleiben die statischen `--admin-*`-Tokens aus `styles.css` stehen.
+  // Ohne diese Prüfung wäre `isZodiacThemeEnabled()` toter Code und der Schalter wirkungslos.
+  if (!palette && !isZodiacThemeEnabled()) return
+
   const saved = !palette ? getSavedPalette(signIndex) : null
   const p = palette || saved || ZODIAC_DEFAULTS[signIndex];
 
@@ -145,8 +151,12 @@ export function applyTheme(signIndex, palette) {
   document.documentElement.style.setProperty("--admin-accent-soft", p.accentSoft);
   document.documentElement.style.setProperty("--admin-shadow", p.shadow);
 
+  // Der Verlauf geht als Variable auf `:root`, nicht als Inline-Style auf `document.body`: so liest
+  // ihn dieselbe Regel wie im Wiki (`body{background:var(--app-body-gradient, …)}`), und ein
+  // abgeschaltetes Theme kann ihn wieder zurücknehmen. Ein Inline-Style auf `body` gewönne
+  // dauerhaft gegen jede Stylesheet-Regel.
   const gradient = p.bodyGradient || buildBodyGradient(p.accentSoft, p.panel);
-  document.body.style.background = gradient;
+  document.documentElement.style.setProperty("--app-body-gradient", gradient);
 
   const { r, g, b } = hexToRgb(p.accent);
   document.documentElement.style.setProperty("--admin-accent-r", r);

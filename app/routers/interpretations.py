@@ -24,7 +24,8 @@ from app.schemas.interpretations import (
 from app.services.auth import is_poweruser
 from app.services import auth as auth_service
 from app.services import interpretation_store as store
-from app.services.providers import get_chat_provider
+from app.services.providers import apply_output_budget, get_chat_provider
+from app.services import prompts
 from app.services.auth_security import (
     build_ai_rate_limit_error_detail,
     check_ai_rate_limit,
@@ -38,6 +39,27 @@ router = APIRouter(
     dependencies=[Depends(require_authenticated_user)],
 )
 logger = logging.getLogger(__name__)
+
+#: Ausgabebudget der Folgefrage je Stufe (D-11a, D-24).
+#:
+#: Jeder Wert liegt **über dem Default beider Provider für dieselbe Stufe**,
+#: damit die Folgefrage nicht an einer Grenze endet, die für eine
+#: Vollauswertung gedacht war. Es ist jeweils die nächsthöhere Stufe des
+#: stärkeren Providers und bleibt unterhalb der Kontextfenster:
+#:
+#: | Stufe           | Perplexity-Default | Mistral-Default | hier  |
+#: |-----------------|--------------------|-----------------|-------|
+#: | Laie            | 4096               | 8192            | 9216  |
+#: | Fortgeschritten | 8192               | 12288           | 16384 |
+#: | Experte         | 9216               | 16384           | 20480 |
+#:
+#: ``tests/test_followup_roles.py`` hält die Werte gegen die echten
+#: Konstruktor-Defaults beider Provider, damit sie nicht still darunter fallen.
+FOLLOWUP_OUTPUT_TOKENS: dict[str, int] = {
+    "Laie": 9216,
+    "Fortgeschritten": 16384,
+    "Experte": 20480,
+}
 
 
 def _sse_event(event: str, data: dict) -> str:
@@ -291,11 +313,12 @@ async def followup_message(
                 detail='Zusatzfragen sind nur für zahlende Mitglieder verfügbar. Bitte unterstützen Sie uns über Buy me a coffee: https://buymeacoffee.com/shinengakic',
             )
 
-        # Rate-Limit vor dem Streamen prüfen
+        # Rate-Limit vor dem Streamen prüfen — der Feature-Name ist der persistierte
+        # context_type, damit Zusatzfrage und Erstauswertung denselben Zähler treffen (D-12).
         rate_limit = check_ai_rate_limit(
             request,
             user_id=user["id"],
-            scope=f"ai:{interp.context_type or 'interp'}",
+            feature=interp.context_type or 'interp',
         )
         if not rate_limit.allowed:
             log_auth_event(
@@ -313,21 +336,40 @@ async def followup_message(
                 headers={"Retry-After": str(rate_limit.retry_after_seconds)},
             )
 
-        # Bisherige Kette laden und neue Frage anhängen (nur query + assistant als Kontext)
+        # Bisherige Kette laden und neue Frage anhängen (nur query + assistant als
+        # Kontext; ältere Runden werden beim Lesen mechanisch verdichtet — D-11/D-23).
         existing_messages = store.get_messages_ordered(db, interpretation_id)
-        history = store.build_message_history(existing_messages)
+        history = store.build_message_history(existing_messages, keep_full_rounds=3)
         history.append({"role": "user", "content": payload.content})
 
         # Nächste Gesprächsrunde bestimmen
         next_pos = store.get_next_round_position(db, interpretation_id)
 
-        # Nutzerfrage und Query sofort persistieren (beide mit identischer Position)
+        # Nutzerfrage und Query sofort persistieren (beide mit identischer Position).
+        # Die query-Zeile trägt nur den neuen Fragetext: die verdichtete Historie
+        # entsteht beim Lesen, sonst verdoppelt sich der Kontext je Runde (D-23).
         store.append_message(db, interp, role="user", content=payload.content, position=next_pos)
-        query_content = json.dumps(history, ensure_ascii=False)
-        store.append_message(db, interp, role="query", content=query_content, position=next_pos)
+        store.append_message(db, interp, role="query", content=payload.content, position=next_pos)
 
-        provider = get_chat_provider(role_type=None)
+        # Stufe je Folgefrage neu auflösen (D-10): Subjekt ist bei Synastrie
+        # user_persons_id, konsistent zur Hauptauswertung. Stufe und Modell hängen
+        # zusammen — vorher ging hier gar keine Stufe an den Provider.
+        role_name = auth_service.get_role_name_for_subject(user["id"], interp.user_persons_id)
+        if role_name not in prompts.STUFEN:
+            role_name = "Laie"
+
+        provider = get_chat_provider(role_type=role_name)
+        apply_output_budget(provider, FOLLOWUP_OUTPUT_TOKENS[role_name])
         model_name = interp.model or provider.model_name
+
+        # Der gemeinsame Regelblock fährt als führende System-Nachricht mit (TEXT-05):
+        # derselbe Text, den system_prompt() komponiert, aber ohne Art-Struktur — die
+        # Folgefrage wird damit keine zweite Vollauswertung. Die Liste ist neu und wird
+        # nie persistiert, `history` bleibt unverändert (D-24, kein ABC-Keyword).
+        messages_for_provider = [
+            {"role": "system", "content": prompts.rules_block(role_name)},
+            *history,
+        ]
 
     except HTTPException:
         db.close()
@@ -345,7 +387,7 @@ async def followup_message(
             return
         summary_parts: list[str] = []
         try:
-            async for chunk in provider.stream_messages(history):
+            async for chunk in provider.stream_messages(messages_for_provider):
                 summary_parts.append(chunk)
                 yield _sse_event("summary_delta", {"content": chunk})
 

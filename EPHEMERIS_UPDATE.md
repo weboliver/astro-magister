@@ -6,14 +6,14 @@ https://github.com/aloistr/swisseph
 
 ### Was wurde aktualisiert
 
-#### 1. Header-Dateien (13 Dateien)
+#### 1. Header-Dateien (12 Dateien)
 - `swephexp.h` - Public API (649 → 1020 Zeilen)
 - `sweodef.h` - Interne Definitionen (319 → 326 Zeilen)
 - `sweph.h` - Ephemeris Definitionen
 - `swephlib.h` - Library-Funktionen
 - `swejpl.h` - JPL-Funktionen
 - `swehouse.h` - House-System
-- `swedate.h`, `swecl.h`, `swemptab.h` - Weitere Header
+- `swedate.h`, `swemptab.h` - Weitere Header
 
 **Wichtigste Änderungen:**
 - AGPLv3 Lizenzierung (vorher GPL)
@@ -23,7 +23,7 @@ https://github.com/aloistr/swisseph
 
 #### 2. Quelldateien (15 C-Dateien)
 Alle Quelldateien wurden aktualisiert:
-- `sweph.c` - Hauptephemeris-Engine (2500+KB)
+- `sweph.c` - Hauptephemeris-Engine (~284 KB)
 - `swecl.c` - Eclipse-Berechnungen
 - `swedate.c` - Datums-Funktionen
 - `swehouse.c` - House-Systeme
@@ -73,7 +73,7 @@ ar rcs libswe.a $(SWE_OBJECTS)
 ### Kompilierungs-Details
 
 **Extension-Modul: `_pysw.so`**
-- Größe: 522 KB
+- Größe: ~467 KB
 - Format: ELF 64-bit LSB shared object
 - Abhängigkeiten: libc, libm
 

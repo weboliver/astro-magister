@@ -145,6 +145,12 @@ def draw_chart_png(
                 state.now = chart
                 state.charts['now'] = chart
             drawer = drawer_cls(env.opts, surface_obj)
+            # Synastrie-Vergleichsbilder zeigen alle Aspekte, nicht nur Konjunktion und
+            # Opposition: der Zeichner begrenzt den Filter 'click' sonst auf Aspekt-Index 6
+            # (`astronex/drawing/aspects.py`). `allclick` ist derselbe Schalter, den das
+            # Desktop-Menü „Ver todos los aspectos“ setzt.
+            if operation in ('click_hh', 'click_rr'):
+                drawer.allclick = True
             drawer.dispatch_pres(cr, width, height)
             buffer = io.BytesIO()
             surface.write_to_png(buffer)

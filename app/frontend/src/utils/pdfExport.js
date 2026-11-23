@@ -1,3 +1,5 @@
+import { apiUrl } from '../services/api.js'
+
 /**
  * Öffnet ein neues Browserfenster mit der gerenderten Auswertung und
  * löst den Druckdialog aus (→ "Als PDF speichern").
@@ -16,14 +18,33 @@
 export async function printInterpretationAsPdf(title, element, { personName, birthDate, birthCity, birthRegionCode, birthCountryCode, additionalQuestion, imageUrl } = {}) {
   if (!element) return
 
+  // Das Fenster wird ZUERST geöffnet, noch im Gesten-Kontext des Klicks (IN-08). Vorher stand
+  // `window.open` hinter zwei Netzwerk-Requests und einem FileReader: bei langsamem
+  // `/locations/countries` oder großem Chart-Blob fiel der Aufruf aus der transienten
+  // Nutzeraktivierung und der Popup-Blocker schlug zu — der Nutzer sah nur den `alert` unten.
+  // Der Inhalt wird in dasselbe Fenster geschrieben, sobald die Daten da sind.
+  const win = window.open('', '_blank')
+  if (!win) {
+    alert('Popup wurde blockiert. Bitte Popup-Blocker für diese Seite deaktivieren.')
+    return
+  }
+
+  // Der gerenderte Markdown-Baum wird ROH übernommen (IN-10): diese Zeile ist nur deshalb sicher,
+  // weil der Inhalt aus zwei Zusagen stammt, die hier nicht lokal prüfbar sind —
+  //   1. `MarkdownRenderer` rendert ohne `rehype-raw`, d. h. Quell-HTML im Markdown wird escaped
+  //      (kein `innerHTML` aus Fremdquellen in diesem Baum), und
+  //   2. das Popup erbt die strenge CSP des Openers (Begründung unten am `write`), sodass ein
+  //      eingeschmuggeltes `<script>`/`on…`-Attribut nicht ausgeführt würde.
+  // Wer eine dieser beiden Zusagen ändert, muss diese Zeile entschärfen (sanitizen) — nicht
+  // umgekehrt. Der Wert landet unten in `${htmlContent}` im Popup-Body.
   const htmlContent = element.innerHTML
 
   // Länder- und Bundesland-Codes in Namen auflösen
   let birthPlace = ''
   try {
     const [countriesRes, regionsRes] = await Promise.all([
-      birthCountryCode ? fetch('/locations/countries', { credentials: 'include' }) : Promise.resolve(null),
-      birthCountryCode && birthRegionCode ? fetch(`/locations/regions?country=${encodeURIComponent(birthCountryCode)}`, { credentials: 'include' }) : Promise.resolve(null),
+      birthCountryCode ? fetch(apiUrl('/locations/countries'), { credentials: 'include' }) : Promise.resolve(null),
+      birthCountryCode && birthRegionCode ? fetch(apiUrl(`/locations/regions?country=${encodeURIComponent(birthCountryCode)}`), { credentials: 'include' }) : Promise.resolve(null),
     ])
     let countryName = birthCountryCode || ''
     let regionName = birthRegionCode || ''
@@ -42,27 +63,20 @@ export async function printInterpretationAsPdf(title, element, { personName, bir
     birthPlace = [birthCity, birthRegionCode, birthCountryCode].filter(Boolean).join(', ')
   }
 
-  // Blob-URL → base64 Data-URL konvertieren damit das neue Fenster die Grafik laden kann
+  // Blob-URL → base64 Data-URL konvertieren, damit das Popup die Grafik unabhängig von der
+  // Lebensdauer der Blob-URL einbettet (useChartCache widerruft alte URLs).
+  //
+  // Bewusst KEIN fetch(): seit Phase 47 gilt `connect-src 'self'`, und `blob:` fällt nicht unter
+  // 'self' — fetch(blobUrl) wurde blockiert, der catch verschluckte den Fehler und das PDF kam
+  // ohne Grafik. Ein <img> lädt über `img-src 'self' data: blob:` und ist damit erlaubt; das
+  // Canvas einer same-origin Blob-Grafik ist nicht "tainted", toDataURL funktioniert.
   let imageDataUrl = null
   if (imageUrl) {
     try {
-      const res = await fetch(imageUrl)
-      const blob = await res.blob()
-      imageDataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(blob)
-      })
+      imageDataUrl = await imageUrlToDataUrl(imageUrl)
     } catch {
       // Grafik konnte nicht geladen werden – trotzdem weitermachen
     }
-  }
-
-  const win = window.open('', '_blank')
-  if (!win) {
-    alert('Popup wurde blockiert. Bitte Popup-Blocker für diese Seite deaktivieren.')
-    return
   }
 
   const displayName = personName ? personName.charAt(0).toUpperCase() + personName.slice(1) : ''
@@ -77,7 +91,7 @@ export async function printInterpretationAsPdf(title, element, { personName, bir
     <hr>` : ''
 
   const imageBlock = imageDataUrl
-    ? `<div class="pdf-chart"><img src="${imageDataUrl}" alt="Chart" /></div><hr>`
+    ? `<div class="pdf-chart"><img src="${escapeHtml(imageDataUrl)}" alt="Chart" /></div><hr>`
     : ''
 
   win.document.write(`<!DOCTYPE html>
@@ -135,12 +149,38 @@ export async function printInterpretationAsPdf(title, element, { personName, bir
   ${metaBlock}
   ${imageBlock}
   ${htmlContent}
-  <script>
-    window.onload = function() { window.print(); };
-  </script>
 </body>
 </html>`)
+
+  // Phase 47 (R-02): the popup document must not carry an inline script block. An about:blank
+  // window inherits the opener's CSP (CSP3 / HTML policy container), and the enforced policy in
+  // the nginx templates only allows scripts carrying the per-request nonce — which this
+  // browser-written document never gets, so an inline script here would simply be blocked.
+  // The print dialog is therefore triggered from the OPENER (ordinary code, not subject to the
+  // popup document's CSP). The listener is registered AFTER document.write because
+  // document.open() discards the window's listeners, and close() is needed for load to fire.
+  win.addEventListener('load', () => { win.focus(); win.print(); }, { once: true })
   win.document.close()
+}
+
+/** Lädt eine Bild-URL über ein <img> (CSP img-src) und liefert sie als PNG-Data-URL. */
+function imageUrlToDataUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        canvas.getContext('2d').drawImage(img, 0, 0)
+        resolve(canvas.toDataURL('image/png'))
+      } catch (err) {
+        reject(err)
+      }
+    }
+    img.onerror = reject
+    img.src = url
+  })
 }
 
 function escapeHtml(str) {

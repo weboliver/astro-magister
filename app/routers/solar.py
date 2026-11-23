@@ -3,12 +3,12 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import json
 import logging
+from app.routers._sse_utils import missing_chart_data_event
 logger = logging.getLogger(__name__)
 
 from app.services.ephemeris import julday, revjul, calc_ut, calc_ut_with_speed, houses
 from app import config as app_config
 from app.schemas.datetime_models import SolarReturnRequest, SolarReturnResponse
-from app.static.texte import get_general_anweisung
 import astronex.chart as chart_module
 from astronex.chart import Chart
 from astronex.config import ORBS as CONFIG_ORBS
@@ -22,6 +22,7 @@ except Exception as e:
     logger.debug(f"TimezoneFinder not available: {e}")
     TimezoneFinder = None
 from app.services.horoscope_graphics import draw_chart_png
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
@@ -376,10 +377,10 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
             aspect_parts.append(f"{n1} to {n2} / {label}")
 
         birth = f"{request.birth_year:04d}-{request.birth_month:02d}-{request.birth_day:02d}"
-        summary = "Huber Astrologische Psychologie. "  + "\n\n"
-        summary += f"Interpretiere zum Geburtshoroskop vom {birth}" + f" das Solarhoroskop im Jahr: {target_year}:\n\n" + "; ".join(planet_house_parts) + ". Aspects: " + "\n".join(aspect_parts) + "\n\n" +\
-                        get_general_anweisung()
+        summary = f"Geburtsdatum: {birth}\nSolarjahr: {target_year}\n\nPlaneten:\n"
+        summary += "; ".join(planet_house_parts) + "\n\nAspekte:\n" + "\n".join(aspect_parts)
     except Exception:
+        logger.exception("Daten-Prompt für die Solar-Auswertung konnte nicht gebaut werden")
         summary = ""
 
     # 4. Häuser (Placidus) zum Solar-Return-Zeitpunkt (mit Ort falls angegeben)
@@ -401,7 +402,7 @@ def _build_solar_return_response(request: SolarReturnRequest) -> SolarReturnResp
         planets=planet_list,
         houses=list(houses_list) if houses_list else [None]*12,
         aspects=aspects,
-        summary=append_additional_question(summary, getattr(request, 'additional_question', None)),
+        summary=summary,
     )
 
 
@@ -443,17 +444,22 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
     """
     cached_summary = None
     provider = None
+    summary_prompt = ""
     try:
         result = _build_solar_return_response(payload)
         response_data = result.model_dump()
-        summary_prompt = response_data.pop("summary")
-        if summary_prompt:
+        summary_data = response_data.pop("summary")
+        if summary_data:
             user = _get_user_from_request(request)
             role_name = _resolve_role_name_for_solar_return(request, payload)
+            summary_prompt = prompts.summary_prompt("solar_return", summary_data, role_name)
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(payload, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(summary_prompt, SOLAR_RETURN_SYSTEM_PROMPT)
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, scope='ai:solar-return')
+                rate_limit = check_ai_rate_limit(request, user_id=user['id'] if user else None, feature='solar')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -478,7 +484,7 @@ async def get_solar_return_stream(payload: SolarReturnRequest, request: Request)
     async def event_stream():
         if not summary_prompt:
             yield _sse_event("meta", response_data)
-            yield _sse_event("done", {"summary": ""})
+            yield missing_chart_data_event("solar")
             return
 
         summary_parts = []

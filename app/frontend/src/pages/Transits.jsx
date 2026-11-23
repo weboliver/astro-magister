@@ -559,6 +559,8 @@ export default function Transits() {
       onHistoryLoad={handleHistoryLoad}
       imageObjectFit="cover"
       chartMinHeight={420}
+      chartType="transits"
+      chartDataPayload={transitPayload}
       questionPlaceholder="Optional: Welche konkrete Transit-Frage soll die KI zusätzlich beantworten?"
       state={pageState}
     >

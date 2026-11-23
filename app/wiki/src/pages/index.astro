@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro'
+import { DEFAULT_COVER_URL } from '../services/covers.js'
 
 async function fetchJSON(url) {
   const res = await fetch(url)
@@ -7,49 +8,74 @@ async function fetchJSON(url) {
   return res.json()
 }
 
-const [sections, categories, entries] = await Promise.all([
-  fetchJSON('http://api:8000/wiki/sections'),
-  fetchJSON('http://api:8000/wiki/categories'),
-  fetchJSON('http://api:8000/wiki/entries?limit=100'),
-])
+// Quelle ist die eine Definition öffentlicher Einträge (D-13); Bereichsgrenze und
+// Titelsperre liegen serverseitig. Kein `limit`, keine Nachladung von Stammdaten.
+const entries = await fetchJSON('http://api:8000/wiki/build-entries')
 
-const hiddenTitles = new Set(['Datenschutz', 'Impressum', 'Kontakt'])
-const astrologieSection = sections.find(s => s.section_name === 'Astrologie')
-const astrologieSectionId = astrologieSection?.section_id
+// D-18/D-20: EINE Menge — dieselbe Bedingung wie in `[slug].astro` und in der Sitemap.
+// Ein harter `section_name`-Filter würde die Seiten einer zweiten aktivierten Sektion
+// bauen, aber nirgends verlinken — Sitemap-Waisen.
+const buildSet = entries.filter(e => e.wiki_active === true && e.slug)
 
-const astrologieCategories = categories.filter(c => c.section_id === astrologieSectionId)
-const astrologieCategoryIds = new Set(astrologieCategories.map(c => c.category_id))
-
-const astrologieEntries = entries.filter(e => {
-  if (!e.ispublic) return false
-  if (hiddenTitles.has(e.entry_name)) return false
-  return astrologieCategoryIds.has(e.category_id)
-})
-
-const categoryMap = new Map()
-for (const entry of astrologieEntries) {
-  const catName = astrologieCategories.find(c => c.category_id === entry.category_id)?.category_name || 'uncategorized'
-  if (!categoryMap.has(catName)) categoryMap.set(catName, [])
-  categoryMap.get(catName).push(entry)
+// Gruppierung nach Sektion, darunter nach Kategorie. Die Einfüge-Reihenfolge der Sektionen
+// ist die Render-Reihenfolge; die Kategorienamen werden sortiert, die Einträge nach Nummer.
+const sections = new Map()
+for (const entry of buildSet) {
+  const sectionName = entry.section_name || 'Wiki'
+  const categoryName = entry.category_name || 'uncategorized'
+  if (!sections.has(sectionName)) sections.set(sectionName, new Map())
+  const categories = sections.get(sectionName)
+  if (!categories.has(categoryName)) categories.set(categoryName, [])
+  categories.get(categoryName).push(entry)
 }
 
-const sortedCategories = [...categoryMap.keys()].sort()
+const byNumber = (a, b) => (a.entry_number || 0) - (b.entry_number || 0)
+
+// D-15: die `ItemList` leitet sich aus GENAU der Reihenfolge ab, in der die Seite listet —
+// nicht aus einer zweiten Sortiervorschrift, die auseinanderlaufen könnte.
+const listedEntries = [...sections.values()].flatMap(categories =>
+  [...categories.keys()].sort().flatMap(name => [...categories.get(name)].sort(byNumber))
+)
+
+const itemList = {
+  '@type': 'ItemList',
+  itemListElement: listedEntries.map((entry, index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: entry.entry_name,
+    url: new URL(`/astro-wiki/${entry.slug}/`, Astro.site).toString(),
+  })),
+}
 ---
-<Layout title="Wiki Übersicht">
-  <h1>Astrologie</h1>
-  <p style="margin-bottom:24px">Finde Erklärungen zu astrologischen Begriffen, Planeten, Aspekten und mehr.</p>
-  {sortedCategories.map(cat => (
-    <div style="margin-bottom:28px">
-      <h2 style="color:var(--admin-accent)">{cat}</h2>
-      <ul>
-        {[...categoryMap.get(cat)].sort((a,b) => (a.entry_number||0) - (b.entry_number||0)).map(entry => (
-          <li style="margin-bottom:8px">
-            <a href={`/astro-wiki/${entry.slug}/`} style="color:#0f766e;font-weight:600">
-              {entry.entry_name}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
+<Layout title="Wiki Übersicht" canonicalPath="/astro-wiki/" jsonLd={[itemList]}>
+  <h1>Wiki</h1>
+  <p class="wiki-index-intro">Finde Erklärungen zu astrologischen Begriffen, Planeten, Aspekten und mehr.</p>
+  {[...sections.keys()].map(sectionName => (
+    <section class="wiki-index-section">
+      <h2>{sectionName}</h2>
+      {[...sections.get(sectionName).keys()].sort().map(categoryName => (
+        <div class="wiki-index-group">
+          <h3 class="wiki-index-category">{categoryName}</h3>
+          <ul class="wiki-index-list">
+            {[...sections.get(sectionName).get(categoryName)].sort(byNumber).map((entry, index) => (
+              <li class="wiki-index-row">
+                <div class="wiki-index-text">
+                  <a class="wiki-index-title" href={`/astro-wiki/${entry.slug}/`}>{entry.entry_name}</a>
+                  {entry.entry_short && <p class="wiki-index-short">{entry.entry_short}</p>}
+                </div>
+                <img
+                  class="wiki-cover-index"
+                  src={entry.cover_url || DEFAULT_COVER_URL}
+                  alt=""
+                  width="120"
+                  height="63"
+                  loading={index < 3 ? 'eager' : 'lazy'}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
   ))}
 </Layout>

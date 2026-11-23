@@ -223,6 +223,8 @@ export default function Mondknoten() {
       chartLoadingMessage="Mondknoten wird gerendert…"
       chartFallbackMessage="Klicke auf «Mondknoten interpretieren», um das Chart rechts neben dem Formular anzuzeigen und eine Auswertung zu erhalten."
       onInterpret={handleInterpret}
+      chartType="nodes"
+      chartDataPayload={currentPayload}
       state={state}
     />
   )

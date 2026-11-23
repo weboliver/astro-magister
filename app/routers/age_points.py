@@ -14,8 +14,8 @@ from app.schemas.age_points import *
 from app.services.ephemeris import julday, houses, calc
 from astronex.chart import Chart
 from pytz import timezone as pytz_timezone
-from app.static.texte import get_general_anweisung
 from app.routers.transits import TransitRequest, DateObject, Location, transits
+from app.services import prompts
 from app.services.providers import get_chat_provider
 from app.services.perplexity import append_additional_question
 from app.services import auth as auth_service
@@ -486,17 +486,15 @@ def _build_target_year_summary(age_points, target_year: Optional[int], transit_s
         except Exception:
             parts.append(f"{day}.{mon}.{year}: {lab}")
     if target_year:
-        header = (
-            f"Huber Astrologische Psychologie.\n\nErstelle eine Interpretation für folgende Alterspunkte im Jahr {target_year}:\n\n"
-        )
+        header = f"Alterspunkte im Jahr {target_year}:\n"
     else:
-        header = "Huber Astrologische Psychologie.\n\nErstelle eine Interpretation für folgenden Alterspunkt:\n\n"
+        header = "Alterspunkt:\n"
 
     transit_block = ""
     if transit_sections:
         transit_block = "\n\nTransite:\n\n" + "\n\n".join(transit_sections)
 
-    return header + "\n".join(parts) + transit_block + "\n\n" + get_general_anweisung()
+    return header + "\n".join(parts) + transit_block + "\n"
 
 
 def _build_age_points_response(req: AgePointsRequest, http_request: Request) -> AgePointsResponse:
@@ -523,7 +521,7 @@ def _build_age_points_response(req: AgePointsRequest, http_request: Request) -> 
         kind=req.kind,
         target_year=req.target_year,
         age_points=filtered_points,
-        summary=append_additional_question(summary_prompt, getattr(req, 'additional_question', None)),
+        summary=summary_prompt,
     )
 
 
@@ -544,12 +542,16 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
         try:
             user = _get_user_from_request(http_request)
             role_name = _resolve_role_name_for_age_points(http_request, req)
+            summary_prompt = prompts.summary_prompt("age_points", result.summary, role_name)
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(req, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
-            cached_summary = provider.get_cached(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+            cached_summary = provider.get_cached(summary_prompt, AGE_POINTS_SYSTEM_PROMPT)
             if cached_summary is not None:
                 result.summary = cached_summary
             else:
-                rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
+                rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, feature='age-points')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',
@@ -565,7 +567,7 @@ def get_age_points(req: AgePointsRequest, http_request: Request):
                         detail=build_ai_rate_limit_error_detail(rate_limit),
                         headers={'Retry-After': str(rate_limit.retry_after_seconds)},
                     )
-                result.summary = provider.chat_completion(result.summary, AGE_POINTS_SYSTEM_PROMPT)
+                result.summary = provider.chat_completion(summary_prompt, AGE_POINTS_SYSTEM_PROMPT)
         except HTTPException:
             raise
         except Exception as exc:
@@ -587,17 +589,22 @@ async def get_age_points_stream(req: AgePointsRequest, http_request: Request):
     """
     cached_summary = None
     provider = None
+    summary_prompt = ""
     try:
         result = _build_age_points_response(req, http_request)
         response_data = result.model_dump()
-        summary_prompt = response_data.pop("summary")
-        if summary_prompt:
+        summary_data = response_data.pop("summary")
+        if summary_data:
             user = _get_user_from_request(http_request)
             role_name = _resolve_role_name_for_age_points(http_request, req)
+            summary_prompt = prompts.summary_prompt("age_points", summary_data, role_name)
+            summary_prompt = append_additional_question(
+                summary_prompt, getattr(req, 'additional_question', None)
+            )
             provider = get_chat_provider(role_type=role_name)
             cached_summary = provider.get_cached(summary_prompt, AGE_POINTS_SYSTEM_PROMPT)
             if cached_summary is None:
-                rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, scope='ai:age-points')
+                rate_limit = check_ai_rate_limit(http_request, user_id=user['id'] if user else None, feature='age-points')
                 if not rate_limit.allowed:
                     log_auth_event(
                         event_type='ai_rate_limited',

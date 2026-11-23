@@ -11,6 +11,10 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
+# shellcheck source=docker/compose-network-env.sh
+source "${SCRIPT_DIR}/compose-network-env.sh"
+astronex_network_env "${ENV_FILE}"
+
 # Zuerst versuchen, die Images zu pullen.
 # Wenn keine Services als Argument übergeben wurden, dann pull für alle buildbaren Services
 # außer `api` / `nginx` (auch Varianten `astronex-api` / `astronex-nginx`) —

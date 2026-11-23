@@ -4,6 +4,7 @@ import { useSynastrySelection } from '../contexts/SynastrySelectionContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getSignIndex } from '../theme/ThemeApplier'
 import { zodiacNames } from '../theme/zodiacColors'
+import { apiUrl } from '../services/api.js'
 
 function PersonSignGlyph({ persons, selectedPersonId }){
   const { profile } = useAuth()
@@ -43,7 +44,7 @@ function PersonSignGlyph({ persons, selectedPersonId }){
       birth_latitude: b.lat ?? 0,
       birth_longitude: b.lng ?? 0,
     })
-    fetch(`/api/ascendant?${params}`)
+    fetch(apiUrl(`/ascendant?${params}`))
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.ascendant_sign_index != null) setAscendantName(zodiacNames[data.ascendant_sign_index]) })
       .catch(() => {})
@@ -54,7 +55,7 @@ function PersonSignGlyph({ persons, selectedPersonId }){
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
       <img
-        src={`/theme/glyph/sign/${info.signIdx}`}
+        src={apiUrl(`/theme/glyph/sign/${info.signIdx}`)}
         alt="Sternzeichen"
         width={28}
         height={28}

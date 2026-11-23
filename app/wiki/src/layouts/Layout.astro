@@ -1,44 +1,522 @@
 ---
 import '../styles/global.css'
+import '../../../frontend/src/styles/shell.css'
+import { SIGN_DATE_BOUNDARIES, ZODIAC_DEFAULTS } from '../../../frontend/src/theme/zodiacColors.js'
+import { ORGANIZATION_ID } from '../../../frontend/src/services/canonical.js'
+
 interface Props {
   title: string
   description?: string
+  /** Öffentlicher Pfad der Seite, z. B. `/astro-wiki/erstes-haus-10/` (D-10). */
+  canonicalPath: string
+  /** Zusätzliche JSON-LD-Knoten der Seite; der `Organization`-Knoten kommt hier dazu. */
+  jsonLd?: Record<string, unknown>[]
 }
-const { title, description = 'Astro-Magister Wiki — Astrologisches Nachschlagewerk' } = Astro.props
+const {
+  title,
+  description = 'Astro-Magister Wiki — Astrologisches Nachschlagewerk',
+  canonicalPath,
+  jsonLd = [],
+} = Astro.props
+
+// Der Build-Pfad ist NICHT der öffentliche Pfad (`/wiki/<slug>/` vs. `/astro-wiki/<slug>/`,
+// D-10). Wer ihn vergisst, macht den Build rot statt still `undefined` zu rendern.
+if (!canonicalPath) throw new Error('Layout.astro: canonicalPath fehlt')
+
+// `Astro.site` ist die eine Host-Quelle (D-07); `URL` normalisiert auf genau einen
+// abschließenden Schrägstrich — keine String-Verkettung, kein doppelter Schrägstrich.
+const canonical = new URL(canonicalPath, Astro.site).toString()
+
+// Der `Organization`-Knoten steht auf jeder Seite: eine `@id`-Referenz trägt nur dann
+// Eigenschaften, wenn der Knoten im selben Dokument definiert ist (Pattern 3, A1).
+const organizationNode = {
+  '@type': 'Organization',
+  '@id': ORGANIZATION_ID,
+  name: 'Astro-Magister',
+  url: new URL('/', Astro.site).toString(),
+  description: 'Portal für astrologische Selbsterfahrung.',
+}
+
+// Ein Block, ein `JSON.stringify`, danach `<` escapen: `entry_name` mit `</script>` kann so
+// nicht aus dem Block ausbrechen (T-42-10, Pitfall 11). Niemals String-Verkettung.
+const jsonLdHtml = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@graph': [organizationNode, ...jsonLd],
+}).replace(/</g, '\\u003c')
+
+// „Wiki" ist im statischen Wiki immer die aktuelle Seite: `page` auf der Übersicht,
+// `true` auf Artikelseiten und Rechtsseiten (UI-SPEC, NAV-08). Maßgeblich ist der
+// öffentliche Pfad — zur Build-Zeit ist der Pathname der Übersicht `/`.
+const istWikiStart = canonicalPath === '/astro-wiki/'
+const wikiCurrent = istWikiStart ? 'page' : 'true'
+
+// Build-Zeit-Konstante: kein Laufzeit-Jahr im gerenderten HTML.
+const jahr = new Date().getFullYear()
 ---
 <!doctype html>
-<html lang="de">
+<html lang="de" class="no-js">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow" />
     <title>{title} | Astro-Magister Wiki</title>
-    <link rel="canonical" href={`https://www.astro-magister.de/${Astro.url.pathname}`} />
+    <link rel="canonical" href={canonical} />
+    <script type="application/ld+json" is:inline set:html={jsonLdHtml} />
+    <!-- Anti-Flash-Zodiac-Theme: blockierend im <head>, damit der erste Paint bereits die Farbe
+         des aktuellen Sonnenzeichens trägt. `define:vars` serialisiert die Palette zur Build-Zeit
+         (kein Netzwerk) und hält das Skript inline (kein Bundle, keine Verzögerung). `body` gibt
+         es hier noch nicht — der Hintergrund läuft über `--app-body-gradient`. -->
+    <script define:vars={{ SIGN_DATE_BOUNDARIES, ZODIAC_DEFAULTS }}>
+      (function () {
+        var root = document.documentElement
+        root.classList.replace('no-js', 'js')
+
+        var now = new Date()
+        var month = now.getMonth() + 1
+        var day = now.getDate()
+        var index = 0
+        for (var i = 0; i < SIGN_DATE_BOUNDARIES.length; i++) {
+          var b = SIGN_DATE_BOUNDARIES[i]
+          var sm = b.start[0], sd = b.start[1], em = b.end[0], ed = b.end[1]
+          var inRange
+          if (sm <= em) {
+            inRange = (month > sm || (month === sm && day >= sd)) && (month < em || (month === em && day <= ed))
+          } else {
+            inRange = (month > sm || (month === sm && day >= sd)) || (month < em || (month === em && day <= ed))
+          }
+          if (inRange) { index = b.sign; break }
+        }
+
+        var palette = ZODIAC_DEFAULTS[index]
+
+        try {
+          // Der Admin-Schalter (`zodiacThemeEnabled`, geschrieben von App und Wiki) ist auch hier
+          // verbindlich: steht er auf 'false', bleibt es bei der Datums-Palette (WR-07).
+          var gespeichert = localStorage.getItem('zodiacTheme')
+          var themingAktiv = localStorage.getItem('zodiacThemeEnabled') !== 'false'
+          if (gespeichert && themingAktiv) {
+            var entry = JSON.parse(gespeichert)[String(index)]
+            if (entry && entry.accent && entry.panel && entry.accentSoft && entry.shadow) {
+              palette = entry
+            }
+          }
+        } catch (e) { /* still: Datums-Palette bleibt */ }
+
+        var gradient = palette.bodyGradient
+        if (!gradient) {
+          var soft = String(palette.accentSoft).replace('#', '')
+          var r = parseInt(soft.substring(0, 2), 16)
+          var g = parseInt(soft.substring(2, 4), 16)
+          var bl = parseInt(soft.substring(4, 6), 16)
+          gradient = 'radial-gradient(circle at top right, rgba(' + r + ',' + g + ',' + bl + ',0.7), transparent 28%),' +
+            ' linear-gradient(180deg, ' + palette.panel + ' 0%, #fefbfb 44%, ' + palette.panel + ' 100%)'
+        }
+
+        var style = root.style
+        style.setProperty('--admin-accent', palette.accent)
+        style.setProperty('--admin-panel', palette.panel)
+        style.setProperty('--admin-accent-soft', palette.accentSoft)
+        style.setProperty('--admin-shadow', palette.shadow)
+        style.setProperty('--app-body-gradient', gradient)
+
+        var accent = String(palette.accent).replace('#', '')
+        style.setProperty('--admin-accent-r', parseInt(accent.substring(0, 2), 16))
+        style.setProperty('--admin-accent-g', parseInt(accent.substring(2, 4), 16))
+        style.setProperty('--admin-accent-b', parseInt(accent.substring(4, 6), 16))
+
+        root.dataset.sign = String(index)
+        try {
+          root.dataset.session = localStorage.getItem('username') ? 'auth' : 'anon'
+        } catch (e) {
+          root.dataset.session = 'anon'
+        }
+      })()
+    </script>
   </head>
   <body>
-    <div>
+    <a class="app-skip-link" href="#main">Zum Inhalt springen</a>
+    <header class="app-header">
       <div class="app-nav-wrap">
-        <nav class="app-nav" style="min-width: 200px">
-          <div class="app-nav-desktop">
-            <div class="app-nav-group">
-              <a class="app-nav-link" href="/">Startseite</a>
-            </div>
-          </div>
+        <nav class="app-nav" aria-label="Hauptnavigation">
+          <!-- Schriftzug im Balken — gleiche Struktur wie `App.jsx` (Hüllen-Parität, Phase 40). -->
+          <span class="app-nav-brand-mobile" aria-hidden="true">Astro-Magister</span>
+          <button
+            type="button"
+            class="app-nav-menu-button"
+            aria-expanded="false"
+            aria-controls="nav-panel"
+            aria-label="Menü"
+          >
+            <span aria-hidden="true">☰</span>
+          </button>
+          <ul id="nav-panel" class="app-nav-panel" data-open="false">
+            <li class="app-nav-item-group app-nav-item-group-allgemein">
+              <span class="app-nav-group-heading" aria-hidden="true">Allgemein</span>
+              <ul class="app-nav-inline-list" aria-label="Allgemein">
+                <li class="app-nav-item">
+                  <a class="app-nav-link" href="/">Startseite</a>
+                </li>
+                <li class="app-nav-item">
+                  <a class="app-nav-link" href="/astro-wiki/" aria-current={wikiCurrent}>Wiki</a>
+                </li>
+              </ul>
+            </li>
+            <li class="app-nav-item-group app-nav-item-group-auswertungen">
+              <button
+                type="button"
+                class="app-nav-link app-nav-group-button"
+                aria-expanded="false"
+                aria-controls="nav-sub-group-auswertungen"
+              >
+                Auswertungen<span class="app-nav-caret" aria-hidden="true">▾</span>
+              </button>
+              <span class="app-nav-group-heading" aria-hidden="true">Auswertungen</span>
+              <ul
+                id="nav-sub-group-auswertungen"
+                class="app-nav-subgroup"
+                data-open="false"
+                aria-label="Auswertungen"
+              >
+                <!-- Der Sperr-Hinweis steht neben dem Link, nicht darin (WR-02): als Kind stünde er
+                     im Accessible Name und `aria-describedby` läse ihn doppelt vor. -->
+                <li class="app-nav-item app-nav-anon-only">
+                  <a
+                    class="app-nav-sub-link app-nav-sub-link-locked"
+                    href="/login?next=%2Fhoroscope"
+                    data-locked="anmeldung"
+                    aria-describedby="nav-hint-anon-horoscope"
+                  >
+                    <span class="app-nav-sub-label">Horoskop</span>
+                  </a>
+                  <span class="app-nav-lock-hint" id="nav-hint-anon-horoscope">Anmelden erforderlich</span>
+                </li>
+                <li class="app-nav-item app-nav-anon-only">
+                  <a
+                    class="app-nav-sub-link app-nav-sub-link-locked"
+                    href="/login?next=%2Fmondknoten"
+                    data-locked="anmeldung"
+                    aria-describedby="nav-hint-anon-mondknoten"
+                  >
+                    <span class="app-nav-sub-label">Mondknoten</span>
+                  </a>
+                  <span class="app-nav-lock-hint" id="nav-hint-anon-mondknoten">Anmelden erforderlich</span>
+                </li>
+                <li class="app-nav-item app-nav-anon-only">
+                  <a
+                    class="app-nav-sub-link app-nav-sub-link-locked"
+                    href="/login?next=%2Ftransits"
+                    data-locked="anmeldung"
+                    aria-describedby="nav-hint-anon-transits"
+                  >
+                    <span class="app-nav-sub-label">Transite</span>
+                  </a>
+                  <span class="app-nav-lock-hint" id="nav-hint-anon-transits">Anmelden erforderlich</span>
+                </li>
+                <li class="app-nav-item app-nav-anon-only">
+                  <a
+                    class="app-nav-sub-link app-nav-sub-link-locked"
+                    href="/login?next=%2Fsolar"
+                    data-locked="anmeldung"
+                    aria-describedby="nav-hint-anon-solar"
+                  >
+                    <span class="app-nav-sub-label">Solar Jahr</span>
+                  </a>
+                  <span class="app-nav-lock-hint" id="nav-hint-anon-solar">Anmelden erforderlich</span>
+                </li>
+                <li class="app-nav-item app-nav-anon-only">
+                  <a
+                    class="app-nav-sub-link app-nav-sub-link-locked"
+                    href="/login?next=%2Fagepoints"
+                    data-locked="anmeldung"
+                    aria-describedby="nav-hint-anon-agepoints"
+                  >
+                    <span class="app-nav-sub-label">Alterspunkte</span>
+                  </a>
+                  <span class="app-nav-lock-hint" id="nav-hint-anon-agepoints">Anmelden erforderlich</span>
+                </li>
+                <li class="app-nav-item app-nav-anon-only">
+                  <a
+                    class="app-nav-sub-link app-nav-sub-link-locked"
+                    href="/login?next=%2Fsynastrie"
+                    data-locked="anmeldung"
+                    aria-describedby="nav-hint-anon-synastrie"
+                  >
+                    <span class="app-nav-sub-label">Synastrie</span>
+                  </a>
+                  <span class="app-nav-lock-hint" id="nav-hint-anon-synastrie">Anmelden erforderlich</span>
+                </li>
+                <li class="app-nav-item app-nav-auth-only">
+                  <a class="app-nav-sub-link" href="/horoscope">Horoskop</a>
+                </li>
+                <li class="app-nav-item app-nav-auth-only">
+                  <a class="app-nav-sub-link" href="/mondknoten">Mondknoten</a>
+                </li>
+                <li class="app-nav-item app-nav-auth-only">
+                  <a class="app-nav-sub-link" href="/transits">Transite</a>
+                </li>
+                <li class="app-nav-item app-nav-auth-only">
+                  <a class="app-nav-sub-link" href="/solar">Solar Jahr</a>
+                </li>
+                <li class="app-nav-item app-nav-auth-only">
+                  <a class="app-nav-sub-link" href="/agepoints">Alterspunkte</a>
+                </li>
+                <li class="app-nav-item app-nav-auth-only">
+                  <a class="app-nav-sub-link" href="/synastrie">Synastrie</a>
+                </li>
+              </ul>
+            </li>
+            <li class="app-nav-brand" aria-hidden="true">Astro-Magister</li>
+            <li class="app-nav-item-group app-nav-item-group-konto app-nav-auth-only">
+              <button
+                type="button"
+                class="app-nav-link app-nav-group-button"
+                aria-expanded="false"
+                aria-controls="nav-sub-group-konto"
+              >
+                Konto<span class="app-nav-caret" aria-hidden="true">▾</span>
+              </button>
+              <span class="app-nav-group-heading" aria-hidden="true">Konto</span>
+              <ul id="nav-sub-group-konto" class="app-nav-subgroup" data-open="false" aria-label="Konto">
+                <li class="app-nav-item">
+                  <a class="app-nav-sub-link" href="/settings">Profil</a>
+                </li>
+                <li class="app-nav-item">
+                  <button type="button" class="app-nav-link app-nav-link-logout" data-action="logout">Logout</button>
+                </li>
+              </ul>
+            </li>
+            <li class="app-nav-item-group app-nav-item-group-anon app-nav-anon-only">
+              <span class="app-nav-group-heading" aria-hidden="true">Konto</span>
+              <ul class="app-nav-anon-list" aria-label="Konto">
+                <li class="app-nav-item">
+                  <a class="app-nav-link" href="/login">Login</a>
+                </li>
+                <li class="app-nav-item">
+                  <a class="app-nav-link" href="/register">Registrieren</a>
+                </li>
+              </ul>
+            </li>
+          </ul>
         </nav>
       </div>
-      <div class="app-content-stage">
-        <div class="app-page-shell">
-          <section class="app-page-panel">
-            <slot />
-          </section>
-          <div class="app-footer-links">
-            <a class="app-footer-link" href="/astro-wiki/impressum/">Impressum</a>
-            <a class="app-footer-link" href="/astro-wiki/datenschutz/">Datenschutz</a>
-            <a class="app-footer-link" href="/astro-wiki/kontakt/">Kontakt</a>
-          </div>
+    </header>
+    <main id="main" class="app-content-stage" tabindex="-1">
+      <div class="app-page-shell">
+        <section class="app-page-panel"><slot /></section>
+      </div>
+    </main>
+    <footer class="app-footer" data-testid="site-footer">
+      <div class="app-footer-groups">
+        <nav class="app-footer-group" aria-labelledby="footer-legal">
+          <p class="app-footer-heading" id="footer-legal">Rechtliches</p>
+          <ul>
+            <li><a class="app-footer-link" href="/astro-wiki/impressum/">Impressum</a></li>
+            <li><a class="app-footer-link" href="/astro-wiki/datenschutz/">Datenschutz</a></li>
+            <li><a class="app-footer-link" href="/astro-wiki/kontakt/">Kontakt</a></li>
+          </ul>
+        </nav>
+        <div class="app-footer-group" role="group" aria-labelledby="footer-support">
+          <p class="app-footer-heading" id="footer-support">Unterstützen</p>
+          <ul>
+            <li>
+              <a class="app-footer-link" href="https://buymeacoffee.com/shinengakic" target="_blank" rel="noreferrer">
+                Buy me a coffee
+                <span aria-hidden="true">↗</span>
+                <span class="app-visually-hidden">(öffnet in neuem Tab)</span>
+              </a>
+            </li>
+          </ul>
         </div>
       </div>
-    </div>
+      <p class="app-footer-copy">© {jahr} Astro-Magister</p>
+    </footer>
+    <!-- Disclosure-Verhalten der Hülle als Vanilla-Skript: exklusiv, Escape mit Fokus-Rückgabe,
+         Außenklick und Fokusverlust. Kein `role="menu"`, keine Pfeiltasten, kein Scroll-Lock. -->
+    <script is:inline>
+      (function () {
+        var nav = document.querySelector('nav.app-nav')
+        if (!nav) return
+        var panel = nav.querySelector('#nav-panel')
+        var menuButton = nav.querySelector('.app-nav-menu-button')
+        var groups = Array.prototype.slice.call(nav.querySelectorAll('.app-nav-group-button'))
+
+        function isOpen(element) {
+          return !!element && element.getAttribute('data-open') === 'true'
+        }
+
+        function setGroup(button, open) {
+          var target = document.getElementById(button.getAttribute('aria-controls'))
+          button.setAttribute('aria-expanded', open ? 'true' : 'false')
+          if (target) target.setAttribute('data-open', open ? 'true' : 'false')
+        }
+
+        function closeGroups(exceptButton) {
+          groups.forEach(function (button) {
+            if (button !== exceptButton) setGroup(button, false)
+          })
+        }
+
+        function closePanel() {
+          if (panel) panel.setAttribute('data-open', 'false')
+          if (menuButton) menuButton.setAttribute('aria-expanded', 'false')
+        }
+
+        function closeAll() {
+          closeGroups(null)
+          closePanel()
+        }
+
+        groups.forEach(function (button) {
+          button.addEventListener('click', function () {
+            var open = button.getAttribute('aria-expanded') === 'true'
+            closeGroups(button)
+            setGroup(button, !open)
+          })
+        })
+
+        if (menuButton && panel) {
+          menuButton.addEventListener('click', function () {
+            var open = isOpen(panel)
+            closeGroups(null)
+            panel.setAttribute('data-open', open ? 'false' : 'true')
+            menuButton.setAttribute('aria-expanded', open ? 'false' : 'true')
+          })
+        }
+
+        // Fokusverlust schließt die Gruppe nur bei vorhandenem `relatedTarget` außerhalb — WebKit
+        // fokussiert Links/Buttons beim Mausklick nicht, sonst verschwände das Dropdown vor dem Klick.
+        Array.prototype.forEach.call(nav.querySelectorAll('.app-nav-item-group'), function (item) {
+          var button = item.querySelector('.app-nav-group-button')
+          if (!button) return
+          item.addEventListener('focusout', function (event) {
+            if (event.relatedTarget && !item.contains(event.relatedTarget)) setGroup(button, false)
+          })
+        })
+
+        document.addEventListener('pointerdown', function (event) {
+          if (!nav.contains(event.target)) closeAll()
+        })
+
+        // `'Esc'` ist der Alt-Wert von IE11/EdgeHTML für dieselbe Taste, moderne Browser melden `Escape` —
+        // der Zweig kostet nichts und hält die beiden Kopien desselben Verhaltens (App + Wiki) deckungsgleich.
+        document.addEventListener('keydown', function (event) {
+          if (event.key !== 'Escape' && event.key !== 'Esc') return
+          var openButton = null
+          for (var i = 0; i < groups.length; i++) {
+            if (groups[i].getAttribute('aria-expanded') === 'true') {
+              openButton = groups[i]
+              break
+            }
+          }
+          if (!openButton && !isOpen(panel)) return
+          closeAll()
+          if (openButton) openButton.focus()
+          else if (menuButton) menuButton.focus()
+        })
+
+        nav.addEventListener('click', function (event) {
+          var target = event.target
+          if (!target || typeof target.closest !== 'function') return
+          if (target.closest('.app-nav-group-button') || target.closest('.app-nav-menu-button')) return
+          if (target.closest('a.app-nav-link') || target.closest('a.app-nav-sub-link') || target.closest('button[data-action="logout"]')) {
+            closeAll()
+          }
+        })
+      })()
+    </script>
+    <!-- Sitzung und Laufzeit-Theme: Logout beendet die Session serverseitig und vergisst dieselben
+         localStorage-Schlüssel wie `clearStoredSession()` plus `username`. Der Theme-Abruf läuft
+         nur, wenn das Kopfskript noch nichts gespeichert hat; jede Fehlstufe bleibt still. -->
+    <script is:inline>
+      (function () {
+        var root = document.documentElement
+        var index = parseInt(root.dataset.sign, 10)
+        if (isNaN(index) || index < 0 || index > 11) index = 0
+
+        function removeStoredSession() {
+          try {
+            localStorage.removeItem('token')
+            localStorage.removeItem('refresh_token')
+            localStorage.removeItem('astronex_last_refresh_at')
+            localStorage.removeItem('username')
+            // Der personenbezogene Theme-Merker gehört zur Sitzung (A-8/D-09): nach dem Logout
+            // gilt das Tageszeichen. Dieselben Schlüssel wie `clearStoredSession()` im SPA (WR-02).
+            localStorage.removeItem('astronex_theme_sign')
+          } catch (e) { /* still */ }
+        }
+
+        function applyPalette(palette) {
+          var style = root.style
+          style.setProperty('--admin-accent', palette.accent)
+          style.setProperty('--admin-panel', palette.panel)
+          style.setProperty('--admin-accent-soft', palette.accentSoft)
+          style.setProperty('--admin-shadow', palette.shadow)
+
+          var gradient = palette.bodyGradient
+          if (!gradient) {
+            var soft = String(palette.accentSoft).replace('#', '')
+            gradient = 'radial-gradient(circle at top right, rgba(' +
+              parseInt(soft.substring(0, 2), 16) + ',' +
+              parseInt(soft.substring(2, 4), 16) + ',' +
+              parseInt(soft.substring(4, 6), 16) + ',0.7), transparent 28%),' +
+              ' linear-gradient(180deg, ' + palette.panel + ' 0%, #fefbfb 44%, ' + palette.panel + ' 100%)'
+          }
+          style.setProperty('--app-body-gradient', gradient)
+
+          var accent = String(palette.accent).replace('#', '')
+          style.setProperty('--admin-accent-r', parseInt(accent.substring(0, 2), 16))
+          style.setProperty('--admin-accent-g', parseInt(accent.substring(2, 4), 16))
+          style.setProperty('--admin-accent-b', parseInt(accent.substring(4, 6), 16))
+        }
+
+        document.addEventListener('click', function (event) {
+          var target = event.target
+          if (!target || typeof target.closest !== 'function') return
+          if (!target.closest('[data-action="logout"]')) return
+          event.preventDefault()
+          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+            .then(function () {}, function () {})
+            .then(function () {
+              removeStoredSession()
+              location.reload()
+            })
+        })
+
+        var gespeichert = null
+        try {
+          gespeichert = localStorage.getItem('zodiacTheme')
+        } catch (e) {
+          gespeichert = 'x'
+        }
+        if (gespeichert) return
+
+        fetch('/api/theme/settings', { credentials: 'include' })
+          .then(function (response) {
+            return response.ok ? response.json() : null
+          })
+          .then(function (data) {
+            if (!data || !data.theme) return
+            // Der Admin-Schalter gilt auch im Wiki: ist das Zodiac-Theming abgeschaltet, wird
+            // nichts gespeichert und nichts angewendet — es bleibt bei der Datums-Palette des
+            // Kopfskripts. Der Merker wandert mit, damit der nächste Aufbau nicht doch noch eine
+            // alte gespeicherte Palette anwendet (WR-07).
+            try {
+              if (data.enabled === false) {
+                localStorage.removeItem('zodiacTheme')
+                localStorage.setItem('zodiacThemeEnabled', 'false')
+              } else {
+                localStorage.setItem('zodiacTheme', JSON.stringify(data.theme))
+                localStorage.setItem('zodiacThemeEnabled', 'true')
+              }
+            } catch (e) { /* still */ }
+            if (data.enabled === false) return
+            var entry = data.theme[String(index)]
+            if (!entry || !entry.accent || !entry.panel || !entry.accentSoft || !entry.shadow) return
+            applyPalette(entry)
+          })
+          .catch(function () { /* still: Datums-Palette bleibt */ })
+      })()
+    </script>
   </body>
 </html>

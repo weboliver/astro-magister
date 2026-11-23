@@ -364,6 +364,8 @@ export default function SolarReturn() {
       chartMarginTop={-102}
       chartMinHeight={420}
       chartHistoryYearOnly
+      chartType="solar_return"
+      chartDataPayload={currentPayload}
       questionPlaceholder="Optional: Worauf soll die KI beim Solarjahr besonders eingehen?"
     >
       <label style={{ marginBottom: 20, marginRight: 20 }}>Target Year</label>

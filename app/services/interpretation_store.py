@@ -1,6 +1,7 @@
 """Service für das Lesen und Schreiben von Interpretations-Sessions und Nachrichten."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import List, Optional
 
@@ -11,14 +12,27 @@ from app.db.models.interpretations import UserInterpretation, UserInterpretation
 from app.schemas.interpretations import InterpretationCreate, MessageCreate
 
 
-def _assert_person_ownership(user_id: int, user_persons_id: Optional[int]) -> None:
-    """Wirft ValueError wenn user_persons_id nicht zum User gehört."""
-    if user_persons_id is None:
-        return
+def _assert_person_ownership(
+    user_id: int,
+    user_persons_id: Optional[int],
+    user_person_id_2: Optional[int] = None,
+) -> None:
+    """Wirft ValueError wenn eine der referenzierten Personen nicht zum User gehört.
+
+    Beide Referenzen werden geprüft: ``user_persons_id`` (die Hauptperson) und
+    ``user_person_id_2`` (bei Synastrie die zweite Person). Die zweite wurde
+    ursprünglich nicht geprüft, wodurch eine Session mit fremder Person als
+    zweitem Partner angelegt werden konnte, obwohl ``get_interpretation`` beim
+    Lesen nach ``user_id`` filtert (CR-01-Nebenbefund aus `43-REVIEW.md`).
+    """
     from app.services import auth as auth_service
-    person = auth_service.get_person(user_id, user_persons_id)
-    if not person:
-        raise ValueError(f"Person {user_persons_id} not found or access denied")
+
+    for person_id in (user_persons_id, user_person_id_2):
+        if person_id is None:
+            continue
+        person = auth_service.get_person(user_id, person_id)
+        if not person:
+            raise ValueError(f"Person {person_id} not found or access denied")
 
 logger = logging.getLogger(__name__)
 
@@ -216,18 +230,155 @@ def get_messages_ordered(
     return msgs
 
 
-def build_message_history(messages: List[UserInterpretationMessage]) -> List[dict]:
-    """Konvertiert gespeicherte Nachrichten in das dict-Format für die Perplexity-API.
+#: Kopf der verdichteten Nachricht älterer Runden (mechanisch, kein LLM).
+_CONDENSED_HISTORY_HEADER = "Bisheriger Verlauf (verdichtet):"
 
-    Nur 'query'- (→ role='user') und 'assistant'-Nachrichten werden verwendet.
-    'user'-Nachrichten (Anzeigeform) werden übersprungen.
+#: Zeichen-Obergrenzen je Runde in der verdichteten Nachricht.
+_QUESTION_PREVIEW_CHARS = 120
+_ANSWER_PREVIEW_CHARS = 200
+
+
+def _one_line(text: str, limit: int) -> str:
+    """Kürzt einen Text mechanisch auf eine Zeile und ``limit`` Zeichen."""
+    return " ".join(str(text or "").split())[:limit]
+
+
+def _legacy_question(raw: str) -> str:
+    """Gibt den zu sendenden Fragetext einer ``query``-Zeile zurück.
+
+    Im Bestand stehen zwei Speicherformen:
+
+    - **neu** (ab D-23): die Zeile enthält nur den Fragetext des Nutzers,
+    - **alt**: die Zeile enthält ``json.dumps`` der damals gesamten Konversation.
+
+    Für die alte Form wird ausschließlich der ``content`` des **letzten**
+    ``user``-Eintrags verwendet — das ist die in dieser Runde neu gestellte
+    Frage (D-23a); alles davor steht ohnehin in den früheren Runden. Der ganze
+    Blob würde die Verdichtung sonst wirkungslos machen: bei einer langen
+    Altsession gingen die letzten Blobs mit je ~24k–100k Tokens mit. Ist der
+    Inhalt kein parsebares JSON-Array aus Dicts mit ``role``/``content`` oder
+    fehlt ein ``user``-Eintrag, bleibt der Rohtext unverändert.
+
+    Args:
+        raw: Gespeicherter Inhalt einer ``query``-Zeile.
+
+    Returns:
+        Der Fragetext dieser Runde.
     """
-    result = []
+    if not raw.startswith("["):
+        return raw
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return raw
+    if not isinstance(parsed, list):
+        return raw
+    for entry in reversed(parsed):
+        if (
+            isinstance(entry, dict)
+            and entry.get("role") == "user"
+            and isinstance(entry.get("content"), str)
+        ):
+            return entry["content"]
+    return raw
+
+
+def _rounds_by_position(messages: List[UserInterpretationMessage]) -> List[tuple]:
+    """Gruppiert die Kontext-Zeilen in Runden (eine Runde = eine ``position``).
+
+    Nur ``query``- (→ Rolle ``user``) und ``assistant``-Zeilen zählen;
+    ``user``-Zeilen sind die Anzeigeform. Die Rundenbildung läuft über die
+    Spalte ``position`` und **nicht** über die Abfolge ``query`` → ``assistant``,
+    weil eine abgebrochene Runde (Query ohne Antwort) die Zählung sonst
+    verschiebt. Sortiert wird aufsteigend nach ``position``.
+    """
+    rounds: dict[int, dict[str, List[str]]] = {}
     for m in messages:
-        if m.role == "query":
-            result.append({"role": "user", "content": m.content})
-        elif m.role == "assistant":
-            result.append({"role": "assistant", "content": m.content})
+        if m.role not in ("query", "assistant"):
+            continue
+        rounds.setdefault(m.position, {"query": [], "assistant": []})[m.role].append(m.content)
+    return [(position, rounds[position]) for position in sorted(rounds)]
+
+
+def _condensed_line(number: int, round_messages: dict) -> str:
+    """Eine Zeile der verdichteten Nachricht: Frage und Antwortbeginn einer Runde."""
+    question = round_messages["query"][0] if round_messages["query"] else ""
+    answer = round_messages["assistant"][0] if round_messages["assistant"] else ""
+    return (
+        f"Runde {number} — "
+        f"Frage: {_one_line(_legacy_question(question), _QUESTION_PREVIEW_CHARS)}"
+        f" | Kern: {_one_line(answer, _ANSWER_PREVIEW_CHARS)}"
+    )
+
+
+def build_message_history(
+    messages: List[UserInterpretationMessage],
+    *,
+    keep_full_rounds: int = 3,
+) -> List[dict]:
+    """Baut die Nachrichtenliste für das Modell aus den gespeicherten Zeilen.
+
+    Reine Ableitung: keine Datenbank, kein Netz. Gespeichert wird pro Runde nur
+    der neue Turn (D-23); der gesendete Kontext entsteht beim Lesen, damit er
+    linear statt quadratisch wächst.
+
+    Runden entstehen über die Spalte ``position`` (siehe
+    :func:`_rounds_by_position`). Regeln:
+
+    - Runde 1 (Stufenauftrag **und** Horoskopdaten) geht immer vollständig mit —
+      ohne diese Daten hätte das Modell keinen Chart.
+    - Die letzten ``keep_full_rounds`` Runden gehen vollständig mit.
+    - Alle älteren Runden werden zu **einer** User-Nachricht verdichtet, die mit
+      ``Bisheriger Verlauf (verdichtet):`` beginnt und je Runde eine Zeile
+      ``Runde <n> — Frage: … | Kern: …`` trägt (Frage auf 120, Antwortbeginn auf
+      200 Zeichen gekürzt). Die Verdichtung ist mechanisch: deterministisch,
+      kostenlos, offline testbar und für alle Alt-Sessions nachträglich
+      verbessert sie sich mit dem Code. Es gibt bewusst **keine** gespeicherte
+      Zusammenfassung (kein zusätzlicher LLM-Aufruf je Runde, keine Drift, keine
+      zweite Wahrheitsquelle).
+
+    Beide Speicherformen werden gelesen: neue ``query``-Zeilen tragen den reinen
+    Fragetext, alte ein JSON-Blob der damaligen Konversation, das über
+    :func:`_legacy_question` auf die letzte Frage reduziert wird (D-23a).
+    Zurückgeschrieben wird nichts (kein Backfill, keine Migration).
+
+    Fehlende Antworten (abgebrochene Runde) erzeugen weder eine Ausnahme noch
+    eine leere Nachricht.
+
+    Args:
+        messages: Gespeicherte Nachrichten in Anzeige-Reihenfolge
+            (``position`` aufsteigend, dann ``user`` → ``query`` → ``assistant``).
+        keep_full_rounds: Anzahl der vollständig gesendeten Runden am Ende.
+
+    Returns:
+        Liste von ``{"role", "content"}``-Dicts; leer bei leerer Eingabe.
+    """
+    rounds = _rounds_by_position(messages)
+    if not rounds:
+        return []
+
+    keep = max(0, int(keep_full_rounds))
+    first_full_trailing = max(1, len(rounds) - keep)
+
+    condensed_lines = [
+        _condensed_line(index + 1, rounds[index][1])
+        for index in range(1, first_full_trailing)
+    ]
+
+    result: List[dict] = []
+    for index, (_position, round_messages) in enumerate(rounds):
+        if index == 1 and condensed_lines:
+            result.append({
+                "role": "user",
+                "content": _CONDENSED_HISTORY_HEADER + "\n" + "\n".join(condensed_lines),
+            })
+        if 0 < index < first_full_trailing:
+            continue  # steckt in der verdichteten Nachricht
+        for content in round_messages["query"]:
+            result.append({"role": "user", "content": _legacy_question(content)})
+        for content in round_messages["assistant"]:
+            if content and content.strip():
+                result.append({"role": "assistant", "content": content})
     return result
 
 
@@ -269,7 +420,7 @@ def save_or_append_stream_result(
 
     Gibt die interpretation_id der Session zurück.
     """
-    _assert_person_ownership(user_id, user_persons_id)
+    _assert_person_ownership(user_id, user_persons_id, user_person_id_2)
 
     if interpretation_id:
         interp = get_interpretation(db, user_id, interpretation_id)

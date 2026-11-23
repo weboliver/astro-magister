@@ -1,29 +1,15 @@
-body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;background:radial-gradient(circle at top right,rgba(215,239,232,.7),transparent 28%),linear-gradient(180deg,#f4efe4 0%,#fbf9f4 44%,#f4f7fb 100%);background-attachment:fixed}
+/* Der Gradient kommt seit Phase 40 aus `--app-body-gradient`, das das blockierende Kopfskript
+   im <head> aus der Zodiac-Palette setzt. Das Literal bleibt ausschließlich als Fallback ohne
+   JavaScript stehen. `shell.css` definiert kein `body` und kein `:root`. */
+body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;background:var(--app-body-gradient, radial-gradient(circle at top right,rgba(215,239,232,.7),transparent 28%),linear-gradient(180deg,#f4efe4 0%,#fbf9f4 44%,#f4f7fb 100%));background-attachment:fixed}
 nav a{color:#fff}
 input{padding:6px;margin:6px 0;width:94%}
 button{padding:8px 12px}
 
-.app-nav-wrap{padding:0;background:linear-gradient(180deg,#f4efe4 0%,#f4efe4 45%,transparent 100%);max-width:1350px;margin:0 auto}
-.app-nav{background:var(--admin-accent);color:#fff;border-radius:24px;padding:14px 16px;box-shadow:0 18px 34px rgba(15,118,110,.22)}
-.app-nav-desktop,.app-nav-mobile-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.app-nav-group{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.app-nav-mobile-menu{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-.app-nav-link{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:999px;cursor:pointer;color:#f6fffc;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font-weight:600}
-.app-nav-link:hover,.app-nav-link:focus-visible{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);transform:translateY(-1px);outline:none}
-.app-nav-link-active{background:#fff;color:var(--admin-accent);border-color:#fff}
-.app-nav-link-logout{background:rgba(17,36,61,.18)}
-.app-nav-menu-button{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;border-radius:14px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1}
-.app-nav-menu-button:hover,.app-nav-menu-button:focus-visible{background:rgba(255,255,255,.16);outline:none}
-
-.app-content-stage{padding:0;padding-top:16px;min-height:calc(100vh - 60px)}
-.app-page-shell{width:100%;max-width:1350px;margin:0 auto;padding:0;box-sizing:border-box}
-.app-page-panel{background:var(--admin-panel);border:1px solid var(--admin-line);border-radius:28px;padding:24px;box-shadow:var(--admin-shadow);width:100%;box-sizing:border-box;max-width:100%}
-.app-page-panel > :first-child{margin-top:0}
-.app-page-panel > :last-child{margin-bottom:0}
-.app-page-shell-wide{padding:0}
-.app-footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;padding:18px 8px 8px}
-.app-footer-link{border:none;background:transparent;padding:0;color:#5b6877;cursor:pointer;font-size:.92rem;line-height:1.4;text-decoration:none}
-.app-footer-link:hover,.app-footer-link:focus-visible{color:var(--admin-accent);text-decoration:underline;outline:none}
+/* Die Hüllen-Regeln (Skip-Link, Header, Navigationsleiste, Inhaltsbühne, Seitenschale, Panel,
+   Footer) stehen seit Phase 40 ausschließlich in `app/frontend/src/styles/shell.css`, die dieses
+   Layout per Cross-Root-Import lädt — eine Quelle für App und Wiki. Hier bleiben nur Tokens,
+   Element-Grundlagen, Seiteninhalte und die Wiki-eigenen Sichtbarkeitsvarianten. */
 
 :root{
 	--admin-ink:#11243d;
@@ -37,27 +23,46 @@ button{padding:8px 12px}
 	--admin-shadow:0 18px 40px rgba(17,36,61,.08);
 }
 
-.dashboard-grid-header{margin-top:32px;margin-bottom:16px}
-.dashboard-grid-header h3{margin:0;font-size:1.4rem}
-.dashboard-grid-header p{color:#6b7280;margin:6px 0 0}
-.dashboard-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.dashboard-card{border:1px solid #e2e8f0;border-radius:16px;background:#fff;color:#111;padding:1.25rem;display:flex;flex-direction:column;justify-content:space-between;min-height:140px;cursor:pointer;box-shadow:0 6px 18px rgba(15,23,42,.08);border-width:2px}
-.dashboard-card:hover,.dashboard-card:focus-visible{transform:translateY(-2px);box-shadow:0 10px 25px rgba(15,23,42,.15);border-color:#2563eb;outline:none}
-.dashboard-card:focus-visible{outline:3px solid rgba(37,99,235,.4);outline-offset:4px}
-.dashboard-card-title{font-size:1.15rem;font-weight:600}
-.dashboard-card p{margin:8px 0 0;line-height:1.5;color:#475569}
+/* Wiki-eigene Sichtbarkeitsvarianten — nie in `shell.css`, damit die App sie nie auslösen kann.
+   Das Kopfskript setzt `html[data-session]`; ohne JavaScript bleibt `html.no-js` stehen und damit
+   die anonyme Variante (keine Sitzungskenntnis heißt anonym, A-4). */
+html[data-session="anon"] .app-nav-auth-only{display:none}
+html[data-session="auth"] .app-nav-anon-only{display:none}
+html.no-js .app-nav-auth-only{display:none}
+/* Ohne JavaScript gibt es keinen Menü-Button und keine Gruppen-Knöpfe: das Panel ist offen, die
+   Unterlisten sind flache Blöcke, und die helle Karte aus `shell.css` bleibt erhalten, damit die
+   dunklen Untermenü-Einträge nicht direkt auf dem Akzent-Balken stehen. */
+html.no-js .app-nav-menu-button{display:none}
+html.no-js .app-nav-group-button{display:none}
+html.no-js .app-nav-subgroup{display:block;position:static}
+html.no-js .app-nav-panel{display:flex;flex-wrap:wrap}
 
-@media (max-width:960px){
-	.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
+/* Statische Wiki-Übersicht `/astro-wiki/` (D-17): je Eintrag eine Zeile mit Titel und Kurztext
+   links, Bild rechts. Gruppierung nach Kategorie und Sortierung nach `entry_number` kommen
+   unverändert aus dem Build-Endpunkt. Nur `var(--admin-…)`, keine Farb-Literale. */
+.wiki-index-group{margin:0 0 32px}
+.wiki-index-category{color:var(--admin-accent)}
+.wiki-index-list{list-style:none;margin:0;padding:0}
+.wiki-index-row{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:16px;align-items:start;padding:16px 0;border-top:1px solid var(--admin-line)}
+.wiki-index-row:first-child{border-top:none;padding-top:0}
+.wiki-index-text{min-width:0}
+.wiki-index-title{font-size:16px;font-weight:600;line-height:1.5;color:var(--admin-ink);text-decoration:none}
+.wiki-index-title:hover,.wiki-index-title:focus-visible{color:var(--admin-accent);text-decoration:underline}
+.wiki-index-title:focus-visible{outline:3px solid var(--admin-accent-soft);outline-offset:2px}
+.wiki-index-short{font-size:16px;font-weight:400;line-height:1.5;color:var(--admin-ink);margin:4px 0 0;overflow-wrap:anywhere}
+.wiki-index-intro{margin:0 0 24px}
+.wiki-cover-index{display:block;width:120px;height:auto;aspect-ratio:40/21;border-radius:8px;background:var(--admin-panel-strong);object-fit:cover}
+/* Artikelkopf-Banner (D-13): dieselben Maße und derselbe Klassenname wie in
+   `app/frontend/src/styles/styles.css` — kein Hochskalieren über die Mastergröße 400 px. */
+.wiki-cover-banner{display:block;float:right;width:45%;max-width:400px;height:auto;aspect-ratio:40/21;margin:4px 0 16px 24px;border-radius:16px;background:var(--admin-panel-strong);object-fit:cover}
+/* Artikel umschließt das rechts schwebende Cover (der Text fließt links herum); schmal steht das
+   Bild wieder volle Breite über dem Text, weil daneben kein lesbarer Satzspiegel bliebe. */
+.wiki-article{display:flow-root}
+@media (max-width:640px){.wiki-cover-banner{float:none;width:100%;margin:0 0 24px}}
 
 @media (max-width:640px){
-	.app-nav-wrap{padding:12px 12px 0}
-	.app-nav{padding:12px}
-	.app-content-stage{padding:12px 0 20px}
-	.app-page-shell{padding:0 12px}
-	.app-page-panel{padding:18px;border-radius:22px}
-	.dashboard-grid{grid-template-columns:repeat(1,minmax(0,1fr))}
+	.wiki-index-row{grid-template-columns:minmax(0,1fr) 80px}
+	.wiki-cover-index{width:80px}
 }
 
 .admin-page{display:flex;flex-direction:column;gap:20px;max-width:1350px;margin:0;width:100%}

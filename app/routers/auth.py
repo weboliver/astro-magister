@@ -16,6 +16,7 @@ from app.services.auth_security import (
     REFRESH_RATE_LIMIT_WINDOW_SECONDS,
     REGISTER_RATE_LIMIT_ATTEMPTS,
     REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    build_rate_limit_identifier,
     check_rate_limit,
     clear_failed_logins,
     get_client_ip,
@@ -162,7 +163,7 @@ async def register(payload: RegisterIn, request: Request):
     """
     client_ip = get_client_ip(request)
     user_agent = request.headers.get('user-agent')
-    rate_limit = check_rate_limit('register', client_ip, REGISTER_RATE_LIMIT_ATTEMPTS, REGISTER_RATE_LIMIT_WINDOW_SECONDS)
+    rate_limit = check_rate_limit('register', build_rate_limit_identifier(request), REGISTER_RATE_LIMIT_ATTEMPTS, REGISTER_RATE_LIMIT_WINDOW_SECONDS)
     if not rate_limit.allowed:
         log_auth_event(event_type='register_rate_limited', success=False, username=payload.username, ip_address=client_ip, user_agent=user_agent, detail='Rate limit exceeded')
         raise _rate_limit_exception('Zu viele Registrierungsversuche. Bitte später erneut versuchen.', rate_limit.retry_after_seconds)
@@ -207,7 +208,9 @@ async def login(payload: LoginIn, request: Request, response: Response):
         log_auth_event(event_type='login_locked', success=False, username=payload.username, ip_address=client_ip, user_agent=user_agent, detail='Account temporarily locked')
         raise _lockout_exception(lock_seconds)
 
-    rate_limit = check_rate_limit('login', client_ip, LOGIN_RATE_LIMIT_ATTEMPTS, LOGIN_RATE_LIMIT_WINDOW_SECONDS)
+    # Phase 49 / D-09: the limiter subject comes from the single subject source. Measured before
+    # this phase the bare IP landed in the key (live key auth:rate:login:10.99.0.1).
+    rate_limit = check_rate_limit('login', build_rate_limit_identifier(request), LOGIN_RATE_LIMIT_ATTEMPTS, LOGIN_RATE_LIMIT_WINDOW_SECONDS)
     if not rate_limit.allowed:
         log_auth_event(event_type='login_rate_limited', success=False, username=payload.username, ip_address=client_ip, user_agent=user_agent, detail='Rate limit exceeded')
         raise _rate_limit_exception('Zu viele Login-Versuche. Bitte später erneut versuchen.', rate_limit.retry_after_seconds)
@@ -251,7 +254,7 @@ async def refresh_token(request: Request, response: Response, payload: RefreshIn
     """
     client_ip = get_client_ip(request)
     user_agent = request.headers.get('user-agent')
-    rate_limit = check_rate_limit('refresh', client_ip, REFRESH_RATE_LIMIT_ATTEMPTS, REFRESH_RATE_LIMIT_WINDOW_SECONDS)
+    rate_limit = check_rate_limit('refresh', build_rate_limit_identifier(request), REFRESH_RATE_LIMIT_ATTEMPTS, REFRESH_RATE_LIMIT_WINDOW_SECONDS)
     if not rate_limit.allowed:
         log_auth_event(event_type='refresh_rate_limited', success=False, ip_address=client_ip, user_agent=user_agent, detail='Rate limit exceeded')
         raise _rate_limit_exception('Zu viele Token-Aktualisierungen. Bitte später erneut versuchen.', rate_limit.retry_after_seconds)
@@ -291,6 +294,32 @@ def logout_refresh(request: Request, response: Response, payload: LogoutIn | Non
     return {'status':'ok'}
 
 
+def _extract_access_token(request: Request) -> str | None:
+    """Extract the access token from the Authorization header, else from the access cookie.
+
+    Eine Wahrheit fuer Authentifizierung und Entwertung (G-49-WR01): ``_get_user_from_request``
+    und ``logout`` lesen den Token ueber genau diesen Helfer. Der frueher eigene Header-Parser im
+    Logout lief bereits auseinander (case-sensitives ``startswith('Bearer ')`` und fester
+    ``[7:]``-Slice) und liess ein authentifiziertes ``bearer <token>`` ungeblacklistet, obwohl
+    der Handler ``200`` antwortete.
+
+    ``split()`` faltet zusaetzliche Leerzeichen und ``lower()`` macht die Schreibweise
+    irrelevant — dieselbe Semantik, die ``HTTPBearer`` und die Auth-Abhaengigkeit akzeptieren.
+
+    Args:
+        request: FastAPI Request with Authorization header or access cookie.
+
+    Returns:
+        The bare JWT string from the header or the access cookie, None if neither carries one.
+    """
+    auth = request.headers.get('authorization') or request.headers.get('Authorization')
+    if auth:
+        parts = auth.split()
+        if len(parts) == 2 and parts[0].lower() == 'bearer':
+            return parts[1]
+    return request.cookies.get(ACCESS_COOKIE_NAME)
+
+
 def _get_user_from_request(request: Request):
     """Extract user from request Authorization header or cookies.
 
@@ -300,14 +329,9 @@ def _get_user_from_request(request: Request):
     Returns:
         User dict if valid token found, None otherwise.
     """
-    auth = request.headers.get('authorization') or request.headers.get('Authorization')
-    if auth:
-        parts = auth.split()
-        if len(parts) == 2 and parts[0].lower() == 'bearer':
-            return _get_user_from_token(parts[1])
-    cookie_token = request.cookies.get(ACCESS_COOKIE_NAME)
-    if cookie_token:
-        return _get_user_from_token(cookie_token)
+    token = _extract_access_token(request)
+    if token:
+        return _get_user_from_token(token)
     return None
 
 
@@ -319,6 +343,12 @@ def _get_user_from_token(token: str):
 
     Returns:
         User dict if token valid and not blacklisted, None otherwise.
+
+    Raises:
+        AuthStoreUnavailable: Redis ist konfiguriert, aber nicht erreichbar (D-01). A token
+            that cannot be checked against the blacklist must not be accepted, so the
+            exception travels to the central 503 translation instead of becoming a 401
+            here (D-20: no second translation site).
     """
     try:
         data = jwt.decode(
@@ -331,7 +361,9 @@ def _get_user_from_token(token: str):
         return None
     # AUTH-03: Check if token is blacklisted
     token_jti = data.get('jti')
-    if token_jti and is_token_blacklisted(token_jti):
+    if not token_jti:
+        return None  # D-03: a token that cannot be invalidated is not accepted
+    if is_token_blacklisted(token_jti):
         return None
     uid = data.get('sub')
     if uid:
@@ -483,19 +515,18 @@ def logout(request: Request, response: Response, user=Depends(require_authentica
     """Logout and invalidate tokens (blacklist access token, revoke refresh tokens).
 
     Args:
-        request: FastAPI Request to get Authorization header.
+        request: FastAPI Request to get the access token from — the same parser the
+            authentication uses (``_extract_access_token``).
         response: FastAPI Response to clear auth cookies.
         user: Authenticated user from dependency.
 
     Returns:
         Dict with status 'ok'.
     """
-    # AUTH-04: Invalidate access token immediately (header or cookie)
-    auth_header = request.headers.get('authorization', '')
-    if auth_header.startswith('Bearer '):
-        token = auth_header[7:]
-    else:
-        token = request.cookies.get(ACCESS_COOKIE_NAME)
+    # AUTH-04: Invalidate access token immediately. The token comes from the same helper as the
+    # authentication (G-49-WR01), so every scheme spelling HTTPBearer accepts reaches the
+    # blacklist write instead of silently falling back to the cookie.
+    token = _extract_access_token(request)
     if token:
         try:
             data = jwt.decode(

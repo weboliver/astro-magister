@@ -44,14 +44,38 @@ Use the automated restore script for simpler restore operations:
 
 # Restore to production database
 ./docker/backup/restore.sh --filename=backups/weekly/astronex-20260517-020000.sql.gz --target=production
+
+# Custom-format dump from another machine (e.g. pg_dump -Fc / Docker export)
+./docker/backup/restore.sh --filename=backups/astronex_20261102_145050.dump --target=production
 ```
 
+**Supported formats** (detected automatically, override with `--format=dump|sql`):
+
+| File | Content | Handled with |
+|------|---------|--------------|
+| `astronex-*.sql.gz` (from `backup.sh`) | pg_dump custom archive, gzip | `gunzip -c \| pg_restore` |
+| `*.dump`, `*.backup` | pg_dump custom archive (`-Fc`), uncompressed | `pg_restore` |
+| `*.dump.gz` | pg_dump custom archive, gzip | `gunzip -c \| pg_restore` |
+| `*.sql`, `*.sql.gz` | plain SQL script | `psql` (`ON_ERROR_STOP=1`) |
+
+`pg_restore` runs with `--no-owner --no-privileges`, so dumps created by a different database
+user on another machine restore without "role does not exist" errors. Plain SQL dumps still
+contain `OWNER TO` statements — create them with `pg_dump --no-owner --no-privileges` (or use a
+custom archive) when the owner differs.
+
 **restore.sh features:**
-- Validates backup file exists
-- Checks file size (>100 bytes)
-- Verifies gzip format
-- Creates target database automatically
-- Reports table count after restore
+- Validates backup file exists, is not empty and that `astronex-db` is running
+- Detects the format (custom archive vs. plain SQL, compressed or not)
+- Drops and recreates the target database (`astronex_test` / the `DB_NAME` from `.env`)
+- Reports table count and the restored `alembic_version` after the restore
+- Reminds you to restart the api container when restoring to production
+
+After a production restore the api container still holds pooled connections to the old
+database — restart it:
+
+```bash
+./docker/restart.sh api
+```
 
 ---
 

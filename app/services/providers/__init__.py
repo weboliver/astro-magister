@@ -147,3 +147,25 @@ def get_chat_provider(role_type: str = "Laie") -> ChatProvider:
     )
     from app.services.perplexity import PerplexityClient
     return PerplexityClient(role_type=role_type)
+
+
+def apply_output_budget(provider: ChatProvider, tokens: int) -> None:
+    """Setzt das Ausgabebudget provider-neutral (Perplexity: tokens, Mistral: _max_tokens).
+
+    Die beiden Provider lesen unterschiedliche Attribute: Perplexity schickt
+    ``self.tokens`` als ``max_tokens``, Mistral ``self._max_tokens``. Ein direktes
+    ``provider.tokens = …`` erreicht deshalb nur Perplexity. Der ABC-Vertrag
+    bleibt unverändert — es kommt kein ``max_tokens``-Keyword an
+    :meth:`ChatProvider.stream_messages` dazu.
+
+    Args:
+        provider: Konkreter Chat-Provider.
+        tokens: Ausgabebudget in Tokens.
+
+    Returns:
+        None. Attribute, die der Provider nicht hat, bleiben unberührt.
+    """
+    if hasattr(provider, "tokens"):
+        provider.tokens = tokens
+    if hasattr(provider, "_max_tokens"):
+        provider._max_tokens = tokens
